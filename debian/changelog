@@ -1,3 +1,9 @@
+ruby3.0 (3.0.4-7ppa1) focal; urgency=medium
+
+  * Build for Ubuntu
+
+ -- Jacob Burroughs <maths22@gmail.com>  Fri, 24 Jun 2022 12:45:04 +0000
+
 ruby3.0 (3.0.4-7) unstable; urgency=medium
 
   * Complete the patch to disable compaction on architectures where it can't work.
