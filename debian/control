@@ -7,7 +7,7 @@ Uploaders: Antonio Terceiro <terceiro@debian.org>,
            Lucas Kanashiro <kanashiro@debian.org>
 Build-Depends: bison,
                coreutils (>= 7.5),
-               debhelper-compat (= 13),
+               debhelper (>= 11),
                file,
                libffi-dev,
                libgdbm-compat-dev,
