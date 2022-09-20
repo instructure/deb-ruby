@@ -10,3 +10,4 @@
 0012-Fix-getcwd-ENOENT.patch
 0011-Revert-Make-host_-values-consistent-with-target_.patch
 upgrade_openssl_3_0_1.patch
+upgrade_rubygems_3_3_22.patch

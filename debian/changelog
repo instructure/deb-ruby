@@ -1,3 +1,10 @@
+ruby2.7 (2.7.6-1ppa3) bionic; urgency=medium
+
+  * Support openssl 3.0
+    Note: bumps openssl bundled gem to 3.0, which breaks bc with 2.x
+
+ -- Jacob Burroughs <maths22@gmail.com>  Tue, 20 Sep 2022 18:18:52 -0500
+
 ruby2.7 (2.7.6-1ppa2) bionic; urgency=medium
 
   * New upstream version 2.7.6.
