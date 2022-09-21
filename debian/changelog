@@ -1,4 +1,10 @@
-ruby2.7 (2.7.6-1ppa10) bionic; urgency=medium
+ruby2.7 (2.7.6-1ppa12) bionic; urgency=medium
+
+  * Upgrade net/smtp and bundler to match other upgrades
+
+ -- Jacob Burroughs <maths22@gmail.com>  Wed, 21 Sep 2022 09:27:07 -0500
+
+ruby2.7 (2.7.6-1ppa11) bionic; urgency=medium
 
   * Fix openssl/depend correctly
 

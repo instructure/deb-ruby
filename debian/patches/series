@@ -12,3 +12,5 @@
 upgrade_openssl_3_0_1.patch
 upgrade_rubygems_3_3_22.patch
 digest_openssl_3_compat.patch
+upgrade_net_smtp_2_0.patch
+upgrade_bundler_2_3_22.patch
