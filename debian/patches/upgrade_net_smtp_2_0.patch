@@ -1,6 +1,6 @@
---- ruby2.7-2.7.6.orig/lib/net/smtp.rb
-+++ ruby2.7-2.7.6/lib/net/smtp.rb
-@@ -146,8 +146,8 @@ module Net
+--- a/lib/net/smtp.rb
++++ b/lib/net/smtp.rb
+@@ -146,8 +146,8 @@
    # The SMTP server will judge whether it should send or reject
    # the SMTP session by inspecting the HELO domain.
    #
@@ -11,7 +11,7 @@
    #
    # === SMTP Authentication
    #
-@@ -157,17 +157,18 @@ module Net
+@@ -157,17 +157,18 @@
    # SMTP.start/SMTP#start.
    #
    #     # PLAIN
@@ -36,7 +36,7 @@
  
      Revision = %q$Revision$.split[1]
  
-@@ -190,8 +191,13 @@ module Net
+@@ -190,8 +191,13 @@
        alias default_ssl_port default_tls_port
      end
  
@@ -52,7 +52,7 @@
      end
  
      #
-@@ -217,8 +223,9 @@ module Net
+@@ -217,8 +223,9 @@
        @error_occurred = false
        @debug_output = nil
        @tls = false
@@ -64,7 +64,7 @@
      end
  
      # Provide human-readable stringification of class state.
-@@ -293,11 +300,11 @@ module Net
+@@ -293,11 +300,11 @@
      # Enables SMTP/TLS (SMTPS: SMTP over direct TLS connection) for
      # this object.  Must be called before the connection is established
      # to have any effect.  +context+ is a OpenSSL::SSL::SSLContext object.
@@ -79,7 +79,7 @@
      end
  
      alias enable_ssl enable_tls
-@@ -306,7 +313,7 @@ module Net
+@@ -306,7 +313,7 @@
      # connection is established to have any effect.
      def disable_tls
        @tls = false
@@ -88,7 +88,7 @@
      end
  
      alias disable_ssl disable_tls
-@@ -330,27 +337,27 @@ module Net
+@@ -330,27 +337,27 @@
  
      # Enables SMTP/TLS (STARTTLS) for this object.
      # +context+ is a OpenSSL::SSL::SSLContext object.
@@ -121,7 +121,7 @@
      end
  
      # The address of the SMTP server to connect to.
-@@ -401,11 +408,15 @@ module Net
+@@ -401,11 +408,15 @@
      #
  
      #
@@ -138,7 +138,7 @@
      #
      # === Example
      #
-@@ -435,6 +446,9 @@ module Net
+@@ -435,6 +446,9 @@
      # or other authentication token; and +authtype+ is the authentication
      # type, one of :plain, :login, or :cram_md5.  See the discussion of
      # SMTP Authentication in the overview notes.
@@ -148,7 +148,7 @@
      #
      # === Errors
      #
-@@ -449,10 +463,16 @@ module Net
+@@ -449,10 +463,16 @@
      # * Net::ReadTimeout
      # * IOError
      #
@@ -169,7 +169,7 @@
      end
  
      # +true+ if the SMTP session has been started.
-@@ -461,6 +481,10 @@ module Net
+@@ -461,6 +481,10 @@
      end
  
      #
@@ -180,7 +180,7 @@
      # Opens a TCP connection and starts the SMTP session.
      #
      # === Parameters
-@@ -473,6 +497,9 @@ module Net
+@@ -473,6 +497,9 @@
      # the type of authentication to attempt; it must be one of
      # :login, :plain, and :cram_md5.  See the notes on SMTP Authentication
      # in the overview.
@@ -190,7 +190,7 @@
      #
      # === Block Usage
      #
-@@ -487,7 +514,7 @@ module Net
+@@ -487,7 +514,7 @@
      #
      #     require 'net/smtp'
      #     smtp = Net::SMTP.new('smtp.mail.server', 25)
@@ -199,7 +199,7 @@
      #       smtp.send_message msgstr, 'from@example.com', ['dest@example.com']
      #     end
      #
-@@ -511,8 +538,20 @@ module Net
+@@ -511,8 +538,20 @@
      # * Net::ReadTimeout
      # * IOError
      #
@@ -222,7 +222,7 @@
        if block_given?
          begin
            do_start helo, user, secret, authtype
-@@ -549,16 +588,16 @@ module Net
+@@ -549,16 +588,16 @@
          tcp_socket(@address, @port)
        end
        logging "Connection opened: #{@address}:#{@port}"
@@ -242,7 +242,7 @@
          # helo response may be different after STARTTLS
          do_helo helo_domain
        end
-@@ -576,14 +615,15 @@ module Net
+@@ -576,14 +615,15 @@
        OpenSSL::SSL::SSLSocket.new socket, context
      end
  
@@ -262,7 +262,7 @@
        end
        verified = true
        s
-@@ -1042,7 +1082,7 @@ module Net
+@@ -1042,7 +1082,7 @@
          return {} unless @string[3, 1] == '-'
          h = {}
          @string.lines.drop(1).each do |line|
@@ -271,8 +271,8 @@
            h[k] = v
          end
          h
---- ruby2.7-2.7.6.orig/lib/net/smtp/net-smtp.gemspec
-+++ ruby2.7-2.7.6/lib/net/smtp/net-smtp.gemspec
+--- a/lib/net/smtp/net-smtp.gemspec
++++ b/lib/net/smtp/net-smtp.gemspec
 @@ -1,12 +1,15 @@
 -begin
 -  require_relative "lib/net/smtp/version"
@@ -281,7 +281,7 @@
 +# frozen_string_literal: true
 +
 +name = File.basename(__FILE__, ".gemspec")
-+version = ["lib", Array.new(name.count("-"), "..").join("/")].find do |dir|
++version = ["lib", Array.new(name.count("-")+1, "..").join("/")].find do |dir|
 +  break File.foreach(File.join(__dir__, dir, "#{name.tr('-', '/')}.rb")) do |line|
 +    /^\s*VERSION\s*=\s*"(.*)"/ =~ line and break $1
 +  end rescue nil
@@ -295,7 +295,7 @@
    spec.authors       = ["Yukihiro Matsumoto"]
    spec.email         = ["matz@ruby-lang.org"]
  
-@@ -14,6 +17,7 @@ Gem::Specification.new do |spec|
+@@ -14,6 +17,7 @@
    spec.description   = %q{Simple Mail Transfer Protocol client library for Ruby.}
    spec.homepage      = "https://github.com/ruby/net-smtp"
    spec.license       = "BSD-2-Clause"
@@ -303,9 +303,9 @@
  
    spec.metadata["homepage_uri"] = spec.homepage
    spec.metadata["source_code_uri"] = spec.homepage
---- ruby2.7-2.7.6.orig/test/net/smtp/test_smtp.rb
-+++ ruby2.7-2.7.6/test/net/smtp/test_smtp.rb
-@@ -129,7 +129,7 @@ module Net
+--- a/test/net/smtp/test_smtp.rb
++++ b/test/net/smtp/test_smtp.rb
+@@ -129,7 +129,7 @@
          smtp = Net::SMTP.new("localhost", servers[0].local_address.ip_port)
          smtp.enable_tls
          smtp.open_timeout = 1
@@ -314,7 +314,7 @@
          end
        ensure
          sock.close if sock
-@@ -184,17 +184,99 @@ module Net
+@@ -184,17 +184,99 @@
        end
      end
  
@@ -421,9 +421,9 @@
      end
    end
  end
---- ruby2.7-2.7.6.orig/test/net/smtp/test_ssl_socket.rb
-+++ ruby2.7-2.7.6/test/net/smtp/test_ssl_socket.rb
-@@ -53,8 +53,10 @@ module Net
+--- a/test/net/smtp/test_ssl_socket.rb
++++ b/test/net/smtp/test_ssl_socket.rb
+@@ -53,8 +53,10 @@
          end
        }
  
@@ -436,7 +436,7 @@
        connection.fake_ssl = ssl_socket
  
 --- /dev/null
-+++ ruby2.7-2.7.6/test/net/smtp/test_sslcontext.rb
++++ b/test/net/smtp/test_sslcontext.rb
 @@ -0,0 +1,128 @@
 +require 'net/smtp'
 +require 'test/unit'
@@ -567,7 +567,7 @@
 +  end
 +end
 --- /dev/null
-+++ ruby2.7-2.7.6/test/net/smtp/test_starttls.rb
++++ b/test/net/smtp/test_starttls.rb
 @@ -0,0 +1,121 @@
 +require 'net/smtp'
 +require 'test/unit'

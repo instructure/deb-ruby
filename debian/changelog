@@ -1,3 +1,9 @@
+ruby2.7 (2.7.6-1ppa15) bionic; urgency=medium
+
+  * Make net smtp gemspec valid
+
+ -- Jacob Burroughs <maths22@gmail.com>  Wed, 21 Sep 2022 11:16:35 -0500
+
 ruby2.7 (2.7.6-1ppa14) bionic; urgency=medium
 
   * Make rbinstall more not broken
