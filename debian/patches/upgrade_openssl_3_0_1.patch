@@ -34265,3 +34265,390 @@
 -end
 -
 -end
+--- ruby2.7-2.7.6.orig/ext/openssl/depend
++++ ruby2.7-2.7.6/ext/openssl/depend
+@@ -39,9 +39,9 @@ ossl.o: ossl_pkcs7.h
+ ossl.o: ossl_pkey.h
+ ossl.o: ossl_rand.h
+ ossl.o: ossl_ssl.h
++ossl.o: ossl_ts.h
+ ossl.o: ossl_version.h
+ ossl.o: ossl_x509.h
+-ossl.o: ruby_missing.h
+ ossl_asn1.o: $(RUBY_EXTCONF_H)
+ ossl_asn1.o: $(arch_hdrdir)/ruby/config.h
+ ossl_asn1.o: $(hdrdir)/ruby.h
+@@ -77,9 +77,9 @@ ossl_asn1.o: ossl_pkcs7.h
+ ossl_asn1.o: ossl_pkey.h
+ ossl_asn1.o: ossl_rand.h
+ ossl_asn1.o: ossl_ssl.h
++ossl_asn1.o: ossl_ts.h
+ ossl_asn1.o: ossl_version.h
+ ossl_asn1.o: ossl_x509.h
+-ossl_asn1.o: ruby_missing.h
+ ossl_bio.o: $(RUBY_EXTCONF_H)
+ ossl_bio.o: $(arch_hdrdir)/ruby/config.h
+ ossl_bio.o: $(hdrdir)/ruby.h
+@@ -115,9 +115,9 @@ ossl_bio.o: ossl_pkcs7.h
+ ossl_bio.o: ossl_pkey.h
+ ossl_bio.o: ossl_rand.h
+ ossl_bio.o: ossl_ssl.h
++ossl_bio.o: ossl_ts.h
+ ossl_bio.o: ossl_version.h
+ ossl_bio.o: ossl_x509.h
+-ossl_bio.o: ruby_missing.h
+ ossl_bn.o: $(RUBY_EXTCONF_H)
+ ossl_bn.o: $(arch_hdrdir)/ruby/config.h
+ ossl_bn.o: $(hdrdir)/ruby.h
+@@ -153,9 +153,9 @@ ossl_bn.o: ossl_pkcs7.h
+ ossl_bn.o: ossl_pkey.h
+ ossl_bn.o: ossl_rand.h
+ ossl_bn.o: ossl_ssl.h
++ossl_bn.o: ossl_ts.h
+ ossl_bn.o: ossl_version.h
+ ossl_bn.o: ossl_x509.h
+-ossl_bn.o: ruby_missing.h
+ ossl_cipher.o: $(RUBY_EXTCONF_H)
+ ossl_cipher.o: $(arch_hdrdir)/ruby/config.h
+ ossl_cipher.o: $(hdrdir)/ruby.h
+@@ -191,9 +191,9 @@ ossl_cipher.o: ossl_pkcs7.h
+ ossl_cipher.o: ossl_pkey.h
+ ossl_cipher.o: ossl_rand.h
+ ossl_cipher.o: ossl_ssl.h
++ossl_cipher.o: ossl_ts.h
+ ossl_cipher.o: ossl_version.h
+ ossl_cipher.o: ossl_x509.h
+-ossl_cipher.o: ruby_missing.h
+ ossl_config.o: $(RUBY_EXTCONF_H)
+ ossl_config.o: $(arch_hdrdir)/ruby/config.h
+ ossl_config.o: $(hdrdir)/ruby.h
+@@ -229,9 +229,9 @@ ossl_config.o: ossl_pkcs7.h
+ ossl_config.o: ossl_pkey.h
+ ossl_config.o: ossl_rand.h
+ ossl_config.o: ossl_ssl.h
++ossl_config.o: ossl_ts.h
+ ossl_config.o: ossl_version.h
+ ossl_config.o: ossl_x509.h
+-ossl_config.o: ruby_missing.h
+ ossl_digest.o: $(RUBY_EXTCONF_H)
+ ossl_digest.o: $(arch_hdrdir)/ruby/config.h
+ ossl_digest.o: $(hdrdir)/ruby.h
+@@ -267,9 +267,9 @@ ossl_digest.o: ossl_pkcs7.h
+ ossl_digest.o: ossl_pkey.h
+ ossl_digest.o: ossl_rand.h
+ ossl_digest.o: ossl_ssl.h
++ossl_digest.o: ossl_ts.h
+ ossl_digest.o: ossl_version.h
+ ossl_digest.o: ossl_x509.h
+-ossl_digest.o: ruby_missing.h
+ ossl_engine.o: $(RUBY_EXTCONF_H)
+ ossl_engine.o: $(arch_hdrdir)/ruby/config.h
+ ossl_engine.o: $(hdrdir)/ruby.h
+@@ -305,9 +305,9 @@ ossl_engine.o: ossl_pkcs7.h
+ ossl_engine.o: ossl_pkey.h
+ ossl_engine.o: ossl_rand.h
+ ossl_engine.o: ossl_ssl.h
++ossl_engine.o: ossl_ts.h
+ ossl_engine.o: ossl_version.h
+ ossl_engine.o: ossl_x509.h
+-ossl_engine.o: ruby_missing.h
+ ossl_hmac.o: $(RUBY_EXTCONF_H)
+ ossl_hmac.o: $(arch_hdrdir)/ruby/config.h
+ ossl_hmac.o: $(hdrdir)/ruby.h
+@@ -343,9 +343,9 @@ ossl_hmac.o: ossl_pkcs7.h
+ ossl_hmac.o: ossl_pkey.h
+ ossl_hmac.o: ossl_rand.h
+ ossl_hmac.o: ossl_ssl.h
++ossl_hmac.o: ossl_ts.h
+ ossl_hmac.o: ossl_version.h
+ ossl_hmac.o: ossl_x509.h
+-ossl_hmac.o: ruby_missing.h
+ ossl_kdf.o: $(RUBY_EXTCONF_H)
+ ossl_kdf.o: $(arch_hdrdir)/ruby/config.h
+ ossl_kdf.o: $(hdrdir)/ruby.h
+@@ -381,9 +381,9 @@ ossl_kdf.o: ossl_pkcs7.h
+ ossl_kdf.o: ossl_pkey.h
+ ossl_kdf.o: ossl_rand.h
+ ossl_kdf.o: ossl_ssl.h
++ossl_kdf.o: ossl_ts.h
+ ossl_kdf.o: ossl_version.h
+ ossl_kdf.o: ossl_x509.h
+-ossl_kdf.o: ruby_missing.h
+ ossl_ns_spki.o: $(RUBY_EXTCONF_H)
+ ossl_ns_spki.o: $(arch_hdrdir)/ruby/config.h
+ ossl_ns_spki.o: $(hdrdir)/ruby.h
+@@ -419,9 +419,9 @@ ossl_ns_spki.o: ossl_pkcs7.h
+ ossl_ns_spki.o: ossl_pkey.h
+ ossl_ns_spki.o: ossl_rand.h
+ ossl_ns_spki.o: ossl_ssl.h
++ossl_ns_spki.o: ossl_ts.h
+ ossl_ns_spki.o: ossl_version.h
+ ossl_ns_spki.o: ossl_x509.h
+-ossl_ns_spki.o: ruby_missing.h
+ ossl_ocsp.o: $(RUBY_EXTCONF_H)
+ ossl_ocsp.o: $(arch_hdrdir)/ruby/config.h
+ ossl_ocsp.o: $(hdrdir)/ruby.h
+@@ -457,9 +457,9 @@ ossl_ocsp.o: ossl_pkcs7.h
+ ossl_ocsp.o: ossl_pkey.h
+ ossl_ocsp.o: ossl_rand.h
+ ossl_ocsp.o: ossl_ssl.h
++ossl_ocsp.o: ossl_ts.h
+ ossl_ocsp.o: ossl_version.h
+ ossl_ocsp.o: ossl_x509.h
+-ossl_ocsp.o: ruby_missing.h
+ ossl_pkcs12.o: $(RUBY_EXTCONF_H)
+ ossl_pkcs12.o: $(arch_hdrdir)/ruby/config.h
+ ossl_pkcs12.o: $(hdrdir)/ruby.h
+@@ -495,9 +495,9 @@ ossl_pkcs12.o: ossl_pkcs7.h
+ ossl_pkcs12.o: ossl_pkey.h
+ ossl_pkcs12.o: ossl_rand.h
+ ossl_pkcs12.o: ossl_ssl.h
++ossl_pkcs12.o: ossl_ts.h
+ ossl_pkcs12.o: ossl_version.h
+ ossl_pkcs12.o: ossl_x509.h
+-ossl_pkcs12.o: ruby_missing.h
+ ossl_pkcs7.o: $(RUBY_EXTCONF_H)
+ ossl_pkcs7.o: $(arch_hdrdir)/ruby/config.h
+ ossl_pkcs7.o: $(hdrdir)/ruby.h
+@@ -533,9 +533,9 @@ ossl_pkcs7.o: ossl_pkcs7.h
+ ossl_pkcs7.o: ossl_pkey.h
+ ossl_pkcs7.o: ossl_rand.h
+ ossl_pkcs7.o: ossl_ssl.h
++ossl_pkcs7.o: ossl_ts.h
+ ossl_pkcs7.o: ossl_version.h
+ ossl_pkcs7.o: ossl_x509.h
+-ossl_pkcs7.o: ruby_missing.h
+ ossl_pkey.o: $(RUBY_EXTCONF_H)
+ ossl_pkey.o: $(arch_hdrdir)/ruby/config.h
+ ossl_pkey.o: $(hdrdir)/ruby.h
+@@ -571,9 +571,9 @@ ossl_pkey.o: ossl_pkey.c
+ ossl_pkey.o: ossl_pkey.h
+ ossl_pkey.o: ossl_rand.h
+ ossl_pkey.o: ossl_ssl.h
++ossl_pkey.o: ossl_ts.h
+ ossl_pkey.o: ossl_version.h
+ ossl_pkey.o: ossl_x509.h
+-ossl_pkey.o: ruby_missing.h
+ ossl_pkey_dh.o: $(RUBY_EXTCONF_H)
+ ossl_pkey_dh.o: $(arch_hdrdir)/ruby/config.h
+ ossl_pkey_dh.o: $(hdrdir)/ruby.h
+@@ -609,9 +609,9 @@ ossl_pkey_dh.o: ossl_pkey.h
+ ossl_pkey_dh.o: ossl_pkey_dh.c
+ ossl_pkey_dh.o: ossl_rand.h
+ ossl_pkey_dh.o: ossl_ssl.h
++ossl_pkey_dh.o: ossl_ts.h
+ ossl_pkey_dh.o: ossl_version.h
+ ossl_pkey_dh.o: ossl_x509.h
+-ossl_pkey_dh.o: ruby_missing.h
+ ossl_pkey_dsa.o: $(RUBY_EXTCONF_H)
+ ossl_pkey_dsa.o: $(arch_hdrdir)/ruby/config.h
+ ossl_pkey_dsa.o: $(hdrdir)/ruby.h
+@@ -647,9 +647,9 @@ ossl_pkey_dsa.o: ossl_pkey.h
+ ossl_pkey_dsa.o: ossl_pkey_dsa.c
+ ossl_pkey_dsa.o: ossl_rand.h
+ ossl_pkey_dsa.o: ossl_ssl.h
++ossl_pkey_dsa.o: ossl_ts.h
+ ossl_pkey_dsa.o: ossl_version.h
+ ossl_pkey_dsa.o: ossl_x509.h
+-ossl_pkey_dsa.o: ruby_missing.h
+ ossl_pkey_ec.o: $(RUBY_EXTCONF_H)
+ ossl_pkey_ec.o: $(arch_hdrdir)/ruby/config.h
+ ossl_pkey_ec.o: $(hdrdir)/ruby.h
+@@ -685,9 +685,9 @@ ossl_pkey_ec.o: ossl_pkey.h
+ ossl_pkey_ec.o: ossl_pkey_ec.c
+ ossl_pkey_ec.o: ossl_rand.h
+ ossl_pkey_ec.o: ossl_ssl.h
++ossl_pkey_ec.o: ossl_ts.h
+ ossl_pkey_ec.o: ossl_version.h
+ ossl_pkey_ec.o: ossl_x509.h
+-ossl_pkey_ec.o: ruby_missing.h
+ ossl_pkey_rsa.o: $(RUBY_EXTCONF_H)
+ ossl_pkey_rsa.o: $(arch_hdrdir)/ruby/config.h
+ ossl_pkey_rsa.o: $(hdrdir)/ruby.h
+@@ -723,9 +723,9 @@ ossl_pkey_rsa.o: ossl_pkey.h
+ ossl_pkey_rsa.o: ossl_pkey_rsa.c
+ ossl_pkey_rsa.o: ossl_rand.h
+ ossl_pkey_rsa.o: ossl_ssl.h
++ossl_pkey_rsa.o: ossl_ts.h
+ ossl_pkey_rsa.o: ossl_version.h
+ ossl_pkey_rsa.o: ossl_x509.h
+-ossl_pkey_rsa.o: ruby_missing.h
+ ossl_rand.o: $(RUBY_EXTCONF_H)
+ ossl_rand.o: $(arch_hdrdir)/ruby/config.h
+ ossl_rand.o: $(hdrdir)/ruby.h
+@@ -761,9 +761,9 @@ ossl_rand.o: ossl_pkey.h
+ ossl_rand.o: ossl_rand.c
+ ossl_rand.o: ossl_rand.h
+ ossl_rand.o: ossl_ssl.h
++ossl_rand.o: ossl_ts.h
+ ossl_rand.o: ossl_version.h
+ ossl_rand.o: ossl_x509.h
+-ossl_rand.o: ruby_missing.h
+ ossl_ssl.o: $(RUBY_EXTCONF_H)
+ ossl_ssl.o: $(arch_hdrdir)/ruby/config.h
+ ossl_ssl.o: $(hdrdir)/ruby.h
+@@ -799,9 +799,9 @@ ossl_ssl.o: ossl_pkey.h
+ ossl_ssl.o: ossl_rand.h
+ ossl_ssl.o: ossl_ssl.c
+ ossl_ssl.o: ossl_ssl.h
++ossl_ssl.o: ossl_ts.h
+ ossl_ssl.o: ossl_version.h
+ ossl_ssl.o: ossl_x509.h
+-ossl_ssl.o: ruby_missing.h
+ ossl_ssl_session.o: $(RUBY_EXTCONF_H)
+ ossl_ssl_session.o: $(arch_hdrdir)/ruby/config.h
+ ossl_ssl_session.o: $(hdrdir)/ruby.h
+@@ -837,9 +837,46 @@ ossl_ssl_session.o: ossl_pkey.h
+ ossl_ssl_session.o: ossl_rand.h
+ ossl_ssl_session.o: ossl_ssl.h
+ ossl_ssl_session.o: ossl_ssl_session.c
++ossl_ssl_session.o: ossl_ts.h
+ ossl_ssl_session.o: ossl_version.h
+ ossl_ssl_session.o: ossl_x509.h
+-ossl_ssl_session.o: ruby_missing.h
++ossl_ts.o: $(RUBY_EXTCONF_H)
++ossl_ts.o: $(arch_hdrdir)/ruby/config.h
++ossl_ts.o: $(hdrdir)/ruby.h
++ossl_ts.o: $(hdrdir)/ruby/assert.h
++ossl_ts.o: $(hdrdir)/ruby/backward.h
++ossl_ts.o: $(hdrdir)/ruby/defines.h
++ossl_ts.o: $(hdrdir)/ruby/encoding.h
++ossl_ts.o: $(hdrdir)/ruby/intern.h
++ossl_ts.o: $(hdrdir)/ruby/io.h
++ossl_ts.o: $(hdrdir)/ruby/missing.h
++ossl_ts.o: $(hdrdir)/ruby/onigmo.h
++ossl_ts.o: $(hdrdir)/ruby/oniguruma.h
++ossl_ts.o: $(hdrdir)/ruby/ruby.h
++ossl_ts.o: $(hdrdir)/ruby/st.h
++ossl_ts.o: $(hdrdir)/ruby/subst.h
++ossl_ts.o: $(hdrdir)/ruby/thread.h
++ossl_ts.o: openssl_missing.h
++ossl_ts.o: ossl.h
++ossl_ts.o: ossl_asn1.h
++ossl_ts.o: ossl_bio.h
++ossl_ts.o: ossl_bn.h
++ossl_ts.o: ossl_cipher.h
++ossl_ts.o: ossl_config.h
++ossl_ts.o: ossl_digest.h
++ossl_ts.o: ossl_engine.h
++ossl_ts.o: ossl_hmac.h
++ossl_ts.o: ossl_kdf.h
++ossl_ts.o: ossl_ns_spki.h
++ossl_ts.o: ossl_ocsp.h
++ossl_ts.o: ossl_pkcs12.h
++ossl_ts.o: ossl_pkcs7.h
++ossl_ts.o: ossl_pkey.h
++ossl_ts.o: ossl_rand.h
++ossl_ts.o: ossl_ssl.h
++ossl_ts.o: ossl_ts.c
++ossl_ts.o: ossl_ts.h
++ossl_ts.o: ossl_x509.h
+ ossl_x509.o: $(RUBY_EXTCONF_H)
+ ossl_x509.o: $(arch_hdrdir)/ruby/config.h
+ ossl_x509.o: $(hdrdir)/ruby.h
+@@ -874,10 +911,10 @@ ossl_x509.o: ossl_pkcs7.h
+ ossl_x509.o: ossl_pkey.h
+ ossl_x509.o: ossl_rand.h
+ ossl_x509.o: ossl_ssl.h
++ossl_x509.o: ossl_ts.h
+ ossl_x509.o: ossl_version.h
+ ossl_x509.o: ossl_x509.c
+ ossl_x509.o: ossl_x509.h
+-ossl_x509.o: ruby_missing.h
+ ossl_x509attr.o: $(RUBY_EXTCONF_H)
+ ossl_x509attr.o: $(arch_hdrdir)/ruby/config.h
+ ossl_x509attr.o: $(hdrdir)/ruby.h
+@@ -912,10 +949,10 @@ ossl_x509attr.o: ossl_pkcs7.h
+ ossl_x509attr.o: ossl_pkey.h
+ ossl_x509attr.o: ossl_rand.h
+ ossl_x509attr.o: ossl_ssl.h
++ossl_x509attr.o: ossl_ts.h
+ ossl_x509attr.o: ossl_version.h
+ ossl_x509attr.o: ossl_x509.h
+ ossl_x509attr.o: ossl_x509attr.c
+-ossl_x509attr.o: ruby_missing.h
+ ossl_x509cert.o: $(RUBY_EXTCONF_H)
+ ossl_x509cert.o: $(arch_hdrdir)/ruby/config.h
+ ossl_x509cert.o: $(hdrdir)/ruby.h
+@@ -950,10 +987,10 @@ ossl_x509cert.o: ossl_pkcs7.h
+ ossl_x509cert.o: ossl_pkey.h
+ ossl_x509cert.o: ossl_rand.h
+ ossl_x509cert.o: ossl_ssl.h
++ossl_x509cert.o: ossl_ts.h
+ ossl_x509cert.o: ossl_version.h
+ ossl_x509cert.o: ossl_x509.h
+ ossl_x509cert.o: ossl_x509cert.c
+-ossl_x509cert.o: ruby_missing.h
+ ossl_x509crl.o: $(RUBY_EXTCONF_H)
+ ossl_x509crl.o: $(arch_hdrdir)/ruby/config.h
+ ossl_x509crl.o: $(hdrdir)/ruby.h
+@@ -988,10 +1025,10 @@ ossl_x509crl.o: ossl_pkcs7.h
+ ossl_x509crl.o: ossl_pkey.h
+ ossl_x509crl.o: ossl_rand.h
+ ossl_x509crl.o: ossl_ssl.h
++ossl_x509crl.o: ossl_ts.h
+ ossl_x509crl.o: ossl_version.h
+ ossl_x509crl.o: ossl_x509.h
+ ossl_x509crl.o: ossl_x509crl.c
+-ossl_x509crl.o: ruby_missing.h
+ ossl_x509ext.o: $(RUBY_EXTCONF_H)
+ ossl_x509ext.o: $(arch_hdrdir)/ruby/config.h
+ ossl_x509ext.o: $(hdrdir)/ruby.h
+@@ -1026,10 +1063,10 @@ ossl_x509ext.o: ossl_pkcs7.h
+ ossl_x509ext.o: ossl_pkey.h
+ ossl_x509ext.o: ossl_rand.h
+ ossl_x509ext.o: ossl_ssl.h
++ossl_x509ext.o: ossl_ts.h
+ ossl_x509ext.o: ossl_version.h
+ ossl_x509ext.o: ossl_x509.h
+ ossl_x509ext.o: ossl_x509ext.c
+-ossl_x509ext.o: ruby_missing.h
+ ossl_x509name.o: $(RUBY_EXTCONF_H)
+ ossl_x509name.o: $(arch_hdrdir)/ruby/config.h
+ ossl_x509name.o: $(hdrdir)/ruby.h
+@@ -1064,10 +1101,10 @@ ossl_x509name.o: ossl_pkcs7.h
+ ossl_x509name.o: ossl_pkey.h
+ ossl_x509name.o: ossl_rand.h
+ ossl_x509name.o: ossl_ssl.h
++ossl_x509name.o: ossl_ts.h
+ ossl_x509name.o: ossl_version.h
+ ossl_x509name.o: ossl_x509.h
+ ossl_x509name.o: ossl_x509name.c
+-ossl_x509name.o: ruby_missing.h
+ ossl_x509req.o: $(RUBY_EXTCONF_H)
+ ossl_x509req.o: $(arch_hdrdir)/ruby/config.h
+ ossl_x509req.o: $(hdrdir)/ruby.h
+@@ -1102,10 +1139,10 @@ ossl_x509req.o: ossl_pkcs7.h
+ ossl_x509req.o: ossl_pkey.h
+ ossl_x509req.o: ossl_rand.h
+ ossl_x509req.o: ossl_ssl.h
++ossl_x509req.o: ossl_ts.h
+ ossl_x509req.o: ossl_version.h
+ ossl_x509req.o: ossl_x509.h
+ ossl_x509req.o: ossl_x509req.c
+-ossl_x509req.o: ruby_missing.h
+ ossl_x509revoked.o: $(RUBY_EXTCONF_H)
+ ossl_x509revoked.o: $(arch_hdrdir)/ruby/config.h
+ ossl_x509revoked.o: $(hdrdir)/ruby.h
+@@ -1140,10 +1177,10 @@ ossl_x509revoked.o: ossl_pkcs7.h
+ ossl_x509revoked.o: ossl_pkey.h
+ ossl_x509revoked.o: ossl_rand.h
+ ossl_x509revoked.o: ossl_ssl.h
++ossl_x509revoked.o: ossl_ts.h
+ ossl_x509revoked.o: ossl_version.h
+ ossl_x509revoked.o: ossl_x509.h
+ ossl_x509revoked.o: ossl_x509revoked.c
+-ossl_x509revoked.o: ruby_missing.h
+ ossl_x509store.o: $(RUBY_EXTCONF_H)
+ ossl_x509store.o: $(arch_hdrdir)/ruby/config.h
+ ossl_x509store.o: $(hdrdir)/ruby.h
+@@ -1178,8 +1215,8 @@ ossl_x509store.o: ossl_pkcs7.h
+ ossl_x509store.o: ossl_pkey.h
+ ossl_x509store.o: ossl_rand.h
+ ossl_x509store.o: ossl_ssl.h
++ossl_x509store.o: ossl_ts.h
+ ossl_x509store.o: ossl_version.h
+ ossl_x509store.o: ossl_x509.h
+ ossl_x509store.o: ossl_x509store.c
+-ossl_x509store.o: ruby_missing.h
+ # AUTOGENERATED DEPENDENCIES END
