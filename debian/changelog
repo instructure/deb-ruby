@@ -1,3 +1,9 @@
+ruby2.7 (2.7.6-1ppa13) bionic; urgency=medium
+
+  * Make rbinstall not broken
+
+ -- Jacob Burroughs <maths22@gmail.com>  Wed, 21 Sep 2022 10:05:49 -0500
+
 ruby2.7 (2.7.6-1ppa12) bionic; urgency=medium
 
   * Upgrade net/smtp and bundler to match other upgrades
