@@ -1,3 +1,9 @@
+ruby2.7 (2.7.6-1ppa6) bionic; urgency=medium
+
+  * Re-apply backported diff
+
+ -- Jacob Burroughs <maths22@gmail.com>  Tue, 20 Sep 2022 20:03:52 -0500
+
 ruby2.7 (2.7.6-1ppa5) bionic; urgency=medium
 
   * More build fixes to correctly upgrade rubygems and openssl
