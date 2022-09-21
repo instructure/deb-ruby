@@ -1,3 +1,9 @@
+ruby2.7 (2.7.6-1ppa9) bionic; urgency=medium
+
+  * Fix up most of the tests
+
+ -- Jacob Burroughs <maths22@gmail.com>  Tue, 20 Sep 2022 23:43:18 -0500
+
 ruby2.7 (2.7.6-1ppa8) bionic; urgency=medium
 
   * Update dependencies again
