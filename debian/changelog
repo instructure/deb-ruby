@@ -1,3 +1,9 @@
+ruby2.7 (2.7.6-1ppa8) bionic; urgency=medium
+
+  * Update dependencies again
+
+ -- Jacob Burroughs <maths22@gmail.com>  Tue, 20 Sep 2022 21:17:58 -0500
+
 ruby2.7 (2.7.6-1ppa7) bionic; urgency=medium
 
   * Update dependencies

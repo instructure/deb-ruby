@@ -1,5 +1,7 @@
---- ruby2.7-2.7.6.orig/ext/openssl/History.md
-+++ ruby2.7-2.7.6/ext/openssl/History.md
+Index: deb-ruby/ext/openssl/History.md
+===================================================================
+--- deb-ruby.orig/ext/openssl/History.md
++++ deb-ruby/ext/openssl/History.md
 @@ -1,3 +1,239 @@
 +Version 3.0.1
 +=============
@@ -249,7 +251,9 @@
    [[GitHub #460]](https://github.com/ruby/openssl/pull/460)
  * `extconf.rb` explicitly checks that OpenSSL's version number is 1.0.1 or
    newer but also less than 3.0. Ruby/OpenSSL v2.1.x and v2.2.x will not support
---- ruby2.7-2.7.6.orig/ext/openssl/deprecation.rb
+Index: deb-ruby/ext/openssl/deprecation.rb
+===================================================================
+--- deb-ruby.orig/ext/openssl/deprecation.rb
 +++ /dev/null
 @@ -1,27 +0,0 @@
 -# frozen_string_literal: false
@@ -279,8 +283,10 @@
 -      have_macro(func, header) && $defs.push("-DHAVE_#{func.upcase}")
 -  end
 -end
---- ruby2.7-2.7.6.orig/ext/openssl/extconf.rb
-+++ ruby2.7-2.7.6/ext/openssl/extconf.rb
+Index: deb-ruby/ext/openssl/extconf.rb
+===================================================================
+--- deb-ruby.orig/ext/openssl/extconf.rb
++++ deb-ruby/ext/openssl/extconf.rb
 @@ -1,5 +1,5 @@
  # -*- coding: us-ascii -*-
 -# frozen_string_literal: false
@@ -444,8 +450,10 @@
 -OpenSSL.restore_warning_flag
  create_makefile("openssl")
  Logging::message "Done.\n"
---- ruby2.7-2.7.6.orig/ext/openssl/lib/openssl.rb
-+++ ruby2.7-2.7.6/ext/openssl/lib/openssl.rb
+Index: deb-ruby/ext/openssl/lib/openssl.rb
+===================================================================
+--- deb-ruby.orig/ext/openssl/lib/openssl.rb
++++ deb-ruby/ext/openssl/lib/openssl.rb
 @@ -1,4 +1,4 @@
 -# frozen_string_literal: false
 +# frozen_string_literal: true
@@ -487,16 +495,20 @@
 +    OpenSSL.fixed_length_secure_compare(hashed_a, hashed_b) && a == b
 +  end
 +end
---- ruby2.7-2.7.6.orig/ext/openssl/lib/openssl/bn.rb
-+++ ruby2.7-2.7.6/ext/openssl/lib/openssl/bn.rb
+Index: deb-ruby/ext/openssl/lib/openssl/bn.rb
+===================================================================
+--- deb-ruby.orig/ext/openssl/lib/openssl/bn.rb
++++ deb-ruby/ext/openssl/lib/openssl/bn.rb
 @@ -1,4 +1,4 @@
 -# frozen_string_literal: false
 +# frozen_string_literal: true
  #--
  #
  # = Ruby-space definitions that completes C-space funcs for BN
---- ruby2.7-2.7.6.orig/ext/openssl/lib/openssl/buffering.rb
-+++ ruby2.7-2.7.6/ext/openssl/lib/openssl/buffering.rb
+Index: deb-ruby/ext/openssl/lib/openssl/buffering.rb
+===================================================================
+--- deb-ruby.orig/ext/openssl/lib/openssl/buffering.rb
++++ deb-ruby/ext/openssl/lib/openssl/buffering.rb
 @@ -1,5 +1,5 @@
  # coding: binary
 -# frozen_string_literal: false
@@ -586,15 +598,19 @@
      args.each{ |arg| s << arg.to_s }
      do_write(s)
      nil
---- ruby2.7-2.7.6.orig/ext/openssl/lib/openssl/cipher.rb
-+++ ruby2.7-2.7.6/ext/openssl/lib/openssl/cipher.rb
+Index: deb-ruby/ext/openssl/lib/openssl/cipher.rb
+===================================================================
+--- deb-ruby.orig/ext/openssl/lib/openssl/cipher.rb
++++ deb-ruby/ext/openssl/lib/openssl/cipher.rb
 @@ -1,4 +1,4 @@
 -# frozen_string_literal: false
 +# frozen_string_literal: true
  #--
  # = Ruby-space predefined Cipher subclasses
  #
---- ruby2.7-2.7.6.orig/ext/openssl/lib/openssl/config.rb
+Index: deb-ruby/ext/openssl/lib/openssl/config.rb
+===================================================================
+--- deb-ruby.orig/ext/openssl/lib/openssl/config.rb
 +++ /dev/null
 @@ -1,492 +0,0 @@
 -# frozen_string_literal: false
@@ -1089,8 +1105,10 @@
 -    end
 -  end
 -end
---- ruby2.7-2.7.6.orig/ext/openssl/lib/openssl/digest.rb
-+++ ruby2.7-2.7.6/ext/openssl/lib/openssl/digest.rb
+Index: deb-ruby/ext/openssl/lib/openssl/digest.rb
+===================================================================
+--- deb-ruby.orig/ext/openssl/lib/openssl/digest.rb
++++ deb-ruby/ext/openssl/lib/openssl/digest.rb
 @@ -1,4 +1,4 @@
 -# frozen_string_literal: false
 +# frozen_string_literal: true
@@ -1142,8 +1160,10 @@
  
      # Deprecated.
      #
+Index: deb-ruby/ext/openssl/lib/openssl/hmac.rb
+===================================================================
 --- /dev/null
-+++ ruby2.7-2.7.6/ext/openssl/lib/openssl/hmac.rb
++++ deb-ruby/ext/openssl/lib/openssl/hmac.rb
 @@ -0,0 +1,78 @@
 +# frozen_string_literal: true
 +
@@ -1223,8 +1243,10 @@
 +    end
 +  end
 +end
+Index: deb-ruby/ext/openssl/lib/openssl/marshal.rb
+===================================================================
 --- /dev/null
-+++ ruby2.7-2.7.6/ext/openssl/lib/openssl/marshal.rb
++++ deb-ruby/ext/openssl/lib/openssl/marshal.rb
 @@ -0,0 +1,30 @@
 +# frozen_string_literal: true
 +#--
@@ -1256,16 +1278,20 @@
 +    end
 +  end
 +end
---- ruby2.7-2.7.6.orig/ext/openssl/lib/openssl/pkcs5.rb
-+++ ruby2.7-2.7.6/ext/openssl/lib/openssl/pkcs5.rb
+Index: deb-ruby/ext/openssl/lib/openssl/pkcs5.rb
+===================================================================
+--- deb-ruby.orig/ext/openssl/lib/openssl/pkcs5.rb
++++ deb-ruby/ext/openssl/lib/openssl/pkcs5.rb
 @@ -1,4 +1,4 @@
 -# frozen_string_literal: false
 +# frozen_string_literal: true
  #--
  # Ruby/OpenSSL Project
  # Copyright (C) 2017 Ruby/OpenSSL Project Authors
---- ruby2.7-2.7.6.orig/ext/openssl/lib/openssl/pkey.rb
-+++ ruby2.7-2.7.6/ext/openssl/lib/openssl/pkey.rb
+Index: deb-ruby/ext/openssl/lib/openssl/pkey.rb
+===================================================================
+--- deb-ruby.orig/ext/openssl/lib/openssl/pkey.rb
++++ deb-ruby/ext/openssl/lib/openssl/pkey.rb
 @@ -1,11 +1,298 @@
 -# frozen_string_literal: false
 +# frozen_string_literal: true
@@ -1726,8 +1752,10 @@
 +    end
 +  end
  end
---- ruby2.7-2.7.6.orig/ext/openssl/lib/openssl/ssl.rb
-+++ ruby2.7-2.7.6/ext/openssl/lib/openssl/ssl.rb
+Index: deb-ruby/ext/openssl/lib/openssl/ssl.rb
+===================================================================
+--- deb-ruby.orig/ext/openssl/lib/openssl/ssl.rb
++++ deb-ruby/ext/openssl/lib/openssl/ssl.rb
 @@ -1,4 +1,4 @@
 -# frozen_string_literal: false
 +# frozen_string_literal: true
@@ -1843,16 +1871,20 @@
          @svr.listen(backlog)
        end
  
+Index: deb-ruby/ext/openssl/lib/openssl/version.rb
+===================================================================
 --- /dev/null
-+++ ruby2.7-2.7.6/ext/openssl/lib/openssl/version.rb
++++ deb-ruby/ext/openssl/lib/openssl/version.rb
 @@ -0,0 +1,5 @@
 +# frozen_string_literal: true
 +
 +module OpenSSL
 +  VERSION = "3.0.1"
 +end
---- ruby2.7-2.7.6.orig/ext/openssl/lib/openssl/x509.rb
-+++ ruby2.7-2.7.6/ext/openssl/lib/openssl/x509.rb
+Index: deb-ruby/ext/openssl/lib/openssl/x509.rb
+===================================================================
+--- deb-ruby.orig/ext/openssl/lib/openssl/x509.rb
++++ deb-ruby/ext/openssl/lib/openssl/x509.rb
 @@ -1,4 +1,4 @@
 -# frozen_string_literal: false
 +# frozen_string_literal: true
@@ -2102,8 +2134,10 @@
        def ==(other)
          return false unless Request === other
          to_der == other.to_der
---- ruby2.7-2.7.6.orig/ext/openssl/openssl.gemspec
-+++ ruby2.7-2.7.6/ext/openssl/openssl.gemspec
+Index: deb-ruby/ext/openssl/openssl.gemspec
+===================================================================
+--- deb-ruby.orig/ext/openssl/openssl.gemspec
++++ deb-ruby/ext/openssl/openssl.gemspec
 @@ -1,6 +1,6 @@
  Gem::Specification.new do |spec|
    spec.name          = "openssl"
@@ -2127,8 +2161,10 @@
  
    spec.metadata["msys2_mingw_dependencies"] = "openssl"
  end
---- ruby2.7-2.7.6.orig/ext/openssl/openssl_missing.c
-+++ ruby2.7-2.7.6/ext/openssl/openssl_missing.c
+Index: deb-ruby/ext/openssl/openssl_missing.c
+===================================================================
+--- deb-ruby.orig/ext/openssl/openssl_missing.c
++++ deb-ruby/ext/openssl/openssl_missing.c
 @@ -10,77 +10,11 @@
  #include RUBY_EXTCONF_H
  
@@ -2207,8 +2243,10 @@
  #if !defined(HAVE_X509_CRL_GET0_SIGNATURE)
  void
  ossl_X509_CRL_get0_signature(const X509_CRL *crl, const ASN1_BIT_STRING **psig,
---- ruby2.7-2.7.6.orig/ext/openssl/openssl_missing.h
-+++ ruby2.7-2.7.6/ext/openssl/openssl_missing.h
+Index: deb-ruby/ext/openssl/openssl_missing.h
+===================================================================
+--- deb-ruby.orig/ext/openssl/openssl_missing.h
++++ deb-ruby/ext/openssl/openssl_missing.h
 @@ -12,40 +12,7 @@
  
  #include "ruby/config.h"
@@ -2338,8 +2376,10 @@
 +#endif
 +
  #endif /* _OSSL_OPENSSL_MISSING_H_ */
---- ruby2.7-2.7.6.orig/ext/openssl/ossl.c
-+++ ruby2.7-2.7.6/ext/openssl/ossl.c
+Index: deb-ruby/ext/openssl/ossl.c
+===================================================================
+--- deb-ruby.orig/ext/openssl/ossl.c
++++ deb-ruby/ext/openssl/ossl.c
 @@ -9,13 +9,19 @@
   */
  #include "ossl.h"
@@ -2741,8 +2781,10 @@
      Init_ossl_x509();
      Init_ossl_ocsp();
      Init_ossl_engine();
---- ruby2.7-2.7.6.orig/ext/openssl/ossl.h
-+++ ruby2.7-2.7.6/ext/openssl/ossl.h
+Index: deb-ruby/ext/openssl/ossl.h
+===================================================================
+--- deb-ruby.orig/ext/openssl/ossl.h
++++ deb-ruby/ext/openssl/ossl.h
 @@ -18,20 +18,19 @@
  #include <ruby/io.h>
  #include <ruby/thread.h>
@@ -2832,8 +2874,10 @@
  #include "ossl_x509.h"
  #include "ossl_engine.h"
  #include "ossl_kdf.h"
---- ruby2.7-2.7.6.orig/ext/openssl/ossl_asn1.c
-+++ ruby2.7-2.7.6/ext/openssl/ossl_asn1.c
+Index: deb-ruby/ext/openssl/ossl_asn1.c
+===================================================================
+--- deb-ruby.orig/ext/openssl/ossl_asn1.c
++++ deb-ruby/ext/openssl/ossl_asn1.c
 @@ -69,6 +69,12 @@ asn1time_to_time(const ASN1_TIME *time)
      return rb_funcall2(rb_cTime, rb_intern("utc"), 6, argv);
  }
@@ -2935,8 +2979,10 @@
      rb_attr(cASN1BitString, rb_intern("unused_bits"), 1, 1, 0);
  
      rb_define_method(cASN1EndOfContent, "initialize", ossl_asn1eoc_initialize, 0);
---- ruby2.7-2.7.6.orig/ext/openssl/ossl_bn.c
-+++ ruby2.7-2.7.6/ext/openssl/ossl_bn.c
+Index: deb-ruby/ext/openssl/ossl_bn.c
+===================================================================
+--- deb-ruby.orig/ext/openssl/ossl_bn.c
++++ deb-ruby/ext/openssl/ossl_bn.c
 @@ -10,6 +10,10 @@
  /* modified by Michal Rokos <m.rokos@sh.cvut.cz> */
  #include "ossl.h"
@@ -3449,8 +3495,10 @@
      /*
       * bn2bin
       * bin2bn
---- ruby2.7-2.7.6.orig/ext/openssl/ossl_bn.h
-+++ ruby2.7-2.7.6/ext/openssl/ossl_bn.h
+Index: deb-ruby/ext/openssl/ossl_bn.h
+===================================================================
+--- deb-ruby.orig/ext/openssl/ossl_bn.h
++++ deb-ruby/ext/openssl/ossl_bn.h
 @@ -13,7 +13,8 @@
  extern VALUE cBN;
  extern VALUE eBNError;
@@ -3461,8 +3509,10 @@
  
  #define GetBNPtr(obj) ossl_bn_value_ptr(&(obj))
  
---- ruby2.7-2.7.6.orig/ext/openssl/ossl_cipher.c
-+++ ruby2.7-2.7.6/ext/openssl/ossl_cipher.c
+Index: deb-ruby/ext/openssl/ossl_cipher.c
+===================================================================
+--- deb-ruby.orig/ext/openssl/ossl_cipher.c
++++ deb-ruby/ext/openssl/ossl_cipher.c
 @@ -104,7 +104,7 @@ ossl_cipher_alloc(VALUE klass)
   *  call-seq:
   *     Cipher.new(string) -> cipher
@@ -3615,8 +3665,10 @@
  
      id_auth_tag_len = rb_intern_const("auth_tag_len");
      id_key_set = rb_intern_const("key_set");
---- ruby2.7-2.7.6.orig/ext/openssl/ossl_config.c
-+++ ruby2.7-2.7.6/ext/openssl/ossl_config.c
+Index: deb-ruby/ext/openssl/ossl_config.c
+===================================================================
+--- deb-ruby.orig/ext/openssl/ossl_config.c
++++ deb-ruby/ext/openssl/ossl_config.c
 @@ -9,81 +9,452 @@
   */
  #include "ossl.h"
@@ -4112,8 +4164,10 @@
 +    path_str = ossl_buf2str(path, rb_long2int(strlen(path)));
 +    rb_define_const(cConfig, "DEFAULT_CONFIG_FILE", path_str);
  }
---- ruby2.7-2.7.6.orig/ext/openssl/ossl_config.h
-+++ ruby2.7-2.7.6/ext/openssl/ossl_config.h
+Index: deb-ruby/ext/openssl/ossl_config.h
+===================================================================
+--- deb-ruby.orig/ext/openssl/ossl_config.h
++++ deb-ruby/ext/openssl/ossl_config.h
 @@ -7,13 +7,10 @@
   * This program is licensed under the same licence as Ruby.
   * (See the file 'LICENCE'.)
@@ -4132,8 +4186,10 @@
  
 -#endif /* _OSSL_CONFIG_H_ */
 +#endif /* OSSL_CONFIG_H */
---- ruby2.7-2.7.6.orig/ext/openssl/ossl_digest.c
-+++ ruby2.7-2.7.6/ext/openssl/ossl_digest.c
+Index: deb-ruby/ext/openssl/ossl_digest.c
+===================================================================
+--- deb-ruby.orig/ext/openssl/ossl_digest.c
++++ deb-ruby/ext/openssl/ossl_digest.c
 @@ -63,7 +63,7 @@ ossl_evp_get_digestbyname(VALUE obj)
  
          GetDigest(obj, ctx);
@@ -4303,8 +4359,10 @@
       *   sha256.reset
       *   digest2 = sha256.digest(data2)
       *
---- ruby2.7-2.7.6.orig/ext/openssl/ossl_engine.c
-+++ ruby2.7-2.7.6/ext/openssl/ossl_engine.c
+Index: deb-ruby/ext/openssl/ossl_engine.c
+===================================================================
+--- deb-ruby.orig/ext/openssl/ossl_engine.c
++++ deb-ruby/ext/openssl/ossl_engine.c
 @@ -9,7 +9,8 @@
   */
  #include "ossl.h"
@@ -4402,8 +4460,10 @@
  }
  
  /*
---- ruby2.7-2.7.6.orig/ext/openssl/ossl_hmac.c
-+++ ruby2.7-2.7.6/ext/openssl/ossl_hmac.c
+Index: deb-ruby/ext/openssl/ossl_hmac.c
+===================================================================
+--- deb-ruby.orig/ext/openssl/ossl_hmac.c
++++ deb-ruby/ext/openssl/ossl_hmac.c
 @@ -7,14 +7,12 @@
   * This program is licensed under the same licence as Ruby.
   * (See the file 'LICENCE'.)
@@ -4756,8 +4816,10 @@
 -    rb_warning("HMAC is not available: OpenSSL is compiled without HMAC.");
 -}
 -#endif /* NO_HMAC */
---- ruby2.7-2.7.6.orig/ext/openssl/ossl_kdf.c
-+++ ruby2.7-2.7.6/ext/openssl/ossl_kdf.c
+Index: deb-ruby/ext/openssl/ossl_kdf.c
+===================================================================
+--- deb-ruby.orig/ext/openssl/ossl_kdf.c
++++ deb-ruby/ext/openssl/ossl_kdf.c
 @@ -163,6 +163,14 @@ kdf_scrypt(int argc, VALUE *argv, VALUE 
   *   HashLen is the length of the hash function output in octets.
   * _hash_::
@@ -4809,8 +4871,10 @@
       */
      mKDF = rb_define_module_under(mOSSL, "KDF");
      /*
---- ruby2.7-2.7.6.orig/ext/openssl/ossl_ns_spki.c
-+++ ruby2.7-2.7.6/ext/openssl/ossl_ns_spki.c
+Index: deb-ruby/ext/openssl/ossl_ns_spki.c
+===================================================================
+--- deb-ruby.orig/ext/openssl/ossl_ns_spki.c
++++ deb-ruby/ext/openssl/ossl_ns_spki.c
 @@ -350,7 +350,7 @@ ossl_spki_verify(VALUE self, VALUE key)
   *   spki = OpenSSL::Netscape::SPKI.new
   *   spki.challenge = "RandomChallenge"
@@ -4820,8 +4884,10 @@
   *   #send a request containing this to a server generating a certificate
   * === Verifying an SPKI request
   *   request = #...
---- ruby2.7-2.7.6.orig/ext/openssl/ossl_ocsp.c
-+++ ruby2.7-2.7.6/ext/openssl/ossl_ocsp.c
+Index: deb-ruby/ext/openssl/ossl_ocsp.c
+===================================================================
+--- deb-ruby.orig/ext/openssl/ossl_ocsp.c
++++ deb-ruby/ext/openssl/ossl_ocsp.c
 @@ -157,7 +157,7 @@ ossl_ocspcertid_new(OCSP_CERTID *cid)
  }
  
@@ -4952,8 +5018,10 @@
       *   end
       *
       * Then check the validity. A status issued in the future must be rejected.
---- ruby2.7-2.7.6.orig/ext/openssl/ossl_ocsp.h
-+++ ruby2.7-2.7.6/ext/openssl/ossl_ocsp.h
+Index: deb-ruby/ext/openssl/ossl_ocsp.h
+===================================================================
+--- deb-ruby.orig/ext/openssl/ossl_ocsp.h
++++ deb-ruby/ext/openssl/ossl_ocsp.h
 @@ -13,9 +13,9 @@
  
  #if !defined(OPENSSL_NO_OCSP)
@@ -4967,8 +5035,10 @@
  #endif
  
  void Init_ossl_ocsp(void);
---- ruby2.7-2.7.6.orig/ext/openssl/ossl_pkcs12.c
-+++ ruby2.7-2.7.6/ext/openssl/ossl_pkcs12.c
+Index: deb-ruby/ext/openssl/ossl_pkcs12.c
+===================================================================
+--- deb-ruby.orig/ext/openssl/ossl_pkcs12.c
++++ deb-ruby/ext/openssl/ossl_pkcs12.c
 @@ -149,6 +149,24 @@ ossl_pkcs12_s_create(int argc, VALUE *ar
      return obj;
  }
@@ -5013,8 +5083,10 @@
  	if (st) goto err;
      }
  
---- ruby2.7-2.7.6.orig/ext/openssl/ossl_pkcs7.c
-+++ ruby2.7-2.7.6/ext/openssl/ossl_pkcs7.c
+Index: deb-ruby/ext/openssl/ossl_pkcs7.c
+===================================================================
+--- deb-ruby.orig/ext/openssl/ossl_pkcs7.c
++++ deb-ruby/ext/openssl/ossl_pkcs7.c
 @@ -9,21 +9,6 @@
   */
  #include "ossl.h"
@@ -5228,8 +5300,10 @@
      rb_define_method(cPKCS7Signer, "serial", ossl_pkcs7si_get_serial,0);
      rb_define_method(cPKCS7Signer,"signed_time",ossl_pkcs7si_get_signed_time,0);
  
---- ruby2.7-2.7.6.orig/ext/openssl/ossl_pkcs7.h
-+++ ruby2.7-2.7.6/ext/openssl/ossl_pkcs7.h
+Index: deb-ruby/ext/openssl/ossl_pkcs7.h
+===================================================================
+--- deb-ruby.orig/ext/openssl/ossl_pkcs7.h
++++ deb-ruby/ext/openssl/ossl_pkcs7.h
 @@ -10,6 +10,22 @@
  #if !defined(_OSSL_PKCS7_H_)
  #define _OSSL_PKCS7_H_
@@ -5253,8 +5327,10 @@
  extern VALUE cPKCS7;
  extern VALUE cPKCS7Signer;
  extern VALUE cPKCS7Recipient;
---- ruby2.7-2.7.6.orig/ext/openssl/ossl_pkey.c
-+++ ruby2.7-2.7.6/ext/openssl/ossl_pkey.c
+Index: deb-ruby/ext/openssl/ossl_pkey.c
+===================================================================
+--- deb-ruby.orig/ext/openssl/ossl_pkey.c
++++ deb-ruby/ext/openssl/ossl_pkey.c
 @@ -9,6 +9,10 @@
   */
  #include "ossl.h"
@@ -6883,8 +6959,10 @@
  
      id_private_q = rb_intern("private?");
  
---- ruby2.7-2.7.6.orig/ext/openssl/ossl_pkey.h
-+++ ruby2.7-2.7.6/ext/openssl/ossl_pkey.h
+Index: deb-ruby/ext/openssl/ossl_pkey.h
+===================================================================
+--- deb-ruby.orig/ext/openssl/ossl_pkey.h
++++ deb-ruby/ext/openssl/ossl_pkey.h
 @@ -7,27 +7,18 @@
   * This program is licensed under the same licence as Ruby.
   * (See the file 'LICENCE'.)
@@ -7062,8 +7140,10 @@
 -
 -#endif /* _OSSL_PKEY_H_ */
 +#endif /* OSSL_PKEY_H */
---- ruby2.7-2.7.6.orig/ext/openssl/ossl_pkey_dh.c
-+++ ruby2.7-2.7.6/ext/openssl/ossl_pkey_dh.c
+Index: deb-ruby/ext/openssl/ossl_pkey_dh.c
+===================================================================
+--- deb-ruby.orig/ext/openssl/ossl_pkey_dh.c
++++ deb-ruby/ext/openssl/ossl_pkey_dh.c
 @@ -30,216 +30,104 @@ VALUE cDH;
  VALUE eDHError;
  
@@ -7614,8 +7694,10 @@
  
      DEF_OSSL_PKEY_BN(cDH, dh, p);
      DEF_OSSL_PKEY_BN(cDH, dh, q);
---- ruby2.7-2.7.6.orig/ext/openssl/ossl_pkey_dsa.c
-+++ ruby2.7-2.7.6/ext/openssl/ossl_pkey_dsa.c
+Index: deb-ruby/ext/openssl/ossl_pkey_dsa.c
+===================================================================
+--- deb-ruby.orig/ext/openssl/ossl_pkey_dsa.c
++++ deb-ruby/ext/openssl/ossl_pkey_dsa.c
 @@ -44,245 +44,130 @@ VALUE cDSA;
  VALUE eDSAError;
  
@@ -8197,8 +8279,10 @@
  
      DEF_OSSL_PKEY_BN(cDSA, dsa, p);
      DEF_OSSL_PKEY_BN(cDSA, dsa, q);
---- ruby2.7-2.7.6.orig/ext/openssl/ossl_pkey_ec.c
-+++ ruby2.7-2.7.6/ext/openssl/ossl_pkey_ec.c
+Index: deb-ruby/ext/openssl/ossl_pkey_ec.c
+===================================================================
+--- deb-ruby.orig/ext/openssl/ossl_pkey_ec.c
++++ deb-ruby/ext/openssl/ossl_pkey_ec.c
 @@ -47,12 +47,7 @@ VALUE eEC_GROUP;
  VALUE cEC_POINT;
  VALUE eEC_POINT;
@@ -8957,8 +9041,10 @@
      rb_define_method(cEC_POINT, "mul", ossl_ec_point_mul, -1);
  
      id_i_group = rb_intern("@group");
---- ruby2.7-2.7.6.orig/ext/openssl/ossl_pkey_rsa.c
-+++ ruby2.7-2.7.6/ext/openssl/ossl_pkey_rsa.c
+Index: deb-ruby/ext/openssl/ossl_pkey_rsa.c
+===================================================================
+--- deb-ruby.orig/ext/openssl/ossl_pkey_rsa.c
++++ deb-ruby/ext/openssl/ossl_pkey_rsa.c
 @@ -26,10 +26,10 @@
  static inline int
  RSA_HAS_PRIVATE(RSA *rsa)
@@ -9665,8 +9751,10 @@
  /*
   * TODO: Test it
      rb_define_method(cRSA, "blinding_on!", ossl_rsa_blinding_on, 0);
---- ruby2.7-2.7.6.orig/ext/openssl/ossl_rand.c
-+++ ruby2.7-2.7.6/ext/openssl/ossl_rand.c
+Index: deb-ruby/ext/openssl/ossl_rand.c
+===================================================================
+--- deb-ruby.orig/ext/openssl/ossl_rand.c
++++ deb-ruby/ext/openssl/ossl_rand.c
 @@ -120,36 +120,6 @@ ossl_rand_bytes(VALUE self, VALUE len)
      return str;
  }
@@ -9715,8 +9803,10 @@
  #endif
  #ifdef HAVE_RAND_EGD
      rb_define_module_function(mRandom, "egd", ossl_rand_egd, 1);
---- ruby2.7-2.7.6.orig/ext/openssl/ossl_ssl.c
-+++ ruby2.7-2.7.6/ext/openssl/ossl_ssl.c
+Index: deb-ruby/ext/openssl/ossl_ssl.c
+===================================================================
+--- deb-ruby.orig/ext/openssl/ossl_ssl.c
++++ deb-ruby/ext/openssl/ossl_ssl.c
 @@ -38,14 +38,14 @@ VALUE cSSLSocket;
  static VALUE eSSLErrorWaitReadable;
  static VALUE eSSLErrorWaitWritable;
@@ -11036,8 +11126,10 @@
      DefIVarID(timeout);
      DefIVarID(session_id_context);
      DefIVarID(session_get_cb);
---- ruby2.7-2.7.6.orig/ext/openssl/ossl_ssl_session.c
-+++ ruby2.7-2.7.6/ext/openssl/ossl_ssl_session.c
+Index: deb-ruby/ext/openssl/ossl_ssl_session.c
+===================================================================
+--- deb-ruby.orig/ext/openssl/ossl_ssl_session.c
++++ deb-ruby/ext/openssl/ossl_ssl_session.c
 @@ -34,43 +34,38 @@ static VALUE ossl_ssl_session_alloc(VALU
   * Creates a new Session object from an instance of SSLSocket or DER/PEM encoded
   * String.
@@ -11107,8 +11199,10 @@
  }
  
  static VALUE
+Index: deb-ruby/ext/openssl/ossl_ts.c
+===================================================================
 --- /dev/null
-+++ ruby2.7-2.7.6/ext/openssl/ossl_ts.c
++++ deb-ruby/ext/openssl/ossl_ts.c
 @@ -0,0 +1,1539 @@
 +/*
 + *
@@ -12649,8 +12743,10 @@
 +}
 +
 +#endif
+Index: deb-ruby/ext/openssl/ossl_ts.h
+===================================================================
 --- /dev/null
-+++ ruby2.7-2.7.6/ext/openssl/ossl_ts.h
++++ deb-ruby/ext/openssl/ossl_ts.h
 @@ -0,0 +1,16 @@
 +/*
 + *
@@ -12668,7 +12764,9 @@
 +void Init_ossl_ts(void);
 +
 +#endif
---- ruby2.7-2.7.6.orig/ext/openssl/ossl_version.h
+Index: deb-ruby/ext/openssl/ossl_version.h
+===================================================================
+--- deb-ruby.orig/ext/openssl/ossl_version.h
 +++ /dev/null
 @@ -1,15 +0,0 @@
 -/*
@@ -12686,8 +12784,10 @@
 -#define OSSL_VERSION "2.1.3"
 -
 -#endif /* _OSSL_VERSION_H_ */
---- ruby2.7-2.7.6.orig/ext/openssl/ossl_x509.c
-+++ ruby2.7-2.7.6/ext/openssl/ossl_x509.c
+Index: deb-ruby/ext/openssl/ossl_x509.c
+===================================================================
+--- deb-ruby.orig/ext/openssl/ossl_x509.c
++++ deb-ruby/ext/openssl/ossl_x509.c
 @@ -115,11 +115,9 @@ Init_ossl_x509(void)
      DefX509Const(V_ERR_SUITE_B_LOS_NOT_ALLOWED);
      DefX509Const(V_ERR_SUITE_B_CANNOT_SIGN_P_384_WITH_P_256);
@@ -12725,8 +12825,10 @@
  #if defined(X509_V_FLAG_NO_ALT_CHAINS)
      /* Set by Store#flags= and StoreContext#flags=. Suppresses searching for
       * a alternative chain. No effect in OpenSSL >= 1.1.0. */
---- ruby2.7-2.7.6.orig/ext/openssl/ossl_x509cert.c
-+++ ruby2.7-2.7.6/ext/openssl/ossl_x509cert.c
+Index: deb-ruby/ext/openssl/ossl_x509cert.c
+===================================================================
+--- deb-ruby.orig/ext/openssl/ossl_x509cert.c
++++ deb-ruby/ext/openssl/ossl_x509cert.c
 @@ -115,24 +115,27 @@ static VALUE
  ossl_x509_initialize(int argc, VALUE *argv, VALUE self)
  {
@@ -12969,8 +13071,10 @@
      rb_define_alloc_func(cX509Cert, ossl_x509_alloc);
      rb_define_method(cX509Cert, "initialize", ossl_x509_initialize, -1);
      rb_define_method(cX509Cert, "initialize_copy", ossl_x509_copy, 1);
---- ruby2.7-2.7.6.orig/ext/openssl/ossl_x509crl.c
-+++ ruby2.7-2.7.6/ext/openssl/ossl_x509crl.c
+Index: deb-ruby/ext/openssl/ossl_x509crl.c
+===================================================================
+--- deb-ruby.orig/ext/openssl/ossl_x509crl.c
++++ deb-ruby/ext/openssl/ossl_x509crl.c
 @@ -93,23 +93,26 @@ static VALUE
  ossl_x509crl_initialize(int argc, VALUE *argv, VALUE self)
  {
@@ -13021,8 +13125,10 @@
  	}
      }
  
---- ruby2.7-2.7.6.orig/ext/openssl/ossl_x509ext.c
-+++ ruby2.7-2.7.6/ext/openssl/ossl_x509ext.c
+Index: deb-ruby/ext/openssl/ossl_x509ext.c
+===================================================================
+--- deb-ruby.orig/ext/openssl/ossl_x509ext.c
++++ deb-ruby/ext/openssl/ossl_x509ext.c
 @@ -226,11 +226,10 @@ ossl_x509extfactory_create_ext(int argc,
      GetX509ExtFactory(self, ctx);
      obj = NewX509Ext(cX509Ext);
@@ -13064,8 +13170,10 @@
      rb_define_method(cX509Ext, "critical?", ossl_x509ext_get_critical, 0);
      rb_define_method(cX509Ext, "to_der", ossl_x509ext_to_der, 0);
  }
---- ruby2.7-2.7.6.orig/ext/openssl/ossl_x509name.c
-+++ ruby2.7-2.7.6/ext/openssl/ossl_x509name.c
+Index: deb-ruby/ext/openssl/ossl_x509name.c
+===================================================================
+--- deb-ruby.orig/ext/openssl/ossl_x509name.c
++++ deb-ruby/ext/openssl/ossl_x509name.c
 @@ -291,7 +291,14 @@ x509name_print(VALUE self, unsigned long
   * * OpenSSL::X509::Name::MULTILINE
   *
@@ -13115,8 +13223,10 @@
   *
   *   name = OpenSSL::X509::Name.new [['CN', 'nobody'], ['DC', 'example']]
   */
---- ruby2.7-2.7.6.orig/ext/openssl/ossl_x509req.c
-+++ ruby2.7-2.7.6/ext/openssl/ossl_x509req.c
+Index: deb-ruby/ext/openssl/ossl_x509req.c
+===================================================================
+--- deb-ruby.orig/ext/openssl/ossl_x509req.c
++++ deb-ruby/ext/openssl/ossl_x509req.c
 @@ -79,23 +79,26 @@ static VALUE
  ossl_x509req_initialize(int argc, VALUE *argv, VALUE self)
  {
@@ -13168,8 +13278,10 @@
  	}
      }
      return ary;
---- ruby2.7-2.7.6.orig/ext/openssl/ossl_x509revoked.c
-+++ ruby2.7-2.7.6/ext/openssl/ossl_x509revoked.c
+Index: deb-ruby/ext/openssl/ossl_x509revoked.c
+===================================================================
+--- deb-ruby.orig/ext/openssl/ossl_x509revoked.c
++++ deb-ruby/ext/openssl/ossl_x509revoked.c
 @@ -223,13 +223,13 @@ ossl_x509revoked_set_extensions(VALUE se
  	OSSL_Check_Kind(RARRAY_AREF(ary, i), cX509Ext);
      }
@@ -13187,8 +13299,10 @@
  	}
      }
  
---- ruby2.7-2.7.6.orig/ext/openssl/ossl_x509store.c
-+++ ruby2.7-2.7.6/ext/openssl/ossl_x509store.c
+Index: deb-ruby/ext/openssl/ossl_x509store.c
+===================================================================
+--- deb-ruby.orig/ext/openssl/ossl_x509store.c
++++ deb-ruby/ext/openssl/ossl_x509store.c
 @@ -52,8 +52,15 @@ struct ossl_verify_cb_args {
  };
  
@@ -13685,7 +13799,9 @@
       */
      rb_attr(cX509Store, rb_intern("chain"), 1, 0, Qfalse);
      rb_define_alloc_func(cX509Store, ossl_x509store_alloc);
---- ruby2.7-2.7.6.orig/ext/openssl/ruby_missing.h
+Index: deb-ruby/ext/openssl/ruby_missing.h
+===================================================================
+--- deb-ruby.orig/ext/openssl/ruby_missing.h
 +++ /dev/null
 @@ -1,24 +0,0 @@
 -/*
@@ -13712,7 +13828,9 @@
 -#endif
 -
 -#endif /* _OSSL_RUBY_MISSING_H_ */
---- ruby2.7-2.7.6.orig/test/openssl/fixtures/pkey/dh-1.pem
+Index: deb-ruby/test/openssl/fixtures/pkey/dh-1.pem
+===================================================================
+--- deb-ruby.orig/test/openssl/fixtures/pkey/dh-1.pem
 +++ /dev/null
 @@ -1,13 +0,0 @@
 ------BEGIN DH PARAMETERS-----
@@ -13728,7 +13846,9 @@
 -QojjLcoXSoT66ZUOQnYxTSiLtzoKGPy8cAVPbkBrXz2u2sj5gcvr1JjoGjdHm9/3
 -qnqC8fsTz8UndKNIQC337o4K0833bQMzRGl1/qjbAPit2B7E3b6xTZMCAQI=
 ------END DH PARAMETERS-----
---- ruby2.7-2.7.6.orig/test/openssl/fixtures/pkey/dh1024.pem
+Index: deb-ruby/test/openssl/fixtures/pkey/dh1024.pem
+===================================================================
+--- deb-ruby.orig/test/openssl/fixtures/pkey/dh1024.pem
 +++ /dev/null
 @@ -1,5 +0,0 @@
 ------BEGIN DH PARAMETERS-----
@@ -13736,7 +13856,9 @@
 -pFxIvjG05D7HoBZQfrR0c92NGWPkAiCkhQKB8JCbPVzwNLDy6DZ0pmofDKrEsYHG
 -AQjjxMXhwULlmuR/K+WwlaZPiLIBYalLAZQ7ZbOPeVkJ8ePao0eLAgEC
 ------END DH PARAMETERS-----
---- ruby2.7-2.7.6.orig/test/openssl/fixtures/pkey/dsa1024.pem
+Index: deb-ruby/test/openssl/fixtures/pkey/dsa1024.pem
+===================================================================
+--- deb-ruby.orig/test/openssl/fixtures/pkey/dsa1024.pem
 +++ /dev/null
 @@ -1,12 +0,0 @@
 ------BEGIN DSA PRIVATE KEY-----
@@ -13751,7 +13873,9 @@
 -jTYcmSsV4VddplOPK9czytR/GbbibxsrhhgZUbd8LPbvIgaiadJ1PgIUBnJ/5vN2
 -CVArsEzlPUCbohPvZnE=
 ------END DSA PRIVATE KEY-----
---- ruby2.7-2.7.6.orig/test/openssl/fixtures/pkey/dsa256.pem
+Index: deb-ruby/test/openssl/fixtures/pkey/dsa256.pem
+===================================================================
+--- deb-ruby.orig/test/openssl/fixtures/pkey/dsa256.pem
 +++ /dev/null
 @@ -1,8 +0,0 @@
 ------BEGIN DSA PRIVATE KEY-----
@@ -13762,7 +13886,9 @@
 -b4+EjHP/DbNh9Vm5wcfnDBJ1zKvrMEf2xqngYdrV/3CiGJeKAhRvL57QvJZcQGvn
 -ISNX5cMzFHRW3Q==
 ------END DSA PRIVATE KEY-----
---- ruby2.7-2.7.6.orig/test/openssl/fixtures/pkey/dsa512.pem
+Index: deb-ruby/test/openssl/fixtures/pkey/dsa512.pem
+===================================================================
+--- deb-ruby.orig/test/openssl/fixtures/pkey/dsa512.pem
 +++ /dev/null
 @@ -1,8 +0,0 @@
 ------BEGIN DSA PRIVATE KEY-----
@@ -13773,7 +13899,9 @@
 -Q1VB8qkJN7rA7/2HrCR3gTsWNb1YhAsnFsoeRscC+LxXoXi9OAIUBG98h4tilg6S
 -55jreJD3Se3slps=
 ------END DSA PRIVATE KEY-----
---- ruby2.7-2.7.6.orig/test/openssl/fixtures/pkey/p256.pem
+Index: deb-ruby/test/openssl/fixtures/pkey/p256.pem
+===================================================================
+--- deb-ruby.orig/test/openssl/fixtures/pkey/p256.pem
 +++ /dev/null
 @@ -1,5 +0,0 @@
 ------BEGIN EC PRIVATE KEY-----
@@ -13781,7 +13909,9 @@
 -AwEHoUQDQgAEFglk2c+oVUIKQ64eZG9bhLNPWB7lSZ/ArK41eGy5wAzU/0G51Xtt
 -CeBUl+MahZtn9fO1JKdF4qJmS39dXnpENg==
 ------END EC PRIVATE KEY-----
---- ruby2.7-2.7.6.orig/test/openssl/fixtures/pkey/rsa-1.pem
+Index: deb-ruby/test/openssl/fixtures/pkey/rsa-1.pem
+===================================================================
+--- deb-ruby.orig/test/openssl/fixtures/pkey/rsa-1.pem
 +++ /dev/null
 @@ -1,51 +0,0 @@
 ------BEGIN RSA PRIVATE KEY-----
@@ -13835,7 +13965,9 @@
 -bsQ/Jz+KIGUiuFCfNa6d6McPRXIrGgzpprXgfimkV3nj49QyrnuCF/Pc4psGgIaN
 -l3EiGXzRt/55K7DQVadtbcjo9zREac8QnDD6dS/gOfJ82L7frQfMpNWgQA==
 ------END RSA PRIVATE KEY-----
---- ruby2.7-2.7.6.orig/test/openssl/fixtures/pkey/rsa-2.pem
+Index: deb-ruby/test/openssl/fixtures/pkey/rsa-2.pem
+===================================================================
+--- deb-ruby.orig/test/openssl/fixtures/pkey/rsa-2.pem
 +++ /dev/null
 @@ -1,51 +0,0 @@
 ------BEGIN RSA PRIVATE KEY-----
@@ -13889,7 +14021,9 @@
 -eJj1+6KRdlcmt8fh5MPkBBXa6I/9XGmX5UEo7q4wAxeM9nuFWY3watz/EO9LiO6P
 -LmqUSWL65m4cX0VZPvhYEsHppKi1eoWGlHqS4Af5+aIXi2alu2iljQFeA+Q=
 ------END RSA PRIVATE KEY-----
---- ruby2.7-2.7.6.orig/test/openssl/fixtures/pkey/rsa-3.pem
+Index: deb-ruby/test/openssl/fixtures/pkey/rsa-3.pem
+===================================================================
+--- deb-ruby.orig/test/openssl/fixtures/pkey/rsa-3.pem
 +++ /dev/null
 @@ -1,51 +0,0 @@
 ------BEGIN RSA PRIVATE KEY-----
@@ -13943,7 +14077,9 @@
 -sl8dclDjEKBxaqjAeNajOr+BU0w0AAwWXL7dt/ctG2QClcj9wqbEfsXnOR10h4AI
 -rqkcvQrOLbTwcrOD/6R1rQfQXtEHKf1maThxosootAQZXdf6jxU3oonx3tU=
 ------END RSA PRIVATE KEY-----
---- ruby2.7-2.7.6.orig/test/openssl/fixtures/pkey/rsa1024.pem
+Index: deb-ruby/test/openssl/fixtures/pkey/rsa1024.pem
+===================================================================
+--- deb-ruby.orig/test/openssl/fixtures/pkey/rsa1024.pem
 +++ /dev/null
 @@ -1,15 +0,0 @@
 ------BEGIN RSA PRIVATE KEY-----
@@ -13961,7 +14097,9 @@
 -qRYgZfZSL+x1P/54+xTFSwJAY1FxA/N3QPCXCjPh5YqFxAMQs2VVYTfg+t0MEcJD
 -dPMQD5JX6g5HKnHFg2mZtoXQrWmJSn7p8GJK8yNTopEErA==
 ------END RSA PRIVATE KEY-----
---- ruby2.7-2.7.6.orig/test/openssl/fixtures/pkey/rsa2048.pem
+Index: deb-ruby/test/openssl/fixtures/pkey/rsa2048.pem
+===================================================================
+--- deb-ruby.orig/test/openssl/fixtures/pkey/rsa2048.pem
 +++ /dev/null
 @@ -1,27 +0,0 @@
 ------BEGIN RSA PRIVATE KEY-----
@@ -13991,8 +14129,10 @@
 -gBoDG3WMPZoQj9pb7uMcrnvs4APj2FIhMU8U15LcPAj59cD6S6rWnAxO8NFK7HQG
 -4Jxg3JNNf8ErQoCHb1B3oVdXJkmbJkARoDpBKmTCgKtP8ADYLmVPQw==
 ------END RSA PRIVATE KEY-----
+Index: deb-ruby/test/openssl/openssl/envutil.rb
+===================================================================
 --- /dev/null
-+++ ruby2.7-2.7.6/test/openssl/openssl/envutil.rb
++++ deb-ruby/test/openssl/openssl/envutil.rb
 @@ -0,0 +1,287 @@
 +# -*- coding: us-ascii -*-
 +require "timeout"
@@ -14281,8 +14421,10 @@
 +    end
 +  end
 +end
+Index: deb-ruby/test/openssl/openssl/fixtures/pkey/dh-1.pem
+===================================================================
 --- /dev/null
-+++ ruby2.7-2.7.6/test/openssl/openssl/fixtures/pkey/dh-1.pem
++++ deb-ruby/test/openssl/openssl/fixtures/pkey/dh-1.pem
 @@ -0,0 +1,13 @@
 +-----BEGIN DH PARAMETERS-----
 +MIICCAKCAgEAvRzXYxY6L2DjeYmm1eowtMDu1it3j+VwFr6s6PRWzc1apMtztr9G
@@ -14297,16 +14439,20 @@
 +QojjLcoXSoT66ZUOQnYxTSiLtzoKGPy8cAVPbkBrXz2u2sj5gcvr1JjoGjdHm9/3
 +qnqC8fsTz8UndKNIQC337o4K0833bQMzRGl1/qjbAPit2B7E3b6xTZMCAQI=
 +-----END DH PARAMETERS-----
+Index: deb-ruby/test/openssl/openssl/fixtures/pkey/dh1024.pem
+===================================================================
 --- /dev/null
-+++ ruby2.7-2.7.6/test/openssl/openssl/fixtures/pkey/dh1024.pem
++++ deb-ruby/test/openssl/openssl/fixtures/pkey/dh1024.pem
 @@ -0,0 +1,5 @@
 +-----BEGIN DH PARAMETERS-----
 +MIGHAoGBAKnKQ8MNK6nYZzLrrcuTsLxuiJGXoOO5gT+tljOTbHBuiktdMTITzIY0
 +pFxIvjG05D7HoBZQfrR0c92NGWPkAiCkhQKB8JCbPVzwNLDy6DZ0pmofDKrEsYHG
 +AQjjxMXhwULlmuR/K+WwlaZPiLIBYalLAZQ7ZbOPeVkJ8ePao0eLAgEC
 +-----END DH PARAMETERS-----
+Index: deb-ruby/test/openssl/openssl/fixtures/pkey/dsa1024.pem
+===================================================================
 --- /dev/null
-+++ ruby2.7-2.7.6/test/openssl/openssl/fixtures/pkey/dsa1024.pem
++++ deb-ruby/test/openssl/openssl/fixtures/pkey/dsa1024.pem
 @@ -0,0 +1,12 @@
 +-----BEGIN DSA PRIVATE KEY-----
 +MIIBugIBAAKBgQCH9aAoXvWWThIjkA6D+nI1F9ksF9iDq594rkiGNOT9sPDOdB+n
@@ -14320,8 +14466,10 @@
 +jTYcmSsV4VddplOPK9czytR/GbbibxsrhhgZUbd8LPbvIgaiadJ1PgIUBnJ/5vN2
 +CVArsEzlPUCbohPvZnE=
 +-----END DSA PRIVATE KEY-----
+Index: deb-ruby/test/openssl/openssl/fixtures/pkey/dsa256.pem
+===================================================================
 --- /dev/null
-+++ ruby2.7-2.7.6/test/openssl/openssl/fixtures/pkey/dsa256.pem
++++ deb-ruby/test/openssl/openssl/fixtures/pkey/dsa256.pem
 @@ -0,0 +1,8 @@
 +-----BEGIN DSA PRIVATE KEY-----
 +MIH3AgEAAkEAhk2libbY2a8y2Pt21+YPYGZeW6wzaW2yfj5oiClXro9XMR7XWLkE
@@ -14331,8 +14479,10 @@
 +b4+EjHP/DbNh9Vm5wcfnDBJ1zKvrMEf2xqngYdrV/3CiGJeKAhRvL57QvJZcQGvn
 +ISNX5cMzFHRW3Q==
 +-----END DSA PRIVATE KEY-----
+Index: deb-ruby/test/openssl/openssl/fixtures/pkey/dsa512.pem
+===================================================================
 --- /dev/null
-+++ ruby2.7-2.7.6/test/openssl/openssl/fixtures/pkey/dsa512.pem
++++ deb-ruby/test/openssl/openssl/fixtures/pkey/dsa512.pem
 @@ -0,0 +1,8 @@
 +-----BEGIN DSA PRIVATE KEY-----
 +MIH4AgEAAkEA5lB4GvEwjrsMlGDqGsxrbqeFRh6o9OWt6FgTYiEEHaOYhkIxv0Ok
@@ -14342,8 +14492,10 @@
 +Q1VB8qkJN7rA7/2HrCR3gTsWNb1YhAsnFsoeRscC+LxXoXi9OAIUBG98h4tilg6S
 +55jreJD3Se3slps=
 +-----END DSA PRIVATE KEY-----
+Index: deb-ruby/test/openssl/openssl/fixtures/pkey/fullchain.pem
+===================================================================
 --- /dev/null
-+++ ruby2.7-2.7.6/test/openssl/openssl/fixtures/pkey/fullchain.pem
++++ deb-ruby/test/openssl/openssl/fixtures/pkey/fullchain.pem
 @@ -0,0 +1,56 @@
 +-----BEGIN CERTIFICATE-----
 +MIIFKTCCBBGgAwIBAgISBFspP+tJfRaC6xprreB4Rp9KMA0GCSqGSIb3DQEBCwUA
@@ -14401,20 +14553,26 @@
 +O5b85o3AM/OJ+CktFBQtfvBhcJVd9wvlwPsk+uyOy2HI7mNxKKgsBTt375teA2Tw
 +UdHkhVNcsAKX1H7GNNLOEADksd86wuoXvg==
 +-----END CERTIFICATE-----
+Index: deb-ruby/test/openssl/openssl/fixtures/pkey/garbage.txt
+===================================================================
 --- /dev/null
-+++ ruby2.7-2.7.6/test/openssl/openssl/fixtures/pkey/garbage.txt
++++ deb-ruby/test/openssl/openssl/fixtures/pkey/garbage.txt
 @@ -0,0 +1 @@
 +Hello World
+Index: deb-ruby/test/openssl/openssl/fixtures/pkey/p256.pem
+===================================================================
 --- /dev/null
-+++ ruby2.7-2.7.6/test/openssl/openssl/fixtures/pkey/p256.pem
++++ deb-ruby/test/openssl/openssl/fixtures/pkey/p256.pem
 @@ -0,0 +1,5 @@
 +-----BEGIN EC PRIVATE KEY-----
 +MHcCAQEEIID49FDqcf1O1eO8saTgG70UbXQw9Fqwseliit2aWhH1oAoGCCqGSM49
 +AwEHoUQDQgAEFglk2c+oVUIKQ64eZG9bhLNPWB7lSZ/ArK41eGy5wAzU/0G51Xtt
 +CeBUl+MahZtn9fO1JKdF4qJmS39dXnpENg==
 +-----END EC PRIVATE KEY-----
+Index: deb-ruby/test/openssl/openssl/fixtures/pkey/rsa-1.pem
+===================================================================
 --- /dev/null
-+++ ruby2.7-2.7.6/test/openssl/openssl/fixtures/pkey/rsa-1.pem
++++ deb-ruby/test/openssl/openssl/fixtures/pkey/rsa-1.pem
 @@ -0,0 +1,51 @@
 +-----BEGIN RSA PRIVATE KEY-----
 +MIIJJwIBAAKCAgEArIEJUYZrXhMfUXXdl2gLcXrRB4ciWNEeXt5UVLG0nPhygZwJ
@@ -14467,8 +14625,10 @@
 +bsQ/Jz+KIGUiuFCfNa6d6McPRXIrGgzpprXgfimkV3nj49QyrnuCF/Pc4psGgIaN
 +l3EiGXzRt/55K7DQVadtbcjo9zREac8QnDD6dS/gOfJ82L7frQfMpNWgQA==
 +-----END RSA PRIVATE KEY-----
+Index: deb-ruby/test/openssl/openssl/fixtures/pkey/rsa-2.pem
+===================================================================
 --- /dev/null
-+++ ruby2.7-2.7.6/test/openssl/openssl/fixtures/pkey/rsa-2.pem
++++ deb-ruby/test/openssl/openssl/fixtures/pkey/rsa-2.pem
 @@ -0,0 +1,51 @@
 +-----BEGIN RSA PRIVATE KEY-----
 +MIIJKAIBAAKCAgEA1HUbx825tG7+/ulC5DpDogzXqM2/KmeCwGXZY4XjiWa+Zj7b
@@ -14521,8 +14681,10 @@
 +eJj1+6KRdlcmt8fh5MPkBBXa6I/9XGmX5UEo7q4wAxeM9nuFWY3watz/EO9LiO6P
 +LmqUSWL65m4cX0VZPvhYEsHppKi1eoWGlHqS4Af5+aIXi2alu2iljQFeA+Q=
 +-----END RSA PRIVATE KEY-----
+Index: deb-ruby/test/openssl/openssl/fixtures/pkey/rsa-3.pem
+===================================================================
 --- /dev/null
-+++ ruby2.7-2.7.6/test/openssl/openssl/fixtures/pkey/rsa-3.pem
++++ deb-ruby/test/openssl/openssl/fixtures/pkey/rsa-3.pem
 @@ -0,0 +1,51 @@
 +-----BEGIN RSA PRIVATE KEY-----
 +MIIJKAIBAAKCAgEAzn+YCcOh7BIRzrb7TEuhQLD545+/Fx/zCYO3l+y/8ogUxMTg
@@ -14575,8 +14737,10 @@
 +sl8dclDjEKBxaqjAeNajOr+BU0w0AAwWXL7dt/ctG2QClcj9wqbEfsXnOR10h4AI
 +rqkcvQrOLbTwcrOD/6R1rQfQXtEHKf1maThxosootAQZXdf6jxU3oonx3tU=
 +-----END RSA PRIVATE KEY-----
+Index: deb-ruby/test/openssl/openssl/fixtures/pkey/rsa1024.pem
+===================================================================
 --- /dev/null
-+++ ruby2.7-2.7.6/test/openssl/openssl/fixtures/pkey/rsa1024.pem
++++ deb-ruby/test/openssl/openssl/fixtures/pkey/rsa1024.pem
 @@ -0,0 +1,15 @@
 +-----BEGIN RSA PRIVATE KEY-----
 +MIICXgIBAAKBgQDLwsSw1ECnPtT+PkOgHhcGA71nwC2/nL85VBGnRqDxOqjVh7Cx
@@ -14593,8 +14757,10 @@
 +qRYgZfZSL+x1P/54+xTFSwJAY1FxA/N3QPCXCjPh5YqFxAMQs2VVYTfg+t0MEcJD
 +dPMQD5JX6g5HKnHFg2mZtoXQrWmJSn7p8GJK8yNTopEErA==
 +-----END RSA PRIVATE KEY-----
+Index: deb-ruby/test/openssl/openssl/fixtures/pkey/rsa2048.pem
+===================================================================
 --- /dev/null
-+++ ruby2.7-2.7.6/test/openssl/openssl/fixtures/pkey/rsa2048.pem
++++ deb-ruby/test/openssl/openssl/fixtures/pkey/rsa2048.pem
 @@ -0,0 +1,27 @@
 +-----BEGIN RSA PRIVATE KEY-----
 +MIIEpAIBAAKCAQEAuV9ht9J7k4NBs38jOXvvTKY9gW8nLICSno5EETR1cuF7i4pN
@@ -14623,8 +14789,10 @@
 +gBoDG3WMPZoQj9pb7uMcrnvs4APj2FIhMU8U15LcPAj59cD6S6rWnAxO8NFK7HQG
 +4Jxg3JNNf8ErQoCHb1B3oVdXJkmbJkARoDpBKmTCgKtP8ADYLmVPQw==
 +-----END RSA PRIVATE KEY-----
+Index: deb-ruby/test/openssl/openssl/test_asn1.rb
+===================================================================
 --- /dev/null
-+++ ruby2.7-2.7.6/test/openssl/openssl/test_asn1.rb
++++ deb-ruby/test/openssl/openssl/test_asn1.rb
 @@ -0,0 +1,719 @@
 +# frozen_string_literal: true
 +require_relative 'utils'
@@ -15345,8 +15513,10 @@
 +end
 +
 +end
+Index: deb-ruby/test/openssl/openssl/test_bn.rb
+===================================================================
 --- /dev/null
-+++ ruby2.7-2.7.6/test/openssl/openssl/test_bn.rb
++++ deb-ruby/test/openssl/openssl/test_bn.rb
 @@ -0,0 +1,364 @@
 +# coding: us-ascii
 +# frozen_string_literal: true
@@ -15712,8 +15882,10 @@
 +end
 +
 +end
+Index: deb-ruby/test/openssl/openssl/test_buffering.rb
+===================================================================
 --- /dev/null
-+++ ruby2.7-2.7.6/test/openssl/openssl/test_buffering.rb
++++ deb-ruby/test/openssl/openssl/test_buffering.rb
 @@ -0,0 +1,97 @@
 +# frozen_string_literal: true
 +require_relative 'utils'
@@ -15812,8 +15984,10 @@
 +end
 +
 +end
+Index: deb-ruby/test/openssl/openssl/test_cipher.rb
+===================================================================
 --- /dev/null
-+++ ruby2.7-2.7.6/test/openssl/openssl/test_cipher.rb
++++ deb-ruby/test/openssl/openssl/test_cipher.rb
 @@ -0,0 +1,379 @@
 +# frozen_string_literal: true
 +require_relative 'utils'
@@ -16194,8 +16368,10 @@
 +end
 +
 +end
+Index: deb-ruby/test/openssl/openssl/test_config.rb
+===================================================================
 --- /dev/null
-+++ ruby2.7-2.7.6/test/openssl/openssl/test_config.rb
++++ deb-ruby/test/openssl/openssl/test_config.rb
 @@ -0,0 +1,292 @@
 +# frozen_string_literal: true
 +require_relative 'utils'
@@ -16489,8 +16665,10 @@
 +end
 +
 +end
+Index: deb-ruby/test/openssl/openssl/test_digest.rb
+===================================================================
 --- /dev/null
-+++ ruby2.7-2.7.6/test/openssl/openssl/test_digest.rb
++++ deb-ruby/test/openssl/openssl/test_digest.rb
 @@ -0,0 +1,149 @@
 +# frozen_string_literal: true
 +require_relative 'utils'
@@ -16641,8 +16819,10 @@
 +end
 +
 +end
+Index: deb-ruby/test/openssl/openssl/test_engine.rb
+===================================================================
 --- /dev/null
-+++ ruby2.7-2.7.6/test/openssl/openssl/test_engine.rb
++++ deb-ruby/test/openssl/openssl/test_engine.rb
 @@ -0,0 +1,97 @@
 +# frozen_string_literal: true
 +require_relative 'utils'
@@ -16741,8 +16921,10 @@
 +end
 +
 +end
+Index: deb-ruby/test/openssl/openssl/test_fips.rb
+===================================================================
 --- /dev/null
-+++ ruby2.7-2.7.6/test/openssl/openssl/test_fips.rb
++++ deb-ruby/test/openssl/openssl/test_fips.rb
 @@ -0,0 +1,30 @@
 +# frozen_string_literal: true
 +require_relative 'utils'
@@ -16774,8 +16956,10 @@
 +end
 +
 +end
+Index: deb-ruby/test/openssl/openssl/test_hmac.rb
+===================================================================
 --- /dev/null
-+++ ruby2.7-2.7.6/test/openssl/openssl/test_hmac.rb
++++ deb-ruby/test/openssl/openssl/test_hmac.rb
 @@ -0,0 +1,76 @@
 +# frozen_string_literal: true
 +require_relative 'utils'
@@ -16853,8 +17037,10 @@
 +end
 +
 +end
+Index: deb-ruby/test/openssl/openssl/test_kdf.rb
+===================================================================
 --- /dev/null
-+++ ruby2.7-2.7.6/test/openssl/openssl/test_kdf.rb
++++ deb-ruby/test/openssl/openssl/test_kdf.rb
 @@ -0,0 +1,183 @@
 +# frozen_string_literal: true
 +require_relative 'utils'
@@ -17039,8 +17225,10 @@
 +end
 +
 +end
+Index: deb-ruby/test/openssl/openssl/test_ns_spki.rb
+===================================================================
 --- /dev/null
-+++ ruby2.7-2.7.6/test/openssl/openssl/test_ns_spki.rb
++++ deb-ruby/test/openssl/openssl/test_ns_spki.rb
 @@ -0,0 +1,53 @@
 +# frozen_string_literal: true
 +require_relative 'utils'
@@ -17095,8 +17283,10 @@
 +end
 +
 +end
+Index: deb-ruby/test/openssl/openssl/test_ocsp.rb
+===================================================================
 --- /dev/null
-+++ ruby2.7-2.7.6/test/openssl/openssl/test_ocsp.rb
++++ deb-ruby/test/openssl/openssl/test_ocsp.rb
 @@ -0,0 +1,304 @@
 +# frozen_string_literal: true
 +require_relative "utils"
@@ -17402,8 +17592,10 @@
 +end
 +
 +end
+Index: deb-ruby/test/openssl/openssl/test_ossl.rb
+===================================================================
 --- /dev/null
-+++ ruby2.7-2.7.6/test/openssl/openssl/test_ossl.rb
++++ deb-ruby/test/openssl/openssl/test_ossl.rb
 @@ -0,0 +1,65 @@
 +# frozen_string_literal: true
 +require_relative "utils"
@@ -17470,8 +17662,10 @@
 +end
 +
 +end
+Index: deb-ruby/test/openssl/openssl/test_pair.rb
+===================================================================
 --- /dev/null
-+++ ruby2.7-2.7.6/test/openssl/openssl/test_pair.rb
++++ deb-ruby/test/openssl/openssl/test_pair.rb
 @@ -0,0 +1,506 @@
 +# frozen_string_literal: true
 +require_relative 'utils'
@@ -17979,8 +18173,10 @@
 +end
 +
 +end
+Index: deb-ruby/test/openssl/openssl/test_pkcs12.rb
+===================================================================
 --- /dev/null
-+++ ruby2.7-2.7.6/test/openssl/openssl/test_pkcs12.rb
++++ deb-ruby/test/openssl/openssl/test_pkcs12.rb
 @@ -0,0 +1,314 @@
 +# frozen_string_literal: true
 +require_relative "utils"
@@ -18296,8 +18492,10 @@
 +end
 +
 +end
+Index: deb-ruby/test/openssl/openssl/test_pkcs7.rb
+===================================================================
 --- /dev/null
-+++ ruby2.7-2.7.6/test/openssl/openssl/test_pkcs7.rb
++++ deb-ruby/test/openssl/openssl/test_pkcs7.rb
 @@ -0,0 +1,327 @@
 +# frozen_string_literal: true
 +require_relative 'utils'
@@ -18626,8 +18824,10 @@
 +end
 +
 +end
+Index: deb-ruby/test/openssl/openssl/test_pkey.rb
+===================================================================
 --- /dev/null
-+++ ruby2.7-2.7.6/test/openssl/openssl/test_pkey.rb
++++ deb-ruby/test/openssl/openssl/test_pkey.rb
 @@ -0,0 +1,172 @@
 +# frozen_string_literal: true
 +require_relative "utils"
@@ -18801,8 +19001,10 @@
 +    assert_include rsa.to_text, "publicExponent"
 +  end
 +end
+Index: deb-ruby/test/openssl/openssl/test_pkey_dh.rb
+===================================================================
 --- /dev/null
-+++ ruby2.7-2.7.6/test/openssl/openssl/test_pkey_dh.rb
++++ deb-ruby/test/openssl/openssl/test_pkey_dh.rb
 @@ -0,0 +1,166 @@
 +# frozen_string_literal: true
 +require_relative 'utils'
@@ -18970,8 +19172,10 @@
 +end
 +
 +end
+Index: deb-ruby/test/openssl/openssl/test_pkey_dsa.rb
+===================================================================
 --- /dev/null
-+++ ruby2.7-2.7.6/test/openssl/openssl/test_pkey_dsa.rb
++++ deb-ruby/test/openssl/openssl/test_pkey_dsa.rb
 @@ -0,0 +1,251 @@
 +# frozen_string_literal: true
 +require_relative 'utils'
@@ -19224,8 +19428,10 @@
 +end
 +
 +end
+Index: deb-ruby/test/openssl/openssl/test_pkey_ec.rb
+===================================================================
 --- /dev/null
-+++ ruby2.7-2.7.6/test/openssl/openssl/test_pkey_ec.rb
++++ deb-ruby/test/openssl/openssl/test_pkey_ec.rb
 @@ -0,0 +1,467 @@
 +# frozen_string_literal: true
 +require_relative 'utils'
@@ -19694,8 +19900,10 @@
 +end
 +
 +end
+Index: deb-ruby/test/openssl/openssl/test_pkey_rsa.rb
+===================================================================
 --- /dev/null
-+++ ruby2.7-2.7.6/test/openssl/openssl/test_pkey_rsa.rb
++++ deb-ruby/test/openssl/openssl/test_pkey_rsa.rb
 @@ -0,0 +1,549 @@
 +# frozen_string_literal: true
 +require_relative "utils"
@@ -20246,8 +20454,10 @@
 +end
 +
 +end
+Index: deb-ruby/test/openssl/openssl/test_random.rb
+===================================================================
 --- /dev/null
-+++ ruby2.7-2.7.6/test/openssl/openssl/test_random.rb
++++ deb-ruby/test/openssl/openssl/test_random.rb
 @@ -0,0 +1,19 @@
 +# frozen_string_literal: true
 +require_relative "utils"
@@ -20268,8 +20478,10 @@
 +end
 +
 +end
+Index: deb-ruby/test/openssl/openssl/test_ssl.rb
+===================================================================
 --- /dev/null
-+++ ruby2.7-2.7.6/test/openssl/openssl/test_ssl.rb
++++ deb-ruby/test/openssl/openssl/test_ssl.rb
 @@ -0,0 +1,1762 @@
 +# frozen_string_literal: true
 +require_relative "utils"
@@ -22033,8 +22245,10 @@
 +end
 +
 +end
+Index: deb-ruby/test/openssl/openssl/test_ssl_session.rb
+===================================================================
 --- /dev/null
-+++ ruby2.7-2.7.6/test/openssl/openssl/test_ssl_session.rb
++++ deb-ruby/test/openssl/openssl/test_ssl_session.rb
 @@ -0,0 +1,393 @@
 +# frozen_string_literal: true
 +require_relative "utils"
@@ -22429,8 +22643,10 @@
 +end
 +
 +end
+Index: deb-ruby/test/openssl/openssl/test_ts.rb
+===================================================================
 --- /dev/null
-+++ ruby2.7-2.7.6/test/openssl/openssl/test_ts.rb
++++ deb-ruby/test/openssl/openssl/test_ts.rb
 @@ -0,0 +1,680 @@
 +require_relative "utils"
 +
@@ -23112,8 +23328,10 @@
 +end
 +
 +end
+Index: deb-ruby/test/openssl/openssl/test_x509attr.rb
+===================================================================
 --- /dev/null
-+++ ruby2.7-2.7.6/test/openssl/openssl/test_x509attr.rb
++++ deb-ruby/test/openssl/openssl/test_x509attr.rb
 @@ -0,0 +1,94 @@
 +# frozen_string_literal: true
 +require_relative "utils"
@@ -23209,8 +23427,10 @@
 +end
 +
 +end
+Index: deb-ruby/test/openssl/openssl/test_x509cert.rb
+===================================================================
 --- /dev/null
-+++ ruby2.7-2.7.6/test/openssl/openssl/test_x509cert.rb
++++ deb-ruby/test/openssl/openssl/test_x509cert.rb
 @@ -0,0 +1,332 @@
 +# frozen_string_literal: true
 +require_relative "utils"
@@ -23544,8 +23764,10 @@
 +end
 +
 +end
+Index: deb-ruby/test/openssl/openssl/test_x509crl.rb
+===================================================================
 --- /dev/null
-+++ ruby2.7-2.7.6/test/openssl/openssl/test_x509crl.rb
++++ deb-ruby/test/openssl/openssl/test_x509crl.rb
 @@ -0,0 +1,284 @@
 +# frozen_string_literal: true
 +require_relative "utils"
@@ -23831,8 +24053,10 @@
 +end
 +
 +end
+Index: deb-ruby/test/openssl/openssl/test_x509ext.rb
+===================================================================
 --- /dev/null
-+++ ruby2.7-2.7.6/test/openssl/openssl/test_x509ext.rb
++++ deb-ruby/test/openssl/openssl/test_x509ext.rb
 @@ -0,0 +1,104 @@
 +# frozen_string_literal: true
 +require_relative 'utils'
@@ -23938,8 +24162,10 @@
 +end
 +
 +end
+Index: deb-ruby/test/openssl/openssl/test_x509name.rb
+===================================================================
 --- /dev/null
-+++ ruby2.7-2.7.6/test/openssl/openssl/test_x509name.rb
++++ deb-ruby/test/openssl/openssl/test_x509name.rb
 @@ -0,0 +1,469 @@
 +# coding: ASCII-8BIT
 +# frozen_string_literal: true
@@ -24410,8 +24636,10 @@
 +end
 +
 +end
+Index: deb-ruby/test/openssl/openssl/test_x509req.rb
+===================================================================
 --- /dev/null
-+++ ruby2.7-2.7.6/test/openssl/openssl/test_x509req.rb
++++ deb-ruby/test/openssl/openssl/test_x509req.rb
 @@ -0,0 +1,170 @@
 +# frozen_string_literal: true
 +require_relative "utils"
@@ -24583,8 +24811,10 @@
 +end
 +
 +end
+Index: deb-ruby/test/openssl/openssl/test_x509store.rb
+===================================================================
 --- /dev/null
-+++ ruby2.7-2.7.6/test/openssl/openssl/test_x509store.rb
++++ deb-ruby/test/openssl/openssl/test_x509store.rb
 @@ -0,0 +1,373 @@
 +# frozen_string_literal: true
 +require_relative "utils"
@@ -24959,8 +25189,10 @@
 +end
 +
 +end
+Index: deb-ruby/test/openssl/openssl/ut_eof.rb
+===================================================================
 --- /dev/null
-+++ ruby2.7-2.7.6/test/openssl/openssl/ut_eof.rb
++++ deb-ruby/test/openssl/openssl/ut_eof.rb
 @@ -0,0 +1,137 @@
 +# frozen_string_literal: true
 +require 'test/unit'
@@ -25099,8 +25331,10 @@
 +end
 +
 +end
+Index: deb-ruby/test/openssl/openssl/utils.rb
+===================================================================
 --- /dev/null
-+++ ruby2.7-2.7.6/test/openssl/openssl/utils.rb
++++ deb-ruby/test/openssl/openssl/utils.rb
 @@ -0,0 +1,361 @@
 +# frozen_string_literal: true
 +begin
@@ -25463,7 +25697,9 @@
 +end
 +
 +end
---- ruby2.7-2.7.6.orig/test/openssl/test_asn1.rb
+Index: deb-ruby/test/openssl/test_asn1.rb
+===================================================================
+--- deb-ruby.orig/test/openssl/test_asn1.rb
 +++ /dev/null
 @@ -1,689 +0,0 @@
 -# frozen_string_literal: false
@@ -26155,7 +26391,9 @@
 -end
 -
 -end
---- ruby2.7-2.7.6.orig/test/openssl/test_bn.rb
+Index: deb-ruby/test/openssl/test_bn.rb
+===================================================================
+--- deb-ruby.orig/test/openssl/test_bn.rb
 +++ /dev/null
 @@ -1,277 +0,0 @@
 -# coding: us-ascii
@@ -26435,7 +26673,9 @@
 -end
 -
 -end
---- ruby2.7-2.7.6.orig/test/openssl/test_buffering.rb
+Index: deb-ruby/test/openssl/test_buffering.rb
+===================================================================
+--- deb-ruby.orig/test/openssl/test_buffering.rb
 +++ /dev/null
 @@ -1,90 +0,0 @@
 -# frozen_string_literal: false
@@ -26528,7 +26768,9 @@
 -end
 -
 -end
---- ruby2.7-2.7.6.orig/test/openssl/test_cipher.rb
+Index: deb-ruby/test/openssl/test_cipher.rb
+===================================================================
+--- deb-ruby.orig/test/openssl/test_cipher.rb
 +++ /dev/null
 @@ -1,325 +0,0 @@
 -# frozen_string_literal: false
@@ -26856,7 +27098,9 @@
 -end
 -
 -end
---- ruby2.7-2.7.6.orig/test/openssl/test_config.rb
+Index: deb-ruby/test/openssl/test_config.rb
+===================================================================
+--- deb-ruby.orig/test/openssl/test_config.rb
 +++ /dev/null
 @@ -1,358 +0,0 @@
 -# frozen_string_literal: false
@@ -27217,7 +27461,9 @@
 -end
 -
 -end
---- ruby2.7-2.7.6.orig/test/openssl/test_digest.rb
+Index: deb-ruby/test/openssl/test_digest.rb
+===================================================================
+--- deb-ruby.orig/test/openssl/test_digest.rb
 +++ /dev/null
 @@ -1,121 +0,0 @@
 -# frozen_string_literal: false
@@ -27341,7 +27587,9 @@
 -end
 -
 -end
---- ruby2.7-2.7.6.orig/test/openssl/test_engine.rb
+Index: deb-ruby/test/openssl/test_engine.rb
+===================================================================
+--- deb-ruby.orig/test/openssl/test_engine.rb
 +++ /dev/null
 @@ -1,97 +0,0 @@
 -# frozen_string_literal: false
@@ -27441,7 +27689,9 @@
 -end
 -
 -end
---- ruby2.7-2.7.6.orig/test/openssl/test_fips.rb
+Index: deb-ruby/test/openssl/test_fips.rb
+===================================================================
+--- deb-ruby.orig/test/openssl/test_fips.rb
 +++ /dev/null
 @@ -1,30 +0,0 @@
 -# frozen_string_literal: false
@@ -27474,7 +27724,9 @@
 -end
 -
 -end
---- ruby2.7-2.7.6.orig/test/openssl/test_hmac.rb
+Index: deb-ruby/test/openssl/test_hmac.rb
+===================================================================
+--- deb-ruby.orig/test/openssl/test_hmac.rb
 +++ /dev/null
 @@ -1,44 +0,0 @@
 -# frozen_string_literal: false
@@ -27521,7 +27773,9 @@
 -end
 -
 -end
---- ruby2.7-2.7.6.orig/test/openssl/test_kdf.rb
+Index: deb-ruby/test/openssl/test_kdf.rb
+===================================================================
+--- deb-ruby.orig/test/openssl/test_kdf.rb
 +++ /dev/null
 @@ -1,183 +0,0 @@
 -# frozen_string_literal: false
@@ -27707,7 +27961,9 @@
 -end
 -
 -end
---- ruby2.7-2.7.6.orig/test/openssl/test_ns_spki.rb
+Index: deb-ruby/test/openssl/test_ns_spki.rb
+===================================================================
+--- deb-ruby.orig/test/openssl/test_ns_spki.rb
 +++ /dev/null
 @@ -1,53 +0,0 @@
 -# frozen_string_literal: false
@@ -27763,7 +28019,9 @@
 -end
 -
 -end
---- ruby2.7-2.7.6.orig/test/openssl/test_ocsp.rb
+Index: deb-ruby/test/openssl/test_ocsp.rb
+===================================================================
+--- deb-ruby.orig/test/openssl/test_ocsp.rb
 +++ /dev/null
 @@ -1,310 +0,0 @@
 -# frozen_string_literal: false
@@ -28076,7 +28334,9 @@
 -end
 -
 -end
---- ruby2.7-2.7.6.orig/test/openssl/test_pair.rb
+Index: deb-ruby/test/openssl/test_pair.rb
+===================================================================
+--- deb-ruby.orig/test/openssl/test_pair.rb
 +++ /dev/null
 @@ -1,523 +0,0 @@
 -# frozen_string_literal: false
@@ -28602,7 +28862,9 @@
 -end
 -
 -end
---- ruby2.7-2.7.6.orig/test/openssl/test_pkcs12.rb
+Index: deb-ruby/test/openssl/test_pkcs12.rb
+===================================================================
+--- deb-ruby.orig/test/openssl/test_pkcs12.rb
 +++ /dev/null
 @@ -1,313 +0,0 @@
 -# frozen_string_literal: false
@@ -28918,7 +29180,9 @@
 -end
 -
 -end
---- ruby2.7-2.7.6.orig/test/openssl/test_pkcs7.rb
+Index: deb-ruby/test/openssl/test_pkcs7.rb
+===================================================================
+--- deb-ruby.orig/test/openssl/test_pkcs7.rb
 +++ /dev/null
 @@ -1,285 +0,0 @@
 -# frozen_string_literal: false
@@ -29206,7 +29470,9 @@
 -end
 -
 -end
---- ruby2.7-2.7.6.orig/test/openssl/test_pkey_dh.rb
+Index: deb-ruby/test/openssl/test_pkey_dh.rb
+===================================================================
+--- deb-ruby.orig/test/openssl/test_pkey_dh.rb
 +++ /dev/null
 @@ -1,103 +0,0 @@
 -# frozen_string_literal: false
@@ -29312,7 +29578,9 @@
 -end
 -
 -end
---- ruby2.7-2.7.6.orig/test/openssl/test_pkey_dsa.rb
+Index: deb-ruby/test/openssl/test_pkey_dsa.rb
+===================================================================
+--- deb-ruby.orig/test/openssl/test_pkey_dsa.rb
 +++ /dev/null
 @@ -1,200 +0,0 @@
 -# frozen_string_literal: false
@@ -29515,7 +29783,9 @@
 -end
 -
 -end
---- ruby2.7-2.7.6.orig/test/openssl/test_pkey_ec.rb
+Index: deb-ruby/test/openssl/test_pkey_ec.rb
+===================================================================
+--- deb-ruby.orig/test/openssl/test_pkey_ec.rb
 +++ /dev/null
 @@ -1,353 +0,0 @@
 -# frozen_string_literal: false
@@ -29871,7 +30141,9 @@
 -end
 -
 -end
---- ruby2.7-2.7.6.orig/test/openssl/test_pkey_rsa.rb
+Index: deb-ruby/test/openssl/test_pkey_rsa.rb
+===================================================================
+--- deb-ruby.orig/test/openssl/test_pkey_rsa.rb
 +++ /dev/null
 @@ -1,312 +0,0 @@
 -# frozen_string_literal: false
@@ -30186,7 +30458,9 @@
 -end
 -
 -end
---- ruby2.7-2.7.6.orig/test/openssl/test_random.rb
+Index: deb-ruby/test/openssl/test_random.rb
+===================================================================
+--- deb-ruby.orig/test/openssl/test_random.rb
 +++ /dev/null
 @@ -1,19 +0,0 @@
 -# frozen_string_literal: false
@@ -30208,7 +30482,9 @@
 -end
 -
 -end
---- ruby2.7-2.7.6.orig/test/openssl/test_ssl.rb
+Index: deb-ruby/test/openssl/test_ssl.rb
+===================================================================
+--- deb-ruby.orig/test/openssl/test_ssl.rb
 +++ /dev/null
 @@ -1,1666 +0,0 @@
 -# frozen_string_literal: false
@@ -31877,7 +32153,9 @@
 -end
 -
 -end
---- ruby2.7-2.7.6.orig/test/openssl/test_ssl_session.rb
+Index: deb-ruby/test/openssl/test_ssl_session.rb
+===================================================================
+--- deb-ruby.orig/test/openssl/test_ssl_session.rb
 +++ /dev/null
 @@ -1,401 +0,0 @@
 -# frozen_string_literal: false
@@ -32281,7 +32559,9 @@
 -end
 -
 -end
---- ruby2.7-2.7.6.orig/test/openssl/test_x509attr.rb
+Index: deb-ruby/test/openssl/test_x509attr.rb
+===================================================================
+--- deb-ruby.orig/test/openssl/test_x509attr.rb
 +++ /dev/null
 @@ -1,84 +0,0 @@
 -# frozen_string_literal: false
@@ -32368,7 +32648,9 @@
 -end
 -
 -end
---- ruby2.7-2.7.6.orig/test/openssl/test_x509cert.rb
+Index: deb-ruby/test/openssl/test_x509cert.rb
+===================================================================
+--- deb-ruby.orig/test/openssl/test_x509cert.rb
 +++ /dev/null
 @@ -1,201 +0,0 @@
 -# frozen_string_literal: false
@@ -32572,7 +32854,9 @@
 -end
 -
 -end
---- ruby2.7-2.7.6.orig/test/openssl/test_x509crl.rb
+Index: deb-ruby/test/openssl/test_x509crl.rb
+===================================================================
+--- deb-ruby.orig/test/openssl/test_x509crl.rb
 +++ /dev/null
 @@ -1,261 +0,0 @@
 -# frozen_string_literal: false
@@ -32836,7 +33120,9 @@
 -end
 -
 -end
---- ruby2.7-2.7.6.orig/test/openssl/test_x509ext.rb
+Index: deb-ruby/test/openssl/test_x509ext.rb
+===================================================================
+--- deb-ruby.orig/test/openssl/test_x509ext.rb
 +++ /dev/null
 @@ -1,91 +0,0 @@
 -# frozen_string_literal: false
@@ -32930,7 +33216,9 @@
 -end
 -
 -end
---- ruby2.7-2.7.6.orig/test/openssl/test_x509name.rb
+Index: deb-ruby/test/openssl/test_x509name.rb
+===================================================================
+--- deb-ruby.orig/test/openssl/test_x509name.rb
 +++ /dev/null
 @@ -1,456 +0,0 @@
 -# coding: ASCII-8BIT
@@ -33389,7 +33677,9 @@
 -end
 -
 -end
---- ruby2.7-2.7.6.orig/test/openssl/test_x509req.rb
+Index: deb-ruby/test/openssl/test_x509req.rb
+===================================================================
+--- deb-ruby.orig/test/openssl/test_x509req.rb
 +++ /dev/null
 @@ -1,163 +0,0 @@
 -# frozen_string_literal: false
@@ -33555,7 +33845,9 @@
 -end
 -
 -end
---- ruby2.7-2.7.6.orig/test/openssl/test_x509store.rb
+Index: deb-ruby/test/openssl/test_x509store.rb
+===================================================================
+--- deb-ruby.orig/test/openssl/test_x509store.rb
 +++ /dev/null
 @@ -1,241 +0,0 @@
 -# frozen_string_literal: false
@@ -33799,7 +34091,9 @@
 -end
 -
 -end
---- ruby2.7-2.7.6.orig/test/openssl/ut_eof.rb
+Index: deb-ruby/test/openssl/ut_eof.rb
+===================================================================
+--- deb-ruby.orig/test/openssl/ut_eof.rb
 +++ /dev/null
 @@ -1,133 +0,0 @@
 -# frozen_string_literal: false
@@ -33935,7 +34229,9 @@
 -end
 -
 -end
---- ruby2.7-2.7.6.orig/test/openssl/utils.rb
+Index: deb-ruby/test/openssl/utils.rb
+===================================================================
+--- deb-ruby.orig/test/openssl/utils.rb
 +++ /dev/null
 @@ -1,327 +0,0 @@
 -# frozen_string_literal: false
@@ -34265,245 +34561,247 @@
 -end
 -
 -end
---- ruby2.7-2.7.6.orig/ext/openssl/depend
-+++ ruby2.7-2.7.6/ext/openssl/depend
-@@ -39,9 +39,9 @@ ossl.o: ossl_pkcs7.h
+Index: deb-ruby/ext/openssl/depend
+===================================================================
+--- deb-ruby.orig/ext/openssl/depend
++++ deb-ruby/ext/openssl/depend
+@@ -39,9 +39,8 @@ ossl.o: ossl_pkcs7.h
  ossl.o: ossl_pkey.h
  ossl.o: ossl_rand.h
  ossl.o: ossl_ssl.h
+-ossl.o: ossl_version.h
 +ossl.o: ossl_ts.h
- ossl.o: ossl_version.h
  ossl.o: ossl_x509.h
 -ossl.o: ruby_missing.h
  ossl_asn1.o: $(RUBY_EXTCONF_H)
  ossl_asn1.o: $(arch_hdrdir)/ruby/config.h
  ossl_asn1.o: $(hdrdir)/ruby.h
-@@ -77,9 +77,9 @@ ossl_asn1.o: ossl_pkcs7.h
+@@ -77,9 +76,8 @@ ossl_asn1.o: ossl_pkcs7.h
  ossl_asn1.o: ossl_pkey.h
  ossl_asn1.o: ossl_rand.h
  ossl_asn1.o: ossl_ssl.h
+-ossl_asn1.o: ossl_version.h
 +ossl_asn1.o: ossl_ts.h
- ossl_asn1.o: ossl_version.h
  ossl_asn1.o: ossl_x509.h
 -ossl_asn1.o: ruby_missing.h
  ossl_bio.o: $(RUBY_EXTCONF_H)
  ossl_bio.o: $(arch_hdrdir)/ruby/config.h
  ossl_bio.o: $(hdrdir)/ruby.h
-@@ -115,9 +115,9 @@ ossl_bio.o: ossl_pkcs7.h
+@@ -115,9 +113,8 @@ ossl_bio.o: ossl_pkcs7.h
  ossl_bio.o: ossl_pkey.h
  ossl_bio.o: ossl_rand.h
  ossl_bio.o: ossl_ssl.h
+-ossl_bio.o: ossl_version.h
 +ossl_bio.o: ossl_ts.h
- ossl_bio.o: ossl_version.h
  ossl_bio.o: ossl_x509.h
 -ossl_bio.o: ruby_missing.h
  ossl_bn.o: $(RUBY_EXTCONF_H)
  ossl_bn.o: $(arch_hdrdir)/ruby/config.h
  ossl_bn.o: $(hdrdir)/ruby.h
-@@ -153,9 +153,9 @@ ossl_bn.o: ossl_pkcs7.h
+@@ -153,9 +150,8 @@ ossl_bn.o: ossl_pkcs7.h
  ossl_bn.o: ossl_pkey.h
  ossl_bn.o: ossl_rand.h
  ossl_bn.o: ossl_ssl.h
+-ossl_bn.o: ossl_version.h
 +ossl_bn.o: ossl_ts.h
- ossl_bn.o: ossl_version.h
  ossl_bn.o: ossl_x509.h
 -ossl_bn.o: ruby_missing.h
  ossl_cipher.o: $(RUBY_EXTCONF_H)
  ossl_cipher.o: $(arch_hdrdir)/ruby/config.h
  ossl_cipher.o: $(hdrdir)/ruby.h
-@@ -191,9 +191,9 @@ ossl_cipher.o: ossl_pkcs7.h
+@@ -191,9 +187,8 @@ ossl_cipher.o: ossl_pkcs7.h
  ossl_cipher.o: ossl_pkey.h
  ossl_cipher.o: ossl_rand.h
  ossl_cipher.o: ossl_ssl.h
+-ossl_cipher.o: ossl_version.h
 +ossl_cipher.o: ossl_ts.h
- ossl_cipher.o: ossl_version.h
  ossl_cipher.o: ossl_x509.h
 -ossl_cipher.o: ruby_missing.h
  ossl_config.o: $(RUBY_EXTCONF_H)
  ossl_config.o: $(arch_hdrdir)/ruby/config.h
  ossl_config.o: $(hdrdir)/ruby.h
-@@ -229,9 +229,9 @@ ossl_config.o: ossl_pkcs7.h
+@@ -229,9 +224,8 @@ ossl_config.o: ossl_pkcs7.h
  ossl_config.o: ossl_pkey.h
  ossl_config.o: ossl_rand.h
  ossl_config.o: ossl_ssl.h
+-ossl_config.o: ossl_version.h
 +ossl_config.o: ossl_ts.h
- ossl_config.o: ossl_version.h
  ossl_config.o: ossl_x509.h
 -ossl_config.o: ruby_missing.h
  ossl_digest.o: $(RUBY_EXTCONF_H)
  ossl_digest.o: $(arch_hdrdir)/ruby/config.h
  ossl_digest.o: $(hdrdir)/ruby.h
-@@ -267,9 +267,9 @@ ossl_digest.o: ossl_pkcs7.h
+@@ -267,9 +261,8 @@ ossl_digest.o: ossl_pkcs7.h
  ossl_digest.o: ossl_pkey.h
  ossl_digest.o: ossl_rand.h
  ossl_digest.o: ossl_ssl.h
+-ossl_digest.o: ossl_version.h
 +ossl_digest.o: ossl_ts.h
- ossl_digest.o: ossl_version.h
  ossl_digest.o: ossl_x509.h
 -ossl_digest.o: ruby_missing.h
  ossl_engine.o: $(RUBY_EXTCONF_H)
  ossl_engine.o: $(arch_hdrdir)/ruby/config.h
  ossl_engine.o: $(hdrdir)/ruby.h
-@@ -305,9 +305,9 @@ ossl_engine.o: ossl_pkcs7.h
+@@ -305,9 +298,8 @@ ossl_engine.o: ossl_pkcs7.h
  ossl_engine.o: ossl_pkey.h
  ossl_engine.o: ossl_rand.h
  ossl_engine.o: ossl_ssl.h
+-ossl_engine.o: ossl_version.h
 +ossl_engine.o: ossl_ts.h
- ossl_engine.o: ossl_version.h
  ossl_engine.o: ossl_x509.h
 -ossl_engine.o: ruby_missing.h
  ossl_hmac.o: $(RUBY_EXTCONF_H)
  ossl_hmac.o: $(arch_hdrdir)/ruby/config.h
  ossl_hmac.o: $(hdrdir)/ruby.h
-@@ -343,9 +343,9 @@ ossl_hmac.o: ossl_pkcs7.h
+@@ -343,9 +335,8 @@ ossl_hmac.o: ossl_pkcs7.h
  ossl_hmac.o: ossl_pkey.h
  ossl_hmac.o: ossl_rand.h
  ossl_hmac.o: ossl_ssl.h
+-ossl_hmac.o: ossl_version.h
 +ossl_hmac.o: ossl_ts.h
- ossl_hmac.o: ossl_version.h
  ossl_hmac.o: ossl_x509.h
 -ossl_hmac.o: ruby_missing.h
  ossl_kdf.o: $(RUBY_EXTCONF_H)
  ossl_kdf.o: $(arch_hdrdir)/ruby/config.h
  ossl_kdf.o: $(hdrdir)/ruby.h
-@@ -381,9 +381,9 @@ ossl_kdf.o: ossl_pkcs7.h
+@@ -381,9 +372,8 @@ ossl_kdf.o: ossl_pkcs7.h
  ossl_kdf.o: ossl_pkey.h
  ossl_kdf.o: ossl_rand.h
  ossl_kdf.o: ossl_ssl.h
+-ossl_kdf.o: ossl_version.h
 +ossl_kdf.o: ossl_ts.h
- ossl_kdf.o: ossl_version.h
  ossl_kdf.o: ossl_x509.h
 -ossl_kdf.o: ruby_missing.h
  ossl_ns_spki.o: $(RUBY_EXTCONF_H)
  ossl_ns_spki.o: $(arch_hdrdir)/ruby/config.h
  ossl_ns_spki.o: $(hdrdir)/ruby.h
-@@ -419,9 +419,9 @@ ossl_ns_spki.o: ossl_pkcs7.h
+@@ -419,9 +409,8 @@ ossl_ns_spki.o: ossl_pkcs7.h
  ossl_ns_spki.o: ossl_pkey.h
  ossl_ns_spki.o: ossl_rand.h
  ossl_ns_spki.o: ossl_ssl.h
+-ossl_ns_spki.o: ossl_version.h
 +ossl_ns_spki.o: ossl_ts.h
- ossl_ns_spki.o: ossl_version.h
  ossl_ns_spki.o: ossl_x509.h
 -ossl_ns_spki.o: ruby_missing.h
  ossl_ocsp.o: $(RUBY_EXTCONF_H)
  ossl_ocsp.o: $(arch_hdrdir)/ruby/config.h
  ossl_ocsp.o: $(hdrdir)/ruby.h
-@@ -457,9 +457,9 @@ ossl_ocsp.o: ossl_pkcs7.h
+@@ -457,9 +446,8 @@ ossl_ocsp.o: ossl_pkcs7.h
  ossl_ocsp.o: ossl_pkey.h
  ossl_ocsp.o: ossl_rand.h
  ossl_ocsp.o: ossl_ssl.h
+-ossl_ocsp.o: ossl_version.h
 +ossl_ocsp.o: ossl_ts.h
- ossl_ocsp.o: ossl_version.h
  ossl_ocsp.o: ossl_x509.h
 -ossl_ocsp.o: ruby_missing.h
  ossl_pkcs12.o: $(RUBY_EXTCONF_H)
  ossl_pkcs12.o: $(arch_hdrdir)/ruby/config.h
  ossl_pkcs12.o: $(hdrdir)/ruby.h
-@@ -495,9 +495,9 @@ ossl_pkcs12.o: ossl_pkcs7.h
+@@ -495,9 +483,8 @@ ossl_pkcs12.o: ossl_pkcs7.h
  ossl_pkcs12.o: ossl_pkey.h
  ossl_pkcs12.o: ossl_rand.h
  ossl_pkcs12.o: ossl_ssl.h
+-ossl_pkcs12.o: ossl_version.h
 +ossl_pkcs12.o: ossl_ts.h
- ossl_pkcs12.o: ossl_version.h
  ossl_pkcs12.o: ossl_x509.h
 -ossl_pkcs12.o: ruby_missing.h
  ossl_pkcs7.o: $(RUBY_EXTCONF_H)
  ossl_pkcs7.o: $(arch_hdrdir)/ruby/config.h
  ossl_pkcs7.o: $(hdrdir)/ruby.h
-@@ -533,9 +533,9 @@ ossl_pkcs7.o: ossl_pkcs7.h
+@@ -533,9 +520,8 @@ ossl_pkcs7.o: ossl_pkcs7.h
  ossl_pkcs7.o: ossl_pkey.h
  ossl_pkcs7.o: ossl_rand.h
  ossl_pkcs7.o: ossl_ssl.h
+-ossl_pkcs7.o: ossl_version.h
 +ossl_pkcs7.o: ossl_ts.h
- ossl_pkcs7.o: ossl_version.h
  ossl_pkcs7.o: ossl_x509.h
 -ossl_pkcs7.o: ruby_missing.h
  ossl_pkey.o: $(RUBY_EXTCONF_H)
  ossl_pkey.o: $(arch_hdrdir)/ruby/config.h
  ossl_pkey.o: $(hdrdir)/ruby.h
-@@ -571,9 +571,9 @@ ossl_pkey.o: ossl_pkey.c
+@@ -571,9 +557,8 @@ ossl_pkey.o: ossl_pkey.c
  ossl_pkey.o: ossl_pkey.h
  ossl_pkey.o: ossl_rand.h
  ossl_pkey.o: ossl_ssl.h
+-ossl_pkey.o: ossl_version.h
 +ossl_pkey.o: ossl_ts.h
- ossl_pkey.o: ossl_version.h
  ossl_pkey.o: ossl_x509.h
 -ossl_pkey.o: ruby_missing.h
  ossl_pkey_dh.o: $(RUBY_EXTCONF_H)
  ossl_pkey_dh.o: $(arch_hdrdir)/ruby/config.h
  ossl_pkey_dh.o: $(hdrdir)/ruby.h
-@@ -609,9 +609,9 @@ ossl_pkey_dh.o: ossl_pkey.h
+@@ -609,9 +594,8 @@ ossl_pkey_dh.o: ossl_pkey.h
  ossl_pkey_dh.o: ossl_pkey_dh.c
  ossl_pkey_dh.o: ossl_rand.h
  ossl_pkey_dh.o: ossl_ssl.h
+-ossl_pkey_dh.o: ossl_version.h
 +ossl_pkey_dh.o: ossl_ts.h
- ossl_pkey_dh.o: ossl_version.h
  ossl_pkey_dh.o: ossl_x509.h
 -ossl_pkey_dh.o: ruby_missing.h
  ossl_pkey_dsa.o: $(RUBY_EXTCONF_H)
  ossl_pkey_dsa.o: $(arch_hdrdir)/ruby/config.h
  ossl_pkey_dsa.o: $(hdrdir)/ruby.h
-@@ -647,9 +647,9 @@ ossl_pkey_dsa.o: ossl_pkey.h
+@@ -647,9 +631,8 @@ ossl_pkey_dsa.o: ossl_pkey.h
  ossl_pkey_dsa.o: ossl_pkey_dsa.c
  ossl_pkey_dsa.o: ossl_rand.h
  ossl_pkey_dsa.o: ossl_ssl.h
+-ossl_pkey_dsa.o: ossl_version.h
 +ossl_pkey_dsa.o: ossl_ts.h
- ossl_pkey_dsa.o: ossl_version.h
  ossl_pkey_dsa.o: ossl_x509.h
 -ossl_pkey_dsa.o: ruby_missing.h
  ossl_pkey_ec.o: $(RUBY_EXTCONF_H)
  ossl_pkey_ec.o: $(arch_hdrdir)/ruby/config.h
  ossl_pkey_ec.o: $(hdrdir)/ruby.h
-@@ -685,9 +685,9 @@ ossl_pkey_ec.o: ossl_pkey.h
+@@ -685,9 +668,8 @@ ossl_pkey_ec.o: ossl_pkey.h
  ossl_pkey_ec.o: ossl_pkey_ec.c
  ossl_pkey_ec.o: ossl_rand.h
  ossl_pkey_ec.o: ossl_ssl.h
+-ossl_pkey_ec.o: ossl_version.h
 +ossl_pkey_ec.o: ossl_ts.h
- ossl_pkey_ec.o: ossl_version.h
  ossl_pkey_ec.o: ossl_x509.h
 -ossl_pkey_ec.o: ruby_missing.h
  ossl_pkey_rsa.o: $(RUBY_EXTCONF_H)
  ossl_pkey_rsa.o: $(arch_hdrdir)/ruby/config.h
  ossl_pkey_rsa.o: $(hdrdir)/ruby.h
-@@ -723,9 +723,9 @@ ossl_pkey_rsa.o: ossl_pkey.h
+@@ -723,9 +705,8 @@ ossl_pkey_rsa.o: ossl_pkey.h
  ossl_pkey_rsa.o: ossl_pkey_rsa.c
  ossl_pkey_rsa.o: ossl_rand.h
  ossl_pkey_rsa.o: ossl_ssl.h
+-ossl_pkey_rsa.o: ossl_version.h
 +ossl_pkey_rsa.o: ossl_ts.h
- ossl_pkey_rsa.o: ossl_version.h
  ossl_pkey_rsa.o: ossl_x509.h
 -ossl_pkey_rsa.o: ruby_missing.h
  ossl_rand.o: $(RUBY_EXTCONF_H)
  ossl_rand.o: $(arch_hdrdir)/ruby/config.h
  ossl_rand.o: $(hdrdir)/ruby.h
-@@ -761,9 +761,9 @@ ossl_rand.o: ossl_pkey.h
+@@ -761,9 +742,8 @@ ossl_rand.o: ossl_pkey.h
  ossl_rand.o: ossl_rand.c
  ossl_rand.o: ossl_rand.h
  ossl_rand.o: ossl_ssl.h
+-ossl_rand.o: ossl_version.h
 +ossl_rand.o: ossl_ts.h
- ossl_rand.o: ossl_version.h
  ossl_rand.o: ossl_x509.h
 -ossl_rand.o: ruby_missing.h
  ossl_ssl.o: $(RUBY_EXTCONF_H)
  ossl_ssl.o: $(arch_hdrdir)/ruby/config.h
  ossl_ssl.o: $(hdrdir)/ruby.h
-@@ -799,9 +799,9 @@ ossl_ssl.o: ossl_pkey.h
+@@ -799,9 +779,8 @@ ossl_ssl.o: ossl_pkey.h
  ossl_ssl.o: ossl_rand.h
  ossl_ssl.o: ossl_ssl.c
  ossl_ssl.o: ossl_ssl.h
+-ossl_ssl.o: ossl_version.h
 +ossl_ssl.o: ossl_ts.h
- ossl_ssl.o: ossl_version.h
  ossl_ssl.o: ossl_x509.h
 -ossl_ssl.o: ruby_missing.h
  ossl_ssl_session.o: $(RUBY_EXTCONF_H)
  ossl_ssl_session.o: $(arch_hdrdir)/ruby/config.h
  ossl_ssl_session.o: $(hdrdir)/ruby.h
-@@ -837,9 +837,46 @@ ossl_ssl_session.o: ossl_pkey.h
+@@ -837,9 +816,45 @@ ossl_ssl_session.o: ossl_pkey.h
  ossl_ssl_session.o: ossl_rand.h
  ossl_ssl_session.o: ossl_ssl.h
  ossl_ssl_session.o: ossl_ssl_session.c
+-ossl_ssl_session.o: ossl_version.h
 +ossl_ssl_session.o: ossl_ts.h
- ossl_ssl_session.o: ossl_version.h
  ossl_ssl_session.o: ossl_x509.h
 -ossl_ssl_session.o: ruby_missing.h
 +ossl_ts.o: $(RUBY_EXTCONF_H)
@@ -34546,108 +34844,108 @@
  ossl_x509.o: $(RUBY_EXTCONF_H)
  ossl_x509.o: $(arch_hdrdir)/ruby/config.h
  ossl_x509.o: $(hdrdir)/ruby.h
-@@ -874,10 +911,10 @@ ossl_x509.o: ossl_pkcs7.h
+@@ -874,10 +889,9 @@ ossl_x509.o: ossl_pkcs7.h
  ossl_x509.o: ossl_pkey.h
  ossl_x509.o: ossl_rand.h
  ossl_x509.o: ossl_ssl.h
+-ossl_x509.o: ossl_version.h
 +ossl_x509.o: ossl_ts.h
- ossl_x509.o: ossl_version.h
  ossl_x509.o: ossl_x509.c
  ossl_x509.o: ossl_x509.h
 -ossl_x509.o: ruby_missing.h
  ossl_x509attr.o: $(RUBY_EXTCONF_H)
  ossl_x509attr.o: $(arch_hdrdir)/ruby/config.h
  ossl_x509attr.o: $(hdrdir)/ruby.h
-@@ -912,10 +949,10 @@ ossl_x509attr.o: ossl_pkcs7.h
+@@ -912,10 +926,9 @@ ossl_x509attr.o: ossl_pkcs7.h
  ossl_x509attr.o: ossl_pkey.h
  ossl_x509attr.o: ossl_rand.h
  ossl_x509attr.o: ossl_ssl.h
+-ossl_x509attr.o: ossl_version.h
 +ossl_x509attr.o: ossl_ts.h
- ossl_x509attr.o: ossl_version.h
  ossl_x509attr.o: ossl_x509.h
  ossl_x509attr.o: ossl_x509attr.c
 -ossl_x509attr.o: ruby_missing.h
  ossl_x509cert.o: $(RUBY_EXTCONF_H)
  ossl_x509cert.o: $(arch_hdrdir)/ruby/config.h
  ossl_x509cert.o: $(hdrdir)/ruby.h
-@@ -950,10 +987,10 @@ ossl_x509cert.o: ossl_pkcs7.h
+@@ -950,10 +963,9 @@ ossl_x509cert.o: ossl_pkcs7.h
  ossl_x509cert.o: ossl_pkey.h
  ossl_x509cert.o: ossl_rand.h
  ossl_x509cert.o: ossl_ssl.h
+-ossl_x509cert.o: ossl_version.h
 +ossl_x509cert.o: ossl_ts.h
- ossl_x509cert.o: ossl_version.h
  ossl_x509cert.o: ossl_x509.h
  ossl_x509cert.o: ossl_x509cert.c
 -ossl_x509cert.o: ruby_missing.h
  ossl_x509crl.o: $(RUBY_EXTCONF_H)
  ossl_x509crl.o: $(arch_hdrdir)/ruby/config.h
  ossl_x509crl.o: $(hdrdir)/ruby.h
-@@ -988,10 +1025,10 @@ ossl_x509crl.o: ossl_pkcs7.h
+@@ -988,10 +1000,9 @@ ossl_x509crl.o: ossl_pkcs7.h
  ossl_x509crl.o: ossl_pkey.h
  ossl_x509crl.o: ossl_rand.h
  ossl_x509crl.o: ossl_ssl.h
+-ossl_x509crl.o: ossl_version.h
 +ossl_x509crl.o: ossl_ts.h
- ossl_x509crl.o: ossl_version.h
  ossl_x509crl.o: ossl_x509.h
  ossl_x509crl.o: ossl_x509crl.c
 -ossl_x509crl.o: ruby_missing.h
  ossl_x509ext.o: $(RUBY_EXTCONF_H)
  ossl_x509ext.o: $(arch_hdrdir)/ruby/config.h
  ossl_x509ext.o: $(hdrdir)/ruby.h
-@@ -1026,10 +1063,10 @@ ossl_x509ext.o: ossl_pkcs7.h
+@@ -1026,10 +1037,9 @@ ossl_x509ext.o: ossl_pkcs7.h
  ossl_x509ext.o: ossl_pkey.h
  ossl_x509ext.o: ossl_rand.h
  ossl_x509ext.o: ossl_ssl.h
+-ossl_x509ext.o: ossl_version.h
 +ossl_x509ext.o: ossl_ts.h
- ossl_x509ext.o: ossl_version.h
  ossl_x509ext.o: ossl_x509.h
  ossl_x509ext.o: ossl_x509ext.c
 -ossl_x509ext.o: ruby_missing.h
  ossl_x509name.o: $(RUBY_EXTCONF_H)
  ossl_x509name.o: $(arch_hdrdir)/ruby/config.h
  ossl_x509name.o: $(hdrdir)/ruby.h
-@@ -1064,10 +1101,10 @@ ossl_x509name.o: ossl_pkcs7.h
+@@ -1064,10 +1074,9 @@ ossl_x509name.o: ossl_pkcs7.h
  ossl_x509name.o: ossl_pkey.h
  ossl_x509name.o: ossl_rand.h
  ossl_x509name.o: ossl_ssl.h
+-ossl_x509name.o: ossl_version.h
 +ossl_x509name.o: ossl_ts.h
- ossl_x509name.o: ossl_version.h
  ossl_x509name.o: ossl_x509.h
  ossl_x509name.o: ossl_x509name.c
 -ossl_x509name.o: ruby_missing.h
  ossl_x509req.o: $(RUBY_EXTCONF_H)
  ossl_x509req.o: $(arch_hdrdir)/ruby/config.h
  ossl_x509req.o: $(hdrdir)/ruby.h
-@@ -1102,10 +1139,10 @@ ossl_x509req.o: ossl_pkcs7.h
+@@ -1102,10 +1111,9 @@ ossl_x509req.o: ossl_pkcs7.h
  ossl_x509req.o: ossl_pkey.h
  ossl_x509req.o: ossl_rand.h
  ossl_x509req.o: ossl_ssl.h
+-ossl_x509req.o: ossl_version.h
 +ossl_x509req.o: ossl_ts.h
- ossl_x509req.o: ossl_version.h
  ossl_x509req.o: ossl_x509.h
  ossl_x509req.o: ossl_x509req.c
 -ossl_x509req.o: ruby_missing.h
  ossl_x509revoked.o: $(RUBY_EXTCONF_H)
  ossl_x509revoked.o: $(arch_hdrdir)/ruby/config.h
  ossl_x509revoked.o: $(hdrdir)/ruby.h
-@@ -1140,10 +1177,10 @@ ossl_x509revoked.o: ossl_pkcs7.h
+@@ -1140,10 +1148,9 @@ ossl_x509revoked.o: ossl_pkcs7.h
  ossl_x509revoked.o: ossl_pkey.h
  ossl_x509revoked.o: ossl_rand.h
  ossl_x509revoked.o: ossl_ssl.h
+-ossl_x509revoked.o: ossl_version.h
 +ossl_x509revoked.o: ossl_ts.h
- ossl_x509revoked.o: ossl_version.h
  ossl_x509revoked.o: ossl_x509.h
  ossl_x509revoked.o: ossl_x509revoked.c
 -ossl_x509revoked.o: ruby_missing.h
  ossl_x509store.o: $(RUBY_EXTCONF_H)
  ossl_x509store.o: $(arch_hdrdir)/ruby/config.h
  ossl_x509store.o: $(hdrdir)/ruby.h
-@@ -1178,8 +1215,8 @@ ossl_x509store.o: ossl_pkcs7.h
+@@ -1178,8 +1185,7 @@ ossl_x509store.o: ossl_pkcs7.h
  ossl_x509store.o: ossl_pkey.h
  ossl_x509store.o: ossl_rand.h
  ossl_x509store.o: ossl_ssl.h
+-ossl_x509store.o: ossl_version.h
 +ossl_x509store.o: ossl_ts.h
- ossl_x509store.o: ossl_version.h
  ossl_x509store.o: ossl_x509.h
  ossl_x509store.o: ossl_x509store.c
 -ossl_x509store.o: ruby_missing.h
