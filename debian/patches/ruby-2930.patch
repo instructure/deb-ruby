@@ -1,10 +1,65 @@
 Pull in https://github.com/ruby/ruby/pull/2930
+and https://github.com/ruby/ruby/pull/2515
 
 necessary with newer rubygems
 
---- ruby2.7-2.7.6.orig/tool/rbinstall.rb
-+++ ruby2.7-2.7.6/tool/rbinstall.rb
-@@ -817,12 +817,11 @@ end
+--- a/tool/rbinstall.rb
++++ b/tool/rbinstall.rb
+@@ -710,28 +710,34 @@
+     end
+   end
+ 
+-  class UnpackedInstaller < Gem::Installer
+-    module DirPackage
+-      def extract_files(destination_dir, pattern = "*")
+-        path = File.dirname(@gem.path)
+-        return if path == destination_dir
+-        File.chmod(0700, destination_dir)
+-        mode = pattern == "bin/*" ? $script_mode : $data_mode
+-        spec.files.each do |f|
+-          src = File.join(path, f)
+-          dest = File.join(without_destdir(destination_dir), f)
+-          makedirs(dest[/.*(?=\/)/m])
+-          install src, dest, :mode => mode
+-        end
+-        File.chmod($dir_mode, destination_dir)
+-      end
+-    end
++  class DirPackage
++    attr_reader :spec
+ 
+-    def initialize(spec, *options)
+-      super(spec.loaded_from, *options)
+-      @package.extend(DirPackage).spec = spec
++    attr_accessor :dir_mode
++    attr_accessor :prog_mode
++    attr_accessor :data_mode
++
++    def initialize(spec)
++      @spec = spec
++      @src_dir = File.dirname(@spec.loaded_from)
++    end
++
++    def extract_files(destination_dir, pattern = "*")
++      path = @src_dir
++      return if path == destination_dir
++      File.chmod(0700, destination_dir)
++      mode = pattern == "bin/*" ? $script_mode : $data_mode
++      spec.files.each do |f|
++        src = File.join(path, f)
++        dest = File.join(without_destdir(destination_dir), f)
++        makedirs(dest[/.*(?=\/)/m])
++        install src, dest, :mode => mode
++      end
++      File.chmod($dir_mode, destination_dir)
+     end
++  end
+ 
++  class UnpackedInstaller < Gem::Installer
+     def write_cache_file
+     end
+ 
+@@ -817,12 +823,11 @@
  
  def install_default_gem(dir, srcdir)
    gem_dir = Gem.default_dir
@@ -21,7 +76,7 @@ necessary with newer rubygems
  
    gems = Dir.glob("#{srcdir}/#{dir}/**/*.gemspec").map {|src|
      spec = load_gemspec(src)
-@@ -864,9 +863,9 @@ end
+@@ -864,9 +869,9 @@
  
  install?(:ext, :comm, :gem, :'bundled-gems') do
    gem_dir = Gem.default_dir
@@ -33,3 +88,13 @@ necessary with newer rubygems
    installed_gems = {}
    options = {
      :install_dir => install_dir,
+@@ -890,7 +895,8 @@
+     if File.directory?(ext = "#{gem_ext_dir}/#{spec.full_name}")
+       spec.extensions[0] ||= "-"
+     end
+-    ins = RbInstall::UnpackedInstaller.new(spec, options)
++    package = RbInstall::DirPackage.new spec
++    ins = RbInstall::UnpackedInstaller.new(package, options)
+     puts "#{INDENT}#{spec.name} #{spec.version}"
+     ins.install
+     File.chmod($data_mode, File.join(install_dir, "specifications", "#{spec.full_name}.gemspec"))
