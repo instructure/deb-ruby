@@ -1,3 +1,9 @@
+ruby2.7 (2.7.6-1ppa10) bionic; urgency=medium
+
+  * Again fix openssl/depend
+
+ -- Jacob Burroughs <maths22@gmail.com>  Tue, 20 Sep 2022 23:53:47 -0500
+
 ruby2.7 (2.7.6-1ppa9) bionic; urgency=medium
 
   * Fix up most of the tests
