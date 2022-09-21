@@ -115,6 +115,7 @@ ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
 	# dpkg-source does not allow empty file creation via patch file.
 	# This is needed by openssl 3.0.0
 	touch $(CURDIR)/test/openssl/fixtures/pkey/empty.pem
+	touch $(CURDIR)/test/openssl/fixtures/pkey/empty.der
 	$(MAKE) $(TEST_TARGETS) V=1 RUBY_TESTOPTS=-v TESTS="$(excludes)" OPENSSL_CONF=$(CURDIR)/debian/openssl.cnf
 endif
 
