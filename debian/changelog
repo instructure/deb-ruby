@@ -1,3 +1,9 @@
+ruby2.7 (2.7.6-1ppa18) bionic; urgency=medium
+
+  * Try to avoid a contaminated final build
+
+ -- Jacob Burroughs <maths22@gmail.com>  Thu, 22 Sep 2022 12:52:21 -0500
+
 ruby2.7 (2.7.6-1ppa17) bionic; urgency=medium
 
   * Indicate this package provides `ruby` in the right place
