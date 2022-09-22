@@ -5,7 +5,6 @@ Maintainer: Debian Ruby Team <pkg-ruby-extras-maintainers@lists.alioth.debian.or
 Uploaders: Antonio Terceiro <terceiro@debian.org>,
            Lucas Kanashiro <kanashiro@debian.org>,
            Utkarsh Gupta <utkarsh@debian.org>
-Provides: ruby
 Build-Depends: bison,
                coreutils (>= 7.5),
                debhelper (>= 11),
@@ -35,6 +34,7 @@ Rules-Requires-Root: no
 Package: ruby2.7
 Multi-Arch: allowed
 Architecture: any
+Provides: ruby
 Depends: rubygems-integration (>= 1.17.1~),
          ${misc:Depends},
          ${shlibs:Depends}
