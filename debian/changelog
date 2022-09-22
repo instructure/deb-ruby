@@ -1,3 +1,9 @@
+ruby2.7 (2.7.6-1ppa16) bionic; urgency=medium
+
+  * Indicate this package provides `ruby`
+
+ -- Jacob Burroughs <maths22@gmail.com>  Thu, 22 Sep 2022 09:31:59 -0500
+
 ruby2.7 (2.7.6-1ppa15) bionic; urgency=medium
 
   * Make net smtp gemspec valid

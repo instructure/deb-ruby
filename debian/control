@@ -5,6 +5,7 @@ Maintainer: Debian Ruby Team <pkg-ruby-extras-maintainers@lists.alioth.debian.or
 Uploaders: Antonio Terceiro <terceiro@debian.org>,
            Lucas Kanashiro <kanashiro@debian.org>,
            Utkarsh Gupta <utkarsh@debian.org>
+Provides: ruby
 Build-Depends: bison,
                coreutils (>= 7.5),
                debhelper (>= 11),
