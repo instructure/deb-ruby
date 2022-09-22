@@ -34,6 +34,7 @@ Rules-Requires-Root: no
 Package: ruby3.1
 Multi-Arch: allowed
 Architecture: any
+Provides: ruby
 Depends: rubygems-integration (>= 1.17.1~),
          ${misc:Depends},
          ${shlibs:Depends}
