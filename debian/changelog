@@ -1,3 +1,9 @@
+ruby2.7 (2.7.6-1ppa19) bionic; urgency=medium
+
+  * Bump to build debug symbols
+
+ -- Jacob Burroughs <maths22@gmail.com>  Tue, 15 Nov 2022 17:07:35 -0600
+
 ruby2.7 (2.7.6-1ppa18) bionic; urgency=medium
 
   * Try to avoid a contaminated final build
