@@ -1,3 +1,9 @@
+ruby3.2 (3.2.0-1ppa2) bionic; urgency=medium
+
+  * Remove stray questionable patches file
+
+ -- Jacob Burroughs <maths22@gmail.com>  Wed, 11 Jan 2023 21:28:09 -0600
+
 ruby3.2 (3.2.0-1ppa1) bionic; urgency=medium
 
   * Build for Ubuntu

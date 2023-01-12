@@ -9,4 +9,3 @@
 0011-don-t-try-to-download-stuff-in-configure.patch
 ruby_default_arch.m4-don-t-require-arhitectures-to-be-kno.patch
 rbconfig-mkmf-call-foreign-pkg-config-when-cross-compilin.patch
-debian-changes
