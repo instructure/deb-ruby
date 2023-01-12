@@ -1,0 +1,10 @@
+#!/bin/sh
+
+set -e
+
+if [ "$1" = "remove" ]; then
+        update-alternatives --remove gem /usr/bin/gem3.2
+        update-alternatives --remove ruby /usr/bin/ruby3.2
+fi
+
+#DEBHELPER#
