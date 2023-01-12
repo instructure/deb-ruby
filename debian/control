@@ -22,6 +22,7 @@ Build-Depends: bison,
                procps <!nocheck>,
                ruby3.2:native <cross>,
                rubygems-integration (>= 1.6) <!nocheck>,
+               rustc,
                systemtap-sdt-dev [linux-any],
                tzdata,
                zlib1g-dev

@@ -55,6 +55,9 @@ endif
 configure_options += --enable-ipv6
 configure_options += --with-dbm-type=gdbm_compat
 
+# TODO only aarch64 and amd64
+configure_options += --enable-yjit
+
 # do not compress debug sections for arch-dep Ruby packages with dh_compat 12
 configure_options += --with-compress-debug-sections=no
 
