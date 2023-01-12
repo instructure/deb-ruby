@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
-# `uplevel` keyword argument of Kernel#warn is available since ruby 2.5.
-if RUBY_VERSION >= "2.5" && !Gem::KERNEL_WARN_IGNORES_INTERNAL_ENTRIES
+if !Gem::KERNEL_WARN_IGNORES_INTERNAL_ENTRIES
 
   module Kernel
     rubygems_path = "#{__dir__}/" # Frames to be skipped start with this path.
@@ -16,7 +15,7 @@ if RUBY_VERSION >= "2.5" && !Gem::KERNEL_WARN_IGNORES_INTERNAL_ENTRIES
 
     module_function define_method(:warn) {|*messages, **kw|
       unless uplevel = kw[:uplevel]
-        if Gem.java_platform?
+        if Gem.java_platform? && RUBY_VERSION < "3.1"
           return original_warn.bind(self).call(*messages)
         else
           return original_warn.bind(self).call(*messages, **kw)
@@ -39,7 +38,7 @@ if RUBY_VERSION >= "2.5" && !Gem::KERNEL_WARN_IGNORES_INTERNAL_ENTRIES
           start += 1
 
           if path = loc.path
-            unless path.start_with?(rubygems_path) or path.start_with?('<internal:')
+            unless path.start_with?(rubygems_path) || path.start_with?("<internal:")
               # Non-rubygems frames
               uplevel -= 1
             end
