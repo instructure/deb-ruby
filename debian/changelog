@@ -1,3 +1,9 @@
+ruby3.2 (3.2.0-1ppa4) bionic; urgency=medium
+
+  * Don't list rust/yjit symbols since they aren't stable cross-arch
+
+ -- Jacob Burroughs <maths22@gmail.com>  Wed, 11 Jan 2023 21:51:29 -0600
+
 ruby3.2 (3.2.0-1ppa3) bionic; urgency=medium
 
   * Skip tests correctly
