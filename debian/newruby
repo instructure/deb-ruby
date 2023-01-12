@@ -28,7 +28,7 @@ sed -i -e "s/\(gem\|rdoc\)${old_version}/\1${new_version}/gi" \
 	debian/manpages/* debian/*.manpages
 rename "s/${old_version}/${new_version}/g" debian/manpages/*
 
-dch --package "${new_source}" --newversion "${new_version}.0-1" "Ruby $new_version"
+dch --package "${new_source}" --newversion "${new_version}.0~placeholder-1" "Ruby $new_version"
 git add .
 git commit -a -m "Switch to ${new_source}"
 gbp import-orig --pristine-tar --uscan
