@@ -10,20 +10,18 @@ Signed-off-by: Samuel Thibault <samuel.thibault@ens-lyon.org>
  io.c | 6 +++++-
  1 file changed, 5 insertions(+), 1 deletion(-)
 
-diff --git a/io.c b/io.c
-index 0b54310..26168b2 100644
 --- a/io.c
 +++ b/io.c
-@@ -2011,7 +2011,11 @@ io_writev(int argc, const VALUE *argv, VALUE io)
+@@ -2207,7 +2207,11 @@
  
      for (i = 0; i < argc; i += cnt) {
  #ifdef HAVE_WRITEV
--	if ((fptr->mode & (FMODE_SYNC|FMODE_TTY)) && iovcnt_ok(cnt = argc - i)) {
+-        if ((fptr->mode & (FMODE_SYNC|FMODE_TTY)) && iovcnt_ok(cnt = argc - i)) {
 +        if ((fptr->mode & (FMODE_SYNC|FMODE_TTY))
 +# ifdef IOV_MAX
 +               && ((cnt = argc - i) < IOV_MAX)
 +# endif
 +               ) {
- 	    n = io_fwritev(cnt, &argv[i], fptr);
- 	}
- 	else
+             n = io_fwritev(cnt, &argv[i], fptr);
+         }
+         else
