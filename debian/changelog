@@ -1,3 +1,10 @@
+ruby3.2 (3.2.0-1ppa6) bionic; urgency=medium
+
+  * Drop webrick dep because launchpad is being annoying; we should probably
+    restore it in the future
+
+ -- Jacob Burroughs <maths22@gmail.com>  Thu, 12 Jan 2023 10:31:33 -0600
+
 ruby3.2 (3.2.0-1ppa5) bionic; urgency=medium
 
   * Native gems don't build well cross-ruby; don't try to depend on one
