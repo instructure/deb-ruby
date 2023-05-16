@@ -974,6 +974,25 @@ class TestYJIT < Test::Unit::TestCase
     RUBY
   end
 
+  def test_code_gc_partial_last_page
+    # call_threshold: 2 to avoid JIT-ing code_gc itself. If code_gc were JITed right before
+    # code_gc is called, the last page would be on stack.
+    assert_compiles(<<~'RUBY', exits: :any, result: :ok, call_threshold: 2)
+      # Leave a bunch of off-stack pages
+      i = 0
+      while i < 1000
+        eval("x = proc { 1.to_s }; x.call; x.call")
+        i += 1
+      end
+
+      # On Linux, memory page size != code page size. So the last code page could be partially
+      # mapped. This call tests that assertions and other things work fine under the situation.
+      RubyVM::YJIT.code_gc
+
+      :ok
+    RUBY
+  end
+
   def test_trace_script_compiled # not ISEQ_TRACE_EVENTS
     assert_compiles(<<~'RUBY', exits: :any, result: :ok)
       @eval_counter = 0
@@ -1025,6 +1044,100 @@ class TestYJIT < Test::Unit::TestCase
   def test_send_to_call
     assert_compiles(<<~'RUBY', result: :ok)
       ->{ :ok }.send(:call)
+    RUBY
+  end
+
+  def test_invokeblock_many_locals
+    # [Bug #19299]
+    assert_compiles(<<~'RUBY', result: :ok)
+      def foo
+        yield
+      end
+
+      foo do
+        a1=a2=a3=a4=a5=a6=a7=a8=a9=a10=a11=a12=a13=a14=a15=a16=a17=a18=a19=a20=a21=a22=a23=a24=a25=a26=a27=a28=a29=a30 = :ok
+        a30
+      end
+    RUBY
+  end
+
+  def test_bug_19316
+    n = 2 ** 64
+    # foo's extra param and the splats are relevant
+    assert_compiles(<<~'RUBY', result: [[n, -n], [n, -n]])
+      def foo(_, a, b, c)
+        [a & b, ~c]
+      end
+
+      n = 2 ** 64
+      args = [0, -n, n, n-1]
+
+      GC.stress = true
+      [foo(*args), foo(*args)]
+    RUBY
+  end
+
+  def test_tracing_str_uplus
+    assert_compiles(<<~RUBY, frozen_string_literal: true, result: :ok)
+      def str_uplus
+        _ = 1
+        _ = 2
+        ret = [+"frfr", __LINE__]
+        _ = 3
+        _ = 4
+
+        ret
+      end
+
+      str_uplus
+      require 'objspace'
+      ObjectSpace.trace_object_allocations_start
+
+      str, expected_line = str_uplus
+      alloc_line = ObjectSpace.allocation_sourceline(str)
+
+      if expected_line == alloc_line
+        :ok
+      else
+        [expected_line, alloc_line]
+      end
+    RUBY
+  end
+
+  def test_str_uplus_subclass
+    assert_compiles(<<~RUBY, frozen_string_literal: true, result: :subclass)
+      class S < String
+        def encoding
+          :subclass
+        end
+      end
+
+      def test(str)
+        (+str).encoding
+      end
+
+      test ""
+      test S.new
+    RUBY
+  end
+
+  def test_nested_send
+    #[Bug #19464]
+    assert_compiles(<<~RUBY, result: [:ok, :ok])
+      klass = Class.new do
+        class << self
+          alias_method :my_send, :send
+
+          def bar = :ok
+
+          def foo = bar
+        end
+      end
+
+      with_break = -> { break klass.send(:my_send, :foo) }
+      wo_break = -> { klass.send(:my_send, :foo) }
+
+      [with_break[], wo_break[]]
     RUBY
   end
 
