@@ -1,3 +1,11 @@
+ruby3.2 (3.2.2-1ppa1) UNRELEASED; urgency=medium
+
+  [ Jacob Burroughs ]
+  * New upstream version 3.2.2
+  * Restore auto-upload
+
+ -- Ubuntu <ubuntu@focal>  Tue, 16 May 2023 17:19:29 -0500
+
 ruby3.2 (3.2.0-1ppa6) bionic; urgency=medium
 
   * Drop webrick dep because launchpad is being annoying; we should probably
