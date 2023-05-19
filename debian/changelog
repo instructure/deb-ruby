@@ -1,4 +1,4 @@
-ruby3.2 (3.2.2-1ppa1) UNRELEASED; urgency=medium
+ruby3.2 (3.2.2-1ppa1) bionic; urgency=medium
 
   [ Jacob Burroughs ]
   * New upstream version 3.2.2
