@@ -13,8 +13,9 @@ jobs:
           path: "ruby"
       - run: |
           major_version=$(head -n1 ruby/debian/changelog | egrep -o "ruby[0-9.]+" | sed "s/ruby//")
-          minor_version=$(head -n1 ruby/debian/changelog | egrep -o "\([0-9.]+" | sed "s/(//")
-          curl https://cache.ruby-lang.org/pub/ruby/${major_version}/ruby-${minor_version}.tar.gz > ruby${major_version}_${minor_version}.orig.tar.gz
+          minor_version=$(head -n1 ruby/debian/changelog | egrep -o "\([0-9.]+(~[a-z0-9]+)?" | sed "s/(//")
+          upstream_minor_version=$(echo $minor_version | sed "s/~/-/")
+          curl https://cache.ruby-lang.org/pub/ruby/${major_version}/ruby-${upstream_minor_version}.tar.gz > ruby${major_version}_${minor_version}.orig.tar.gz
           # Remove this file itself to avoid generating a debian-changes file
           rm -rf ruby/.github
       - name: Publish PPA
