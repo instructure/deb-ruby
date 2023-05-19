@@ -28,17 +28,17 @@ Forwarded: https://github.com/ruby/ruby/pull/6355
 --- a/lib/mkmf.rb
 +++ b/lib/mkmf.rb
 @@ -1866,7 +1866,7 @@
-     if pkgconfig = with_config("#{pkg}-config") and find_executable0(pkgconfig)
+       if pkgconfig = with_config("#{pkg}-config") and find_executable0(pkgconfig)
        # if and only if package specific config command is given
-     elsif ($PKGCONFIG ||=
--           (pkgconfig = with_config("pkg-config") {config_string("PKG_CONFIG") || "pkg-config"}) &&
-+           (pkgconfig = with_config("pkg-config") {config_string("PKG_CONFIG") || (CROSS_COMPILING ? RbConfig::CONFIG["CC"].sub(/-gcc$/, "-pkg-config"): "pkg-config")}) &&
-            find_executable0(pkgconfig) && pkgconfig) and
-         xsystem([*envs, $PKGCONFIG, "--exists", pkg])
-       # default to pkg-config command
+       elsif ($PKGCONFIG ||=
+-             (pkgconfig = with_config("pkg-config") {config_string("PKG_CONFIG") || "pkg-config"}) &&
++             (pkgconfig = with_config("pkg-config") {config_string("PKG_CONFIG") || (CROSS_COMPILING ? RbConfig::CONFIG["CC"].sub(/-gcc$/, "-pkg-config"): "pkg-config")}) &&
+              find_executable0(pkgconfig) && pkgconfig) and
+            xsystem([*envs, $PKGCONFIG, "--exists", pkg])
+         # default to pkg-config command
 --- a/tool/mkconfig.rb
 +++ b/tool/mkconfig.rb
-@@ -391,7 +391,7 @@
+@@ -395,7 +395,7 @@
      )
    end
  end

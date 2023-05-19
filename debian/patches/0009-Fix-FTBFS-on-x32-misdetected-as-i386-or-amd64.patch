@@ -13,7 +13,7 @@ Updated by John Paul Adrian Glaubitz <glaubitz@physik.fu-berlin.de> on
 
 --- a/configure.ac
 +++ b/configure.ac
-@@ -2596,6 +2596,9 @@
+@@ -2598,6 +2598,9 @@
          [powerpc64-darwin*|ppc64-darwin*], [
              coroutine_type=ppc64
          ],
