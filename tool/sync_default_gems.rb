@@ -43,7 +43,6 @@ module SyncDefaultGems
     benchmark: "ruby/benchmark",
     cgi: "ruby/cgi",
     readline: "ruby/readline",
-    "readline-ext": "ruby/readline-ext",
     observer: "ruby/observer",
     timeout: "ruby/timeout",
     yaml: "ruby/yaml",
@@ -158,7 +157,7 @@ module SyncDefaultGems
       cp_r(Dir.glob("#{upstream}/bundler/tool/bundler/test_gems*"), "tool/bundler")
       cp_r(Dir.glob("#{upstream}/bundler/tool/bundler/rubocop_gems*"), "tool/bundler")
       cp_r(Dir.glob("#{upstream}/bundler/tool/bundler/standard_gems*"), "tool/bundler")
-      rm_rf(%w[spec/bundler/support/artifice/vcr_cassettes])
+      rm_rf Dir.glob("spec/bundler/support/artifice/{vcr_cassettes,used_cassettes.txt}")
       rm_rf Dir.glob("lib/{bundler,rubygems}/**/{COPYING,LICENSE,README}{,.{md,txt,rdoc}}")
     when "rdoc"
       rm_rf(%w[lib/rdoc lib/rdoc.rb test/rdoc libexec/rdoc libexec/ri])
@@ -335,12 +334,6 @@ module SyncDefaultGems
       cp_r("#{upstream}/lib/net/http", "lib/net")
       cp_r("#{upstream}/test/net/http", "test/net")
       cp_r("#{upstream}/net-http.gemspec", "lib/net/http")
-    when "readline-ext"
-      rm_rf(%w[ext/readline test/readline])
-      cp_r("#{upstream}/ext/readline", "ext")
-      cp_r("#{upstream}/test/readline", "test")
-      cp_r("#{upstream}/readline-ext.gemspec", "ext/readline")
-      `git checkout ext/readline/depend`
     when "did_you_mean"
       rm_rf(%w[lib/did_you_mean lib/did_you_mean.rb test/did_you_mean])
       cp_r(Dir.glob("#{upstream}/lib/did_you_mean*"), "lib")
@@ -435,7 +428,8 @@ module SyncDefaultGems
     |\.git.*
     |[A-Z]\w+file
     |COPYING
-    |rakelib\/.*
+    |\Arakelib\/.*
+    |\Atest\/lib\/.*
     )\z/mx
 
   def message_filter(repo, sha, input: ARGF)
@@ -520,8 +514,6 @@ module SyncDefaultGems
 
     failed_commits = []
 
-    ENV["FILTER_BRANCH_SQUELCH_WARNING"] = "1"
-
     require 'shellwords'
     filter = [
       ENV.fetch('RUBY', 'ruby').shellescape,
@@ -585,6 +577,23 @@ module SyncDefaultGems
         next
       end
 
+      tools = pipe_readlines(%W"git diff --name-only -z HEAD~..HEAD -- test/lib/ tool/ rakelib/")
+      unless tools.empty?
+        system(*%W"git rm --", *tools)
+        system(*%W"git checkout HEAD~ --", *tools)
+        if system(*%W"git diff --quiet HEAD~")
+          `git reset HEAD~ --` && `git checkout .` && `git clean -fd`
+          puts "Skip commit #{sha} only for tools"
+          next
+        end
+        unless system(*%W"git commit --amend --no-edit --", *tools)
+          failed_commits << sha
+          `git reset HEAD~ --` && `git checkout .` && `git clean -fd`
+          puts "Failed to pick #{sha}"
+          next
+        end
+      end
+
       head = `git log --format=%H -1 HEAD`.chomp
       system(*%w"git reset --quiet HEAD~ --")
       amend = replace_rdoc_ref_all
@@ -595,7 +604,9 @@ module SyncDefaultGems
 
       puts "Update commit message: #{sha}"
 
-      IO.popen(%W[git filter-branch -f --msg-filter #{[filter, repo, sha].join(' ')} -- HEAD~1..HEAD], &:read)
+      IO.popen({"FILTER_BRANCH_SQUELCH_WARNING" => "1"},
+               %W[git filter-branch -f --msg-filter #{[filter, repo, sha].join(' ')} -- HEAD~1..HEAD],
+               &:read)
       unless $?.success?
         puts "Failed to modify commit message of #{sha}"
         break

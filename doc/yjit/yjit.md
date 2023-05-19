@@ -9,9 +9,9 @@ YJIT - Yet Another Ruby JIT
 ===========================
 
 YJIT is a lightweight, minimalistic Ruby JIT built inside CRuby.
-It lazily compiles code using a Basic Block Versioning (BBV) architecture. The target use case is that of servers running
-Ruby on Rails, an area where MJIT has not yet managed to deliver speedups.
-YJIT is currently supported for macOS and Linux on x86-64 and arm64/aarch64 CPUs.
+It lazily compiles code using a Basic Block Versioning (BBV) architecture.
+The target use case is that of servers running Ruby on Rails.
+YJIT is currently supported for macOS, Linux and BSD on x86-64 and arm64/aarch64 CPUs.
 This project is open source and falls under the same license as CRuby.
 
 <p align="center"><b>
@@ -20,6 +20,8 @@ This project is open source and falls under the same license as CRuby.
  </b></p>
 
 If you wish to learn more about the approach taken, here are some conference talks and publications:
+- RubyKaigi 2022 keynote: [Stories from developing YJIT](https://www.youtube.com/watch?v=EMchdR9C8XM)
+- RubyKaigi 2022 talk: [Building a Lightweight IR and Backend for YJIT](https://www.youtube.com/watch?v=BbLGqTxTRp0)
 - RubyKaigi 2021 talk: [YJIT: Building a New JIT Compiler Inside CRuby](https://www.youtube.com/watch?v=PBVLf3yfMs8)
 - Blog post: [YJIT: Building a New JIT Compiler Inside CRuby](https://pointersgonewild.com/2021/06/02/yjit-building-a-new-jit-compiler-inside-cruby/)
 - VMIL 2021 paper: [YJIT: A Basic Block Versioning JIT Compiler for CRuby](https://dl.acm.org/doi/10.1145/3486606.3486781)
@@ -102,7 +104,7 @@ On macOS, you may need to specify where to find some libraries:
 
 ```sh
 # Install dependencies
-brew install openssl readline libyaml
+brew install openssl libyaml
 
 # Configure in dev (debug) mode for development, build and install
 ./autogen.sh
@@ -155,8 +157,8 @@ YJIT supports all command-line options supported by upstream CRuby, but also add
 
 - `--yjit`: enable YJIT (disabled by default)
 - `--yjit-call-threshold=N`: number of calls after which YJIT begins to compile a function (default 30)
-- `--yjit-exec-mem-size=N`: size of the executable memory block to allocate, in MiB (default 128 MiB)
-- `--yjit-stats`: produce statistics after the execution of a program
+- `--yjit-exec-mem-size=N`: size of the executable memory block to allocate, in MiB (default 64 MiB)
+- `--yjit-stats`: produce statistics after the execution of a program (incurs a run-time cost)
 - `--yjit-trace-exits`: produce a Marshal dump of backtraces from specific exits. Automatically enables `--yjit-stats` (must configure and build with `--enable-yjit=stats` to use this)
 - `--yjit-max-versions=N`: maximum number of versions to generate per basic block (default 4)
 - `--yjit-greedy-versioning`: greedy versioning mode (disabled by default, may increase code size)
@@ -164,24 +166,32 @@ YJIT supports all command-line options supported by upstream CRuby, but also add
 Note that there is also an environment variable `RUBY_YJIT_ENABLE` which can be used to enable YJIT.
 This can be useful for some deployment scripts where specifying an extra command-line option to Ruby is not practical.
 
+You can verify that YJIT is enabled by checking that `ruby -v --yjit` includes the string `+YJIT`:
+
+```sh
+ruby -v --yjit
+ruby 3.3.0dev (2023-01-31T15:11:10Z master 2a0bf269c9) +YJIT dev [x86_64-darwin22]
+```
+
 ### Benchmarking
 
 We have collected a set of benchmarks and implemented a simple benchmarking harness in the [yjit-bench](https://github.com/Shopify/yjit-bench) repository. This benchmarking harness is designed to disable CPU frequency scaling, set process affinity and disable address space randomization so that the variance between benchmarking runs will be as small as possible. Please kindly note that we are at an early stage in this project.
 
 ### Performance Tips
 
-This section contains tips on writing Ruby code that will run as fast as possible on YJIT. Some of this advice is based on current limitations of YJIT, while other advice is broadly applicable. It probably won't be practical to apply these tips everywhere in your codebase, but you can profile your code using a tool such as [stackprof](https://github.com/tmm1/stackprof) and refactor the specific methods that make up the largest fractions of the execution time.
+This section contains tips on writing Ruby code that will run as fast as possible on YJIT. Some of this advice is based on current limitations of YJIT, while other advice is broadly applicable. It probably won't be practical to apply these tips everywhere in your codebase. You should ideally start by profiling your application using a tool such as [stackprof](https://github.com/tmm1/stackprof) so that you can determine which methods make up most of the execution time. You can then refactor the specific methods that make up the largest fractions of the execution time. We do not recommend modifying your entire codebase based on the current limitations of YJIT.
 
 - Use exceptions for error recovery only, not as part of normal control-flow
 - Avoid redefining basic integer operations (i.e. +, -, <, >, etc.)
 - Avoid redefining the meaning of `nil`, equality, etc.
 - Avoid allocating objects in the hot parts of your code
-- Use while loops if you can, instead of `integer.times`
 - Minimize layers of indirection
   - Avoid classes that wrap objects if you can
   - Avoid methods that just call another method, trivial one liner methods
-- CRuby method calls are costly. Favor larger methods over smaller methods.
 - Try to write code so that the same variables always have the same type
+- Use while loops if you can, instead of `integer.times`
+  - This is not idiomatic Ruby, but could help in hot methods
+- CRuby method calls are costly. Avoid things such as methods that only return a value from a hash or return a constant.
 
 You can also use the `--yjit-stats` command-line option to see which bytecodes cause YJIT to exit, and refactor your code to avoid using these instructions in the hottest methods of your code.
 
@@ -242,8 +252,6 @@ The YJIT source code is divided between:
 - `yjit/src/options.rs`: handling of command-line options
 - `yjit/bindgen/src/main.rs`: C bindings exposed to the Rust codebase through bindgen
 - `yjit/src/cruby.rs`: C bindings manually exposed to the Rust codebase
-- `misc/test_yjit_asm.sh`: script to compile and run the in-memory assembler tests
-- `misc/yjit_asm_tests.c`: tests for the in-memory assembler
 
 The core of CRuby's interpreter logic is found in:
 - `insns.def`: defines Ruby's bytecode instructions (gets compiled into `vm.inc`)
@@ -266,11 +274,12 @@ add them to `yjit/cruby.rs` instead.
 
 ### Coding & Debugging Protips
 
-There are 3 test suites:
+There are multiple test suites:
 - `make btest` (see `/bootstraptest`)
 - `make test-all`
 - `make test-spec`
 - `make check` runs all of the above
+- `make yjit-smoke-test` runs quick checks to see that YJIT is working correctly
 
 The tests can be run in parallel like this:
 

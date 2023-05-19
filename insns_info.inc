@@ -129,6 +129,7 @@ const char rb_vm_insn_name_base[] =
     "setn" "\0"
     "adjuststack" "\0"
     "defined" "\0"
+    "definedivar" "\0"
     "checkmatch" "\0"
     "checkkeyword" "\0"
     "checktype" "\0"
@@ -141,8 +142,7 @@ const char rb_vm_insn_name_base[] =
     "opt_str_freeze" "\0"
     "opt_nil_p" "\0"
     "opt_str_uminus" "\0"
-    "opt_newarray_max" "\0"
-    "opt_newarray_min" "\0"
+    "opt_newarray_send" "\0"
     "invokesuper" "\0"
     "invokeblock" "\0"
     "leave" "\0"
@@ -230,6 +230,7 @@ const char rb_vm_insn_name_base[] =
     "trace_setn" "\0"
     "trace_adjuststack" "\0"
     "trace_defined" "\0"
+    "trace_definedivar" "\0"
     "trace_checkmatch" "\0"
     "trace_checkkeyword" "\0"
     "trace_checktype" "\0"
@@ -242,8 +243,7 @@ const char rb_vm_insn_name_base[] =
     "trace_opt_str_freeze" "\0"
     "trace_opt_nil_p" "\0"
     "trace_opt_str_uminus" "\0"
-    "trace_opt_newarray_max" "\0"
-    "trace_opt_newarray_min" "\0"
+    "trace_opt_newarray_send" "\0"
     "trace_invokesuper" "\0"
     "trace_invokeblock" "\0"
     "trace_leave" "\0"
@@ -293,20 +293,20 @@ const unsigned short rb_vm_insn_name_offset[] = {
        0,    4,   13,   22,   36,   50,   69,   80,   91,  111,  131,  148,
      165,  186,  198,  210,  220,  230,  237,  245,  255,  272,  282,  296,
      308,  317,  324,  333,  349,  358,  366,  378,  390,  401,  409,  418,
-     422,  426,  431,  436,  448,  453,  458,  470,  478,  489,  502,  512,
-     524,  537,  551,  556,  579,  591,  606,  616,  631,  648,  665,  677,
-     689,  695,  701,  706,  715,  728,  738,  743,  761,  770,  780,  789,
-     797,  805,  812,  820,  827,  834,  841,  848,  857,  865,  872,  881,
-     890,  904,  918,  929,  938,  950,  959,  967,  984,  998, 1025, 1058,
-    1072, 1086, 1100, 1114, 1135, 1156, 1166, 1181, 1196, 1216, 1236, 1261,
-    1278, 1295, 1321, 1347, 1370, 1393, 1420, 1438, 1456, 1472, 1488, 1501,
-    1515, 1531, 1554, 1570, 1590, 1608, 1623, 1636, 1651, 1673, 1688, 1702,
-    1720, 1738, 1755, 1769, 1784, 1794, 1804, 1815, 1826, 1844, 1855, 1866,
-    1884, 1898, 1915, 1934, 1950, 1968, 1987, 2007, 2018, 2047, 2065, 2086,
-    2102, 2123, 2146, 2169, 2187, 2205, 2217, 2229, 2240, 2255, 2274, 2290,
-    2301, 2325, 2340, 2356, 2371, 2385, 2399, 2412, 2426, 2439, 2452, 2465,
-    2478, 2493, 2507, 2520, 2535, 2550, 2570, 2590, 2607, 2622, 2640, 2655,
-    2669, 2692, 2712, 2745, 2784, 2804, 2824, 2844, 2864, 2891,
+     422,  426,  431,  436,  448,  453,  458,  470,  478,  490,  501,  514,
+     524,  536,  549,  563,  568,  591,  603,  618,  628,  643,  661,  673,
+     685,  691,  697,  702,  711,  724,  734,  739,  757,  766,  776,  785,
+     793,  801,  808,  816,  823,  830,  837,  844,  853,  861,  868,  877,
+     886,  900,  914,  925,  934,  946,  955,  963,  980,  994, 1021, 1054,
+    1068, 1082, 1096, 1110, 1131, 1152, 1162, 1177, 1192, 1212, 1232, 1257,
+    1274, 1291, 1317, 1343, 1366, 1389, 1416, 1434, 1452, 1468, 1484, 1497,
+    1511, 1527, 1550, 1566, 1586, 1604, 1619, 1632, 1647, 1669, 1684, 1698,
+    1716, 1734, 1751, 1765, 1780, 1790, 1800, 1811, 1822, 1840, 1851, 1862,
+    1880, 1894, 1912, 1929, 1948, 1964, 1982, 2001, 2021, 2032, 2061, 2079,
+    2100, 2116, 2137, 2161, 2179, 2197, 2209, 2221, 2232, 2247, 2266, 2282,
+    2293, 2317, 2332, 2348, 2363, 2377, 2391, 2404, 2418, 2431, 2444, 2457,
+    2470, 2485, 2499, 2512, 2527, 2542, 2562, 2582, 2599, 2614, 2632, 2647,
+    2661, 2684, 2704, 2737, 2776, 2796, 2816, 2836, 2856, 2883,
 };
 
 ASSERT_VM_INSTRUCTION_SIZE(rb_vm_insn_name_offset);
@@ -327,12 +327,12 @@ RUBY_SYMBOL_EXPORT_END
 #ifdef RUBY_VM_INSNS_INFO
 const uint8_t rb_vm_insn_len_info[] = {
     1, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 2, 2, 2, 2, 2, 1, 1, 2, 2, 2, 2,
-    1, 3, 1, 2, 2, 2, 2, 3, 1, 2, 2, 2, 1, 1, 2, 1, 2, 2, 2, 2, 4, 2, 3,
-    2, 4, 3, 3, 3, 2, 2, 3, 2, 3, 2, 2, 3, 2, 1, 2, 2, 2, 2, 2, 3, 3, 2,
+    1, 3, 1, 2, 2, 2, 2, 3, 1, 2, 2, 2, 1, 1, 2, 1, 2, 2, 2, 2, 4, 4, 2,
+    3, 2, 4, 3, 3, 3, 2, 2, 3, 2, 3, 3, 3, 2, 1, 2, 2, 2, 2, 2, 3, 3, 2,
     2, 2, 2, 2, 2, 3, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 2, 2, 2, 2, 2, 2,
     2, 3, 3, 2, 2, 2, 2, 1, 1, 1, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 2, 2,
     2, 2, 2, 1, 1, 2, 2, 2, 2, 1, 3, 1, 2, 2, 2, 2, 3, 1, 2, 2, 2, 1, 1,
-    2, 1, 2, 2, 2, 2, 4, 2, 3, 2, 4, 3, 3, 3, 2, 2, 3, 2, 3, 2, 2, 3, 2,
+    2, 1, 2, 2, 2, 2, 4, 4, 2, 3, 2, 4, 3, 3, 3, 2, 2, 3, 2, 3, 3, 3, 2,
     1, 2, 2, 2, 2, 2, 3, 3, 2, 2, 2, 2, 2, 2, 3, 2, 2, 2, 2, 2, 2, 2, 2,
     2, 3, 3, 2, 2, 2, 2, 2, 2, 2, 3, 3, 2, 2, 2, 2, 1, 1,
 };
@@ -364,10 +364,10 @@ const char rb_vm_insn_op_base[] =
     ""     "\0" "N"    "\0" "N"    "\0" "V"    "\0" "V"    "\0"
     "NN"   "\0" ""     "\0" "V"    "\0" "N"    "\0" "N"    "\0"
     ""     "\0" ""     "\0" "N"    "\0" ""     "\0" "N"    "\0"
-    "N"    "\0" "N"    "\0" "N"    "\0" "NVV"  "\0" "N"    "\0"
-    "LL"   "\0" "N"    "\0" "ISN"  "\0" "IS"   "\0" "IS"   "\0"
-    "CS"   "\0" "C"    "\0" "C"    "\0" "VC"   "\0" "C"    "\0"
-    "VC"   "\0" "N"    "\0" "N"    "\0" "CS"   "\0" "C"    "\0"
+    "N"    "\0" "N"    "\0" "N"    "\0" "NVV"  "\0" "IAV"  "\0"
+    "N"    "\0" "LL"   "\0" "N"    "\0" "ISN"  "\0" "IS"   "\0"
+    "IS"   "\0" "CS"   "\0" "C"    "\0" "C"    "\0" "VC"   "\0"
+    "C"    "\0" "VC"   "\0" "NI"   "\0" "CS"   "\0" "C"    "\0"
     ""     "\0" "N"    "\0" "O"    "\0" "O"    "\0" "O"    "\0"
     "O"    "\0" "ST"   "\0" "HO"   "\0" "C"    "\0" "C"    "\0"
     "C"    "\0" "C"    "\0" "C"    "\0" "C"    "\0" "CC"   "\0"
@@ -385,9 +385,9 @@ const char rb_vm_insn_op_base[] =
     "V"    "\0" "NN"   "\0" ""     "\0" "V"    "\0" "N"    "\0"
     "N"    "\0" ""     "\0" ""     "\0" "N"    "\0" ""     "\0"
     "N"    "\0" "N"    "\0" "N"    "\0" "N"    "\0" "NVV"  "\0"
-    "N"    "\0" "LL"   "\0" "N"    "\0" "ISN"  "\0" "IS"   "\0"
-    "IS"   "\0" "CS"   "\0" "C"    "\0" "C"    "\0" "VC"   "\0"
-    "C"    "\0" "VC"   "\0" "N"    "\0" "N"    "\0" "CS"   "\0"
+    "IAV"  "\0" "N"    "\0" "LL"   "\0" "N"    "\0" "ISN"  "\0"
+    "IS"   "\0" "IS"   "\0" "CS"   "\0" "C"    "\0" "C"    "\0"
+    "VC"   "\0" "C"    "\0" "VC"   "\0" "NI"   "\0" "CS"   "\0"
     "C"    "\0" ""     "\0" "N"    "\0" "O"    "\0" "O"    "\0"
     "O"    "\0" "O"    "\0" "ST"   "\0" "HO"   "\0" "C"    "\0"
     "C"    "\0" "C"    "\0" "C"    "\0" "C"    "\0" "C"    "\0"
@@ -403,20 +403,20 @@ const unsigned short rb_vm_insn_op_offset[] = {
       0,   1,   4,   7,  10,  13,  16,  19,  21,  24,  27,  30,
      33,  35,  37,  39,  41,  43,  44,  45,  47,  49,  51,  53,
      54,  57,  58,  60,  62,  64,  66,  69,  70,  72,  74,  76,
-     77,  78,  80,  81,  83,  85,  87,  89,  93,  95,  98, 100,
-    104, 107, 110, 113, 115, 117, 120, 122, 125, 127, 129, 132,
-    134, 135, 137, 139, 141, 143, 145, 148, 151, 153, 155, 157,
-    159, 161, 163, 166, 168, 170, 172, 174, 176, 178, 180, 182,
-    184, 187, 190, 192, 194, 196, 198, 200, 202, 204, 207, 210,
-    212, 214, 216, 218, 219, 220, 221, 224, 227, 230, 233, 236,
-    239, 241, 244, 247, 250, 253, 255, 257, 259, 261, 263, 264,
-    265, 267, 269, 271, 273, 274, 277, 278, 280, 282, 284, 286,
-    289, 290, 292, 294, 296, 297, 298, 300, 301, 303, 305, 307,
-    309, 313, 315, 318, 320, 324, 327, 330, 333, 335, 337, 340,
-    342, 345, 347, 349, 352, 354, 355, 357, 359, 361, 363, 365,
-    368, 371, 373, 375, 377, 379, 381, 383, 386, 388, 390, 392,
-    394, 396, 398, 400, 402, 404, 407, 410, 412, 414, 416, 418,
-    420, 422, 424, 427, 430, 432, 434, 436, 438, 439,
+     77,  78,  80,  81,  83,  85,  87,  89,  93,  97,  99, 102,
+    104, 108, 111, 114, 117, 119, 121, 124, 126, 129, 132, 135,
+    137, 138, 140, 142, 144, 146, 148, 151, 154, 156, 158, 160,
+    162, 164, 166, 169, 171, 173, 175, 177, 179, 181, 183, 185,
+    187, 190, 193, 195, 197, 199, 201, 203, 205, 207, 210, 213,
+    215, 217, 219, 221, 222, 223, 224, 227, 230, 233, 236, 239,
+    242, 244, 247, 250, 253, 256, 258, 260, 262, 264, 266, 267,
+    268, 270, 272, 274, 276, 277, 280, 281, 283, 285, 287, 289,
+    292, 293, 295, 297, 299, 300, 301, 303, 304, 306, 308, 310,
+    312, 316, 320, 322, 325, 327, 331, 334, 337, 340, 342, 344,
+    347, 349, 352, 355, 358, 360, 361, 363, 365, 367, 369, 371,
+    374, 377, 379, 381, 383, 385, 387, 389, 392, 394, 396, 398,
+    400, 402, 404, 406, 408, 410, 413, 416, 418, 420, 422, 424,
+    426, 428, 430, 433, 436, 438, 440, 442, 444, 445,
 };
 
 ASSERT_VM_INSTRUCTION_SIZE(rb_vm_insn_op_offset);
@@ -443,7 +443,33 @@ insn_op_type(VALUE i, long j)
 
 #include "iseq.h"
 
-// This is used to tell MJIT that this insn would be leaf if CHECK_INTS didn't exist.
+extern const bool rb_vm_insn_leaf_p[];
+
+#ifdef RUBY_VM_INSNS_INFO
+const bool rb_vm_insn_leaf_p[] = {
+    1, 1, 1, 1, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1,
+    0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1,
+    1, 1, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 0,
+    1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1,
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0,
+};
+#endif
+
+CONSTFUNC(MAYBE_UNUSED(static bool insn_leaf_p(VALUE insn)));
+
+bool
+insn_leaf_p(VALUE insn)
+{
+    return rb_vm_insn_leaf_p[insn];
+}
+
+// This is used to tell RJIT that this insn would be leaf if CHECK_INTS didn't exist.
 // It should be used only when RUBY_VM_CHECK_INTS is directly written in insns.def.
 static bool leafness_of_check_ints = false;
 
@@ -484,7 +510,7 @@ leafness_of_checkmatch(rb_num_t flag)
         return false;
     }
 }
-#line 488 "insns_info.inc"
+#line 514 "insns_info.inc"
 
 #line 10 "tool/ruby_vm/views/_sp_inc_helpers.erb"
 
@@ -514,7 +540,7 @@ sp_inc_of_invokeblock(const struct rb_callinfo *ci)
      * instructions, except that it does not pop receiver. */
     return sp_inc_of_sendish(ci) + 1;
 }
-#line 518 "insns_info.inc"
+#line 544 "insns_info.inc"
 
 #ifndef RUBY_VM_EXEC_H
 /* can't #include "vm_exec.h" here... */
@@ -920,6 +946,15 @@ PUREFUNC(MAYBE_UNUSED(static rb_num_t attr_popn_defined(rb_num_t op_type, VALUE 
 PUREFUNC(MAYBE_UNUSED(static rb_num_t attr_retn_defined(rb_num_t op_type, VALUE obj, VALUE pushval)));
 PUREFUNC(MAYBE_UNUSED(static rb_snum_t attr_sp_inc_defined(rb_num_t op_type, VALUE obj, VALUE pushval)));
 PUREFUNC(MAYBE_UNUSED(static rb_num_t attr_width_defined(rb_num_t op_type, VALUE obj, VALUE pushval)));
+PUREFUNC(MAYBE_UNUSED(static enum ruby_vminsn_type attr_bin_definedivar(ID id, IVC ic, VALUE pushval)));
+PUREFUNC(MAYBE_UNUSED(static bool attr_handles_sp_definedivar(ID id, IVC ic, VALUE pushval)));
+PUREFUNC(MAYBE_UNUSED(static bool attr_leaf_definedivar(ID id, IVC ic, VALUE pushval)));
+PUREFUNC(MAYBE_UNUSED(static const char* attr_name_definedivar(ID id, IVC ic, VALUE pushval)));
+PUREFUNC(MAYBE_UNUSED(static rb_num_t attr_open_definedivar(ID id, IVC ic, VALUE pushval)));
+PUREFUNC(MAYBE_UNUSED(static rb_num_t attr_popn_definedivar(ID id, IVC ic, VALUE pushval)));
+PUREFUNC(MAYBE_UNUSED(static rb_num_t attr_retn_definedivar(ID id, IVC ic, VALUE pushval)));
+PUREFUNC(MAYBE_UNUSED(static rb_snum_t attr_sp_inc_definedivar(ID id, IVC ic, VALUE pushval)));
+PUREFUNC(MAYBE_UNUSED(static rb_num_t attr_width_definedivar(ID id, IVC ic, VALUE pushval)));
 PUREFUNC(MAYBE_UNUSED(static enum ruby_vminsn_type attr_bin_checkmatch(rb_num_t flag)));
 PUREFUNC(MAYBE_UNUSED(static bool attr_handles_sp_checkmatch(rb_num_t flag)));
 PUREFUNC(MAYBE_UNUSED(static bool attr_leaf_checkmatch(rb_num_t flag)));
@@ -1030,24 +1065,16 @@ PUREFUNC(MAYBE_UNUSED(static rb_num_t attr_popn_opt_str_uminus(VALUE str, CALL_D
 PUREFUNC(MAYBE_UNUSED(static rb_num_t attr_retn_opt_str_uminus(VALUE str, CALL_DATA cd)));
 PUREFUNC(MAYBE_UNUSED(static rb_snum_t attr_sp_inc_opt_str_uminus(VALUE str, CALL_DATA cd)));
 PUREFUNC(MAYBE_UNUSED(static rb_num_t attr_width_opt_str_uminus(VALUE str, CALL_DATA cd)));
-PUREFUNC(MAYBE_UNUSED(static enum ruby_vminsn_type attr_bin_opt_newarray_max(rb_num_t num)));
-PUREFUNC(MAYBE_UNUSED(static bool attr_handles_sp_opt_newarray_max(rb_num_t num)));
-PUREFUNC(MAYBE_UNUSED(static bool attr_leaf_opt_newarray_max(rb_num_t num)));
-PUREFUNC(MAYBE_UNUSED(static const char* attr_name_opt_newarray_max(rb_num_t num)));
-PUREFUNC(MAYBE_UNUSED(static rb_num_t attr_open_opt_newarray_max(rb_num_t num)));
-PUREFUNC(MAYBE_UNUSED(static rb_num_t attr_popn_opt_newarray_max(rb_num_t num)));
-PUREFUNC(MAYBE_UNUSED(static rb_num_t attr_retn_opt_newarray_max(rb_num_t num)));
-PUREFUNC(MAYBE_UNUSED(static rb_snum_t attr_sp_inc_opt_newarray_max(rb_num_t num)));
-PUREFUNC(MAYBE_UNUSED(static rb_num_t attr_width_opt_newarray_max(rb_num_t num)));
-PUREFUNC(MAYBE_UNUSED(static enum ruby_vminsn_type attr_bin_opt_newarray_min(rb_num_t num)));
-PUREFUNC(MAYBE_UNUSED(static bool attr_handles_sp_opt_newarray_min(rb_num_t num)));
-PUREFUNC(MAYBE_UNUSED(static bool attr_leaf_opt_newarray_min(rb_num_t num)));
-PUREFUNC(MAYBE_UNUSED(static const char* attr_name_opt_newarray_min(rb_num_t num)));
-PUREFUNC(MAYBE_UNUSED(static rb_num_t attr_open_opt_newarray_min(rb_num_t num)));
-PUREFUNC(MAYBE_UNUSED(static rb_num_t attr_popn_opt_newarray_min(rb_num_t num)));
-PUREFUNC(MAYBE_UNUSED(static rb_num_t attr_retn_opt_newarray_min(rb_num_t num)));
-PUREFUNC(MAYBE_UNUSED(static rb_snum_t attr_sp_inc_opt_newarray_min(rb_num_t num)));
-PUREFUNC(MAYBE_UNUSED(static rb_num_t attr_width_opt_newarray_min(rb_num_t num)));
+PUREFUNC(MAYBE_UNUSED(static enum ruby_vminsn_type attr_bin_opt_newarray_send(rb_num_t num, ID method)));
+PUREFUNC(MAYBE_UNUSED(static rb_snum_t attr_comptime_sp_inc_opt_newarray_send(rb_num_t num, ID method)));
+PUREFUNC(MAYBE_UNUSED(static bool attr_handles_sp_opt_newarray_send(rb_num_t num, ID method)));
+PUREFUNC(MAYBE_UNUSED(static bool attr_leaf_opt_newarray_send(rb_num_t num, ID method)));
+PUREFUNC(MAYBE_UNUSED(static const char* attr_name_opt_newarray_send(rb_num_t num, ID method)));
+PUREFUNC(MAYBE_UNUSED(static rb_num_t attr_open_opt_newarray_send(rb_num_t num, ID method)));
+PUREFUNC(MAYBE_UNUSED(static rb_num_t attr_popn_opt_newarray_send(rb_num_t num, ID method)));
+PUREFUNC(MAYBE_UNUSED(static rb_num_t attr_retn_opt_newarray_send(rb_num_t num, ID method)));
+PUREFUNC(MAYBE_UNUSED(static rb_snum_t attr_sp_inc_opt_newarray_send(rb_num_t num, ID method)));
+PUREFUNC(MAYBE_UNUSED(static rb_num_t attr_width_opt_newarray_send(rb_num_t num, ID method)));
 PUREFUNC(MAYBE_UNUSED(static enum ruby_vminsn_type attr_bin_invokesuper(CALL_DATA cd, ISEQ blockiseq)));
 PUREFUNC(MAYBE_UNUSED(static rb_snum_t attr_comptime_sp_inc_invokesuper(CALL_INFO ci, ISEQ blockiseq)));
 PUREFUNC(MAYBE_UNUSED(static bool attr_handles_sp_invokesuper(CALL_DATA cd, ISEQ blockiseq)));
@@ -1981,7 +2008,7 @@ attr_leaf_getspecial(
     return
 #line 192 "insns.def"
 (type == 0) ? true : false;
-#line 1985 "insns_info.inc"
+#line 2012 "insns_info.inc"
 }
 
 /* attr const char* name @ getspecial(key, type)()(val) */
@@ -2137,7 +2164,7 @@ attr_leaf_getinstancevariable(
     return
 #line 214 "insns.def"
 false;
-#line 2141 "insns_info.inc"
+#line 2168 "insns_info.inc"
 }
 
 /* attr const char* name @ getinstancevariable(id, ic)()(val) */
@@ -2230,7 +2257,7 @@ attr_leaf_setinstancevariable(
     return
 #line 225 "insns.def"
 false;
-#line 2234 "insns_info.inc"
+#line 2261 "insns_info.inc"
 }
 
 /* attr const char* name @ setinstancevariable(id, ic)(val)() */
@@ -2323,7 +2350,7 @@ attr_leaf_getclassvariable(
     return
 #line 237 "insns.def"
 false;
-#line 2327 "insns_info.inc"
+#line 2354 "insns_info.inc"
 }
 
 /* attr const char* name @ getclassvariable(id, ic)()(val) */
@@ -2416,7 +2443,7 @@ attr_leaf_setclassvariable(
     return
 #line 250 "insns.def"
 false;
-#line 2420 "insns_info.inc"
+#line 2447 "insns_info.inc"
 }
 
 /* attr const char* name @ setclassvariable(id, ic)(val)() */
@@ -2500,7 +2527,7 @@ attr_leaf_opt_getconstant_path(MAYBE_UNUSED(IC ic))
     return
 #line 261 "insns.def"
 false;
-#line 2504 "insns_info.inc"
+#line 2531 "insns_info.inc"
 }
 
 /* attr const char* name @ opt_getconstant_path(ic)()(val) */
@@ -2566,7 +2593,7 @@ attr_leaf_getconstant(MAYBE_UNUSED(ID id))
     return
 #line 289 "insns.def"
 false;
-#line 2570 "insns_info.inc"
+#line 2597 "insns_info.inc"
 }
 
 /* attr const char* name @ getconstant(id)(klass, allow_nil)(val) */
@@ -2632,7 +2659,7 @@ attr_leaf_setconstant(MAYBE_UNUSED(ID id))
     return
 #line 305 "insns.def"
 false;
-#line 2636 "insns_info.inc"
+#line 2663 "insns_info.inc"
 }
 
 /* attr const char* name @ setconstant(id)(val, cbase)() */
@@ -2698,7 +2725,7 @@ attr_leaf_getglobal(MAYBE_UNUSED(ID gid))
     return
 #line 318 "insns.def"
 false;
-#line 2702 "insns_info.inc"
+#line 2729 "insns_info.inc"
 }
 
 /* attr const char* name @ getglobal(gid)()(val) */
@@ -2764,7 +2791,7 @@ attr_leaf_setglobal(MAYBE_UNUSED(ID gid))
     return
 #line 329 "insns.def"
 false;
-#line 2768 "insns_info.inc"
+#line 2795 "insns_info.inc"
 }
 
 /* attr const char* name @ setglobal(gid)(val)() */
@@ -3019,7 +3046,7 @@ attr_leaf_putspecialobject(MAYBE_UNUSED(rb_num_t value_type))
     return
 #line 376 "insns.def"
 (value_type == VM_SPECIAL_OBJECT_VMCORE);
-#line 3023 "insns_info.inc"
+#line 3050 "insns_info.inc"
 }
 
 /* attr const char* name @ putspecialobject(value_type)()(val) */
@@ -3148,7 +3175,7 @@ attr_leaf_concatstrings(MAYBE_UNUSED(rb_num_t num))
     return
 #line 402 "insns.def"
 false;
-#line 3152 "insns_info.inc"
+#line 3179 "insns_info.inc"
 }
 
 /* attr const char* name @ concatstrings(num)(...)(val) */
@@ -3186,7 +3213,7 @@ attr_sp_inc_concatstrings(MAYBE_UNUSED(rb_num_t num))
     return
 #line 403 "insns.def"
 1 - (rb_snum_t)num;
-#line 3190 "insns_info.inc"
+#line 3217 "insns_info.inc"
 }
 
 /* attr rb_num_t width @ concatstrings(num)(...)(val) */
@@ -3289,7 +3316,7 @@ attr_leaf_toregexp(
     return
 #line 429 "insns.def"
 false;
-#line 3293 "insns_info.inc"
+#line 3320 "insns_info.inc"
 }
 
 /* attr const char* name @ toregexp(opt, cnt)(...)(val) */
@@ -3342,7 +3369,7 @@ attr_sp_inc_toregexp(
     return
 #line 430 "insns.def"
 1 - (rb_snum_t)cnt;
-#line 3346 "insns_info.inc"
+#line 3373 "insns_info.inc"
 }
 
 /* attr rb_num_t width @ toregexp(opt, cnt)(...)(val) */
@@ -3474,7 +3501,7 @@ attr_sp_inc_newarray(MAYBE_UNUSED(rb_num_t num))
     return
 #line 453 "insns.def"
 1 - (rb_snum_t)num;
-#line 3478 "insns_info.inc"
+#line 3505 "insns_info.inc"
 }
 
 /* attr rb_num_t width @ newarray(num)(...)(val) */
@@ -3540,7 +3567,7 @@ attr_sp_inc_newarraykwsplat(MAYBE_UNUSED(rb_num_t num))
     return
 #line 468 "insns.def"
 1 - (rb_snum_t)num;
-#line 3544 "insns_info.inc"
+#line 3571 "insns_info.inc"
 }
 
 /* attr rb_num_t width @ newarraykwsplat(num)(...)(val) */
@@ -3706,7 +3733,7 @@ attr_leaf_expandarray(
     return
 #line 514 "insns.def"
 false;
-#line 3710 "insns_info.inc"
+#line 3737 "insns_info.inc"
 }
 
 /* attr const char* name @ expandarray(num, flag)(..., ary)(...) */
@@ -3759,7 +3786,7 @@ attr_sp_inc_expandarray(
     return
 #line 515 "insns.def"
 (rb_snum_t)num - 1 + (flag & 1 ? 1 : 0);
-#line 3763 "insns_info.inc"
+#line 3790 "insns_info.inc"
 }
 
 /* attr rb_num_t width @ expandarray(num, flag)(..., ary)(...) */
@@ -3793,7 +3820,7 @@ attr_leaf_concatarray(void)
     return
 #line 526 "insns.def"
 false;
-#line 3797 "insns_info.inc"
+#line 3824 "insns_info.inc"
 }
 
 /* attr const char* name @ concatarray()(ary1, ary2)(ary) */
@@ -3859,7 +3886,7 @@ attr_leaf_splatarray(MAYBE_UNUSED(VALUE flag))
     return
 #line 537 "insns.def"
 false;
-#line 3863 "insns_info.inc"
+#line 3890 "insns_info.inc"
 }
 
 /* attr const char* name @ splatarray(flag)(ary)(obj) */
@@ -3925,7 +3952,7 @@ attr_leaf_newhash(MAYBE_UNUSED(rb_num_t num))
     return
 #line 548 "insns.def"
 false;
-#line 3929 "insns_info.inc"
+#line 3956 "insns_info.inc"
 }
 
 /* attr const char* name @ newhash(num)(...)(val) */
@@ -3963,7 +3990,7 @@ attr_sp_inc_newhash(MAYBE_UNUSED(rb_num_t num))
     return
 #line 549 "insns.def"
 1 - (rb_snum_t)num;
-#line 3967 "insns_info.inc"
+#line 3994 "insns_info.inc"
 }
 
 /* attr rb_num_t width @ newhash(num)(...)(val) */
@@ -3994,7 +4021,7 @@ attr_leaf_newrange(MAYBE_UNUSED(rb_num_t flag))
     return
 #line 569 "insns.def"
 false;
-#line 3998 "insns_info.inc"
+#line 4025 "insns_info.inc"
 }
 
 /* attr const char* name @ newrange(flag)(low, high)(val) */
@@ -4221,7 +4248,7 @@ attr_sp_inc_dupn(MAYBE_UNUSED(rb_num_t n))
     return
 #line 605 "insns.def"
 n;
-#line 4225 "insns_info.inc"
+#line 4252 "insns_info.inc"
 }
 
 /* attr rb_num_t width @ dupn(n)(...)(...) */
@@ -4350,7 +4377,7 @@ attr_sp_inc_opt_reverse(MAYBE_UNUSED(rb_num_t n))
     return
 #line 629 "insns.def"
 0;
-#line 4354 "insns_info.inc"
+#line 4381 "insns_info.inc"
 }
 
 /* attr rb_num_t width @ opt_reverse(n)(...)(...) */
@@ -4416,7 +4443,7 @@ attr_sp_inc_topn(MAYBE_UNUSED(rb_num_t n))
     return
 #line 659 "insns.def"
 1;
-#line 4420 "insns_info.inc"
+#line 4447 "insns_info.inc"
 }
 
 /* attr rb_num_t width @ topn(n)(...)(val) */
@@ -4482,7 +4509,7 @@ attr_sp_inc_setn(MAYBE_UNUSED(rb_num_t n))
     return
 #line 670 "insns.def"
 0;
-#line 4486 "insns_info.inc"
+#line 4513 "insns_info.inc"
 }
 
 /* attr rb_num_t width @ setn(n)(..., val)(val) */
@@ -4548,7 +4575,7 @@ attr_sp_inc_adjuststack(MAYBE_UNUSED(rb_num_t n))
     return
 #line 681 "insns.def"
 -(rb_snum_t)n;
-#line 4552 "insns_info.inc"
+#line 4579 "insns_info.inc"
 }
 
 /* attr rb_num_t width @ adjuststack(n)(...)(...) */
@@ -4591,7 +4618,7 @@ attr_leaf_defined(
     return
 #line 696 "insns.def"
 leafness_of_defined(op_type);
-#line 4595 "insns_info.inc"
+#line 4622 "insns_info.inc"
 }
 
 /* attr const char* name @ defined(op_type, obj, pushval)(v)(val) */
@@ -4660,6 +4687,108 @@ attr_width_defined(
     return 4;
 }
 
+/* attr enum ruby_vminsn_type bin @ definedivar(id, ic, pushval)()(val) */
+enum ruby_vminsn_type
+attr_bin_definedivar(
+    MAYBE_UNUSED(ID id),
+    MAYBE_UNUSED(IVC ic),
+    MAYBE_UNUSED(VALUE pushval)
+)
+{
+    return BIN(definedivar);
+}
+
+/* attr bool handles_sp @ definedivar(id, ic, pushval)()(val) */
+bool
+attr_handles_sp_definedivar(
+    MAYBE_UNUSED(ID id),
+    MAYBE_UNUSED(IVC ic),
+    MAYBE_UNUSED(VALUE pushval)
+)
+{
+    return false;
+}
+
+/* attr bool leaf @ definedivar(id, ic, pushval)()(val) */
+bool
+attr_leaf_definedivar(
+    MAYBE_UNUSED(ID id),
+    MAYBE_UNUSED(IVC ic),
+    MAYBE_UNUSED(VALUE pushval)
+)
+{
+    return
+#line 710 "insns.def"
+false;
+#line 4724 "insns_info.inc"
+}
+
+/* attr const char* name @ definedivar(id, ic, pushval)()(val) */
+const char*
+attr_name_definedivar(
+    MAYBE_UNUSED(ID id),
+    MAYBE_UNUSED(IVC ic),
+    MAYBE_UNUSED(VALUE pushval)
+)
+{
+    return insn_name(BIN(definedivar));
+}
+
+/* attr rb_num_t open @ definedivar(id, ic, pushval)()(val) */
+rb_num_t
+attr_open_definedivar(
+    MAYBE_UNUSED(ID id),
+    MAYBE_UNUSED(IVC ic),
+    MAYBE_UNUSED(VALUE pushval)
+)
+{
+    return 3;
+}
+
+/* attr rb_num_t popn @ definedivar(id, ic, pushval)()(val) */
+rb_num_t
+attr_popn_definedivar(
+    MAYBE_UNUSED(ID id),
+    MAYBE_UNUSED(IVC ic),
+    MAYBE_UNUSED(VALUE pushval)
+)
+{
+    return 0;
+}
+
+/* attr rb_num_t retn @ definedivar(id, ic, pushval)()(val) */
+rb_num_t
+attr_retn_definedivar(
+    MAYBE_UNUSED(ID id),
+    MAYBE_UNUSED(IVC ic),
+    MAYBE_UNUSED(VALUE pushval)
+)
+{
+    return 1;
+}
+
+/* attr rb_snum_t sp_inc @ definedivar(id, ic, pushval)()(val) */
+rb_snum_t
+attr_sp_inc_definedivar(
+    MAYBE_UNUSED(ID id),
+    MAYBE_UNUSED(IVC ic),
+    MAYBE_UNUSED(VALUE pushval)
+)
+{
+    return 1;
+}
+
+/* attr rb_num_t width @ definedivar(id, ic, pushval)()(val) */
+rb_num_t
+attr_width_definedivar(
+    MAYBE_UNUSED(ID id),
+    MAYBE_UNUSED(IVC ic),
+    MAYBE_UNUSED(VALUE pushval)
+)
+{
+    return 4;
+}
+
 /* attr enum ruby_vminsn_type bin @ checkmatch(flag)(target, pattern)(result) */
 enum ruby_vminsn_type
 attr_bin_checkmatch(MAYBE_UNUSED(rb_num_t flag))
@@ -4679,9 +4808,9 @@ bool
 attr_leaf_checkmatch(MAYBE_UNUSED(rb_num_t flag))
 {
     return
-#line 716 "insns.def"
+#line 730 "insns.def"
 leafness_of_checkmatch(flag);
-#line 4685 "insns_info.inc"
+#line 4814 "insns_info.inc"
 }
 
 /* attr const char* name @ checkmatch(flag)(target, pattern)(result) */
@@ -5176,9 +5305,9 @@ attr_comptime_sp_inc_send(
 )
 {
     return
-#line 798 "insns.def"
+#line 812 "insns.def"
 sp_inc_of_sendish(ci);
-#line 5182 "insns_info.inc"
+#line 5311 "insns_info.inc"
 }
 
 /* attr bool handles_sp @ send(cd, blockiseq)(...)(val) */
@@ -5249,9 +5378,9 @@ attr_sp_inc_send(
 )
 {
     return
-#line 797 "insns.def"
+#line 811 "insns.def"
 sp_inc_of_sendish(cd->ci);
-#line 5255 "insns_info.inc"
+#line 5384 "insns_info.inc"
 }
 
 /* attr rb_num_t width @ send(cd, blockiseq)(...)(val) */
@@ -5276,9 +5405,9 @@ rb_snum_t
 attr_comptime_sp_inc_opt_send_without_block(MAYBE_UNUSED(CALL_INFO ci))
 {
     return
-#line 817 "insns.def"
+#line 832 "insns.def"
 sp_inc_of_sendish(ci);
-#line 5282 "insns_info.inc"
+#line 5411 "insns_info.inc"
 }
 
 /* attr bool handles_sp @ opt_send_without_block(cd)(...)(val) */
@@ -5286,9 +5415,9 @@ bool
 attr_handles_sp_opt_send_without_block(MAYBE_UNUSED(CALL_DATA cd))
 {
     return
-#line 815 "insns.def"
+#line 830 "insns.def"
 true;
-#line 5292 "insns_info.inc"
+#line 5421 "insns_info.inc"
 }
 
 /* attr bool leaf @ opt_send_without_block(cd)(...)(val) */
@@ -5331,9 +5460,9 @@ rb_snum_t
 attr_sp_inc_opt_send_without_block(MAYBE_UNUSED(CALL_DATA cd))
 {
     return
-#line 816 "insns.def"
+#line 831 "insns.def"
 sp_inc_of_sendish(cd->ci);
-#line 5337 "insns_info.inc"
+#line 5466 "insns_info.inc"
 }
 
 /* attr rb_num_t width @ opt_send_without_block(cd)(...)(val) */
@@ -5362,9 +5491,9 @@ bool
 attr_leaf_objtostring(MAYBE_UNUSED(CALL_DATA cd))
 {
     return
-#line 834 "insns.def"
+#line 850 "insns.def"
 false;
-#line 5368 "insns_info.inc"
+#line 5497 "insns_info.inc"
 }
 
 /* attr const char* name @ objtostring(cd)(recv)(val) */
@@ -5652,142 +5781,113 @@ attr_width_opt_str_uminus(
     return 3;
 }
 
-/* attr enum ruby_vminsn_type bin @ opt_newarray_max(num)(...)(val) */
+/* attr enum ruby_vminsn_type bin @ opt_newarray_send(num, method)(...)(val) */
 enum ruby_vminsn_type
-attr_bin_opt_newarray_max(MAYBE_UNUSED(rb_num_t num))
+attr_bin_opt_newarray_send(
+    MAYBE_UNUSED(rb_num_t num),
+    MAYBE_UNUSED(ID method)
+)
 {
-    return BIN(opt_newarray_max);
+    return BIN(opt_newarray_send);
 }
 
-/* attr bool handles_sp @ opt_newarray_max(num)(...)(val) */
+/* attr rb_snum_t comptime_sp_inc @ opt_newarray_send(num, method)(...)(val) */
+rb_snum_t
+attr_comptime_sp_inc_opt_newarray_send(
+    MAYBE_UNUSED(rb_num_t num),
+    MAYBE_UNUSED(ID method)
+)
+{
+    return
+#line 912 "insns.def"
+1 - (rb_snum_t)num;
+#line 5805 "insns_info.inc"
+}
+
+/* attr bool handles_sp @ opt_newarray_send(num, method)(...)(val) */
 bool
-attr_handles_sp_opt_newarray_max(MAYBE_UNUSED(rb_num_t num))
+attr_handles_sp_opt_newarray_send(
+    MAYBE_UNUSED(rb_num_t num),
+    MAYBE_UNUSED(ID method)
+)
 {
     return false;
 }
 
-/* attr bool leaf @ opt_newarray_max(num)(...)(val) */
+/* attr bool leaf @ opt_newarray_send(num, method)(...)(val) */
 bool
-attr_leaf_opt_newarray_max(MAYBE_UNUSED(rb_num_t num))
+attr_leaf_opt_newarray_send(
+    MAYBE_UNUSED(rb_num_t num),
+    MAYBE_UNUSED(ID method)
+)
 {
     return
-#line 894 "insns.def"
+#line 910 "insns.def"
 false;
-#line 5677 "insns_info.inc"
+#line 5828 "insns_info.inc"
 }
 
-/* attr const char* name @ opt_newarray_max(num)(...)(val) */
+/* attr const char* name @ opt_newarray_send(num, method)(...)(val) */
 const char*
-attr_name_opt_newarray_max(MAYBE_UNUSED(rb_num_t num))
+attr_name_opt_newarray_send(
+    MAYBE_UNUSED(rb_num_t num),
+    MAYBE_UNUSED(ID method)
+)
 {
-    return insn_name(BIN(opt_newarray_max));
+    return insn_name(BIN(opt_newarray_send));
 }
 
-/* attr rb_num_t open @ opt_newarray_max(num)(...)(val) */
+/* attr rb_num_t open @ opt_newarray_send(num, method)(...)(val) */
 rb_num_t
-attr_open_opt_newarray_max(MAYBE_UNUSED(rb_num_t num))
-{
-    return 1;
-}
-
-/* attr rb_num_t popn @ opt_newarray_max(num)(...)(val) */
-rb_num_t
-attr_popn_opt_newarray_max(MAYBE_UNUSED(rb_num_t num))
-{
-    return 0;
-}
-
-/* attr rb_num_t retn @ opt_newarray_max(num)(...)(val) */
-rb_num_t
-attr_retn_opt_newarray_max(MAYBE_UNUSED(rb_num_t num))
-{
-    return 1;
-}
-
-/* attr rb_snum_t sp_inc @ opt_newarray_max(num)(...)(val) */
-rb_snum_t
-attr_sp_inc_opt_newarray_max(MAYBE_UNUSED(rb_num_t num))
-{
-    return
-#line 895 "insns.def"
-1 - (rb_snum_t)num;
-#line 5715 "insns_info.inc"
-}
-
-/* attr rb_num_t width @ opt_newarray_max(num)(...)(val) */
-rb_num_t
-attr_width_opt_newarray_max(MAYBE_UNUSED(rb_num_t num))
+attr_open_opt_newarray_send(
+    MAYBE_UNUSED(rb_num_t num),
+    MAYBE_UNUSED(ID method)
+)
 {
     return 2;
 }
 
-/* attr enum ruby_vminsn_type bin @ opt_newarray_min(num)(...)(val) */
-enum ruby_vminsn_type
-attr_bin_opt_newarray_min(MAYBE_UNUSED(rb_num_t num))
-{
-    return BIN(opt_newarray_min);
-}
-
-/* attr bool handles_sp @ opt_newarray_min(num)(...)(val) */
-bool
-attr_handles_sp_opt_newarray_min(MAYBE_UNUSED(rb_num_t num))
-{
-    return false;
-}
-
-/* attr bool leaf @ opt_newarray_min(num)(...)(val) */
-bool
-attr_leaf_opt_newarray_min(MAYBE_UNUSED(rb_num_t num))
-{
-    return
-#line 906 "insns.def"
-false;
-#line 5746 "insns_info.inc"
-}
-
-/* attr const char* name @ opt_newarray_min(num)(...)(val) */
-const char*
-attr_name_opt_newarray_min(MAYBE_UNUSED(rb_num_t num))
-{
-    return insn_name(BIN(opt_newarray_min));
-}
-
-/* attr rb_num_t open @ opt_newarray_min(num)(...)(val) */
+/* attr rb_num_t popn @ opt_newarray_send(num, method)(...)(val) */
 rb_num_t
-attr_open_opt_newarray_min(MAYBE_UNUSED(rb_num_t num))
-{
-    return 1;
-}
-
-/* attr rb_num_t popn @ opt_newarray_min(num)(...)(val) */
-rb_num_t
-attr_popn_opt_newarray_min(MAYBE_UNUSED(rb_num_t num))
+attr_popn_opt_newarray_send(
+    MAYBE_UNUSED(rb_num_t num),
+    MAYBE_UNUSED(ID method)
+)
 {
     return 0;
 }
 
-/* attr rb_num_t retn @ opt_newarray_min(num)(...)(val) */
+/* attr rb_num_t retn @ opt_newarray_send(num, method)(...)(val) */
 rb_num_t
-attr_retn_opt_newarray_min(MAYBE_UNUSED(rb_num_t num))
+attr_retn_opt_newarray_send(
+    MAYBE_UNUSED(rb_num_t num),
+    MAYBE_UNUSED(ID method)
+)
 {
     return 1;
 }
 
-/* attr rb_snum_t sp_inc @ opt_newarray_min(num)(...)(val) */
+/* attr rb_snum_t sp_inc @ opt_newarray_send(num, method)(...)(val) */
 rb_snum_t
-attr_sp_inc_opt_newarray_min(MAYBE_UNUSED(rb_num_t num))
+attr_sp_inc_opt_newarray_send(
+    MAYBE_UNUSED(rb_num_t num),
+    MAYBE_UNUSED(ID method)
+)
 {
     return
-#line 907 "insns.def"
+#line 911 "insns.def"
 1 - (rb_snum_t)num;
-#line 5784 "insns_info.inc"
+#line 5881 "insns_info.inc"
 }
 
-/* attr rb_num_t width @ opt_newarray_min(num)(...)(val) */
+/* attr rb_num_t width @ opt_newarray_send(num, method)(...)(val) */
 rb_num_t
-attr_width_opt_newarray_min(MAYBE_UNUSED(rb_num_t num))
+attr_width_opt_newarray_send(
+    MAYBE_UNUSED(rb_num_t num),
+    MAYBE_UNUSED(ID method)
+)
 {
-    return 2;
+    return 3;
 }
 
 /* attr enum ruby_vminsn_type bin @ invokesuper(cd, blockiseq)(...)(val) */
@@ -5808,9 +5908,9 @@ attr_comptime_sp_inc_invokesuper(
 )
 {
     return
-#line 919 "insns.def"
+#line 936 "insns.def"
 sp_inc_of_sendish(ci);
-#line 5814 "insns_info.inc"
+#line 5914 "insns_info.inc"
 }
 
 /* attr bool handles_sp @ invokesuper(cd, blockiseq)(...)(val) */
@@ -5881,9 +5981,9 @@ attr_sp_inc_invokesuper(
 )
 {
     return
-#line 918 "insns.def"
+#line 935 "insns.def"
 sp_inc_of_sendish(cd->ci);
-#line 5887 "insns_info.inc"
+#line 5987 "insns_info.inc"
 }
 
 /* attr rb_num_t width @ invokesuper(cd, blockiseq)(...)(val) */
@@ -5908,9 +6008,9 @@ rb_snum_t
 attr_comptime_sp_inc_invokeblock(MAYBE_UNUSED(CALL_INFO ci))
 {
     return
-#line 938 "insns.def"
+#line 956 "insns.def"
 sp_inc_of_invokeblock(ci);
-#line 5914 "insns_info.inc"
+#line 6014 "insns_info.inc"
 }
 
 /* attr bool handles_sp @ invokeblock(cd)(...)(val) */
@@ -5918,9 +6018,9 @@ bool
 attr_handles_sp_invokeblock(MAYBE_UNUSED(CALL_DATA cd))
 {
     return
-#line 936 "insns.def"
+#line 954 "insns.def"
 true;
-#line 5924 "insns_info.inc"
+#line 6024 "insns_info.inc"
 }
 
 /* attr bool leaf @ invokeblock(cd)(...)(val) */
@@ -5963,9 +6063,9 @@ rb_snum_t
 attr_sp_inc_invokeblock(MAYBE_UNUSED(CALL_DATA cd))
 {
     return
-#line 937 "insns.def"
+#line 955 "insns.def"
 sp_inc_of_invokeblock(cd->ci);
-#line 5969 "insns_info.inc"
+#line 6069 "insns_info.inc"
 }
 
 /* attr rb_num_t width @ invokeblock(cd)(...)(val) */
@@ -5987,9 +6087,9 @@ bool
 attr_handles_sp_leave(void)
 {
     return
-#line 959 "insns.def"
+#line 978 "insns.def"
 true;
-#line 5993 "insns_info.inc"
+#line 6093 "insns_info.inc"
 }
 
 /* attr bool leaf @ leave()(val)(val) */
@@ -5997,9 +6097,9 @@ bool
 attr_leaf_leave(void)
 {
     return
-#line 958 "insns.def"
+#line 977 "insns.def"
 false;
-#line 6003 "insns_info.inc"
+#line 6103 "insns_info.inc"
 }
 
 /* attr const char* name @ leave()(val)(val) */
@@ -6063,9 +6163,9 @@ bool
 attr_leaf_throw(MAYBE_UNUSED(rb_num_t throw_state))
 {
     return
-#line 992 "insns.def"
+#line 1011 "insns.def"
 false;
-#line 6069 "insns_info.inc"
+#line 6169 "insns_info.inc"
 }
 
 /* attr const char* name @ throw(throw_state)(throwobj)(val) */
@@ -6129,9 +6229,9 @@ bool
 attr_leaf_jump(MAYBE_UNUSED(OFFSET dst))
 {
     return
-#line 1010 "insns.def"
+#line 1029 "insns.def"
 leafness_of_check_ints;
-#line 6135 "insns_info.inc"
+#line 6235 "insns_info.inc"
 }
 
 /* attr const char* name @ jump(dst)()() */
@@ -6195,9 +6295,9 @@ bool
 attr_leaf_branchif(MAYBE_UNUSED(OFFSET dst))
 {
     return
-#line 1023 "insns.def"
+#line 1042 "insns.def"
 leafness_of_check_ints;
-#line 6201 "insns_info.inc"
+#line 6301 "insns_info.inc"
 }
 
 /* attr const char* name @ branchif(dst)(val)() */
@@ -6261,9 +6361,9 @@ bool
 attr_leaf_branchunless(MAYBE_UNUSED(OFFSET dst))
 {
     return
-#line 1038 "insns.def"
+#line 1057 "insns.def"
 leafness_of_check_ints;
-#line 6267 "insns_info.inc"
+#line 6367 "insns_info.inc"
 }
 
 /* attr const char* name @ branchunless(dst)(val)() */
@@ -6327,9 +6427,9 @@ bool
 attr_leaf_branchnil(MAYBE_UNUSED(OFFSET dst))
 {
     return
-#line 1053 "insns.def"
+#line 1072 "insns.def"
 leafness_of_check_ints;
-#line 6333 "insns_info.inc"
+#line 6433 "insns_info.inc"
 }
 
 /* attr const char* name @ branchnil(dst)(val)() */
@@ -6542,9 +6642,9 @@ attr_sp_inc_opt_case_dispatch(
 )
 {
     return
-#line 1081 "insns.def"
+#line 1100 "insns.def"
 -1;
-#line 6548 "insns_info.inc"
+#line 6648 "insns_info.inc"
 }
 
 /* attr rb_num_t width @ opt_case_dispatch(hash, else_offset)(..., key)() */
@@ -6765,9 +6865,9 @@ bool
 attr_leaf_opt_div(MAYBE_UNUSED(CALL_DATA cd))
 {
     return
-#line 1142 "insns.def"
+#line 1161 "insns.def"
 false;
-#line 6771 "insns_info.inc"
+#line 6871 "insns_info.inc"
 }
 
 /* attr const char* name @ opt_div(cd)(recv, obj)(val) */
@@ -6831,9 +6931,9 @@ bool
 attr_leaf_opt_mod(MAYBE_UNUSED(CALL_DATA cd))
 {
     return
-#line 1158 "insns.def"
+#line 1177 "insns.def"
 false;
-#line 6837 "insns_info.inc"
+#line 6937 "insns_info.inc"
 }
 
 /* attr const char* name @ opt_mod(cd)(recv, obj)(val) */
@@ -7302,9 +7402,9 @@ bool
 attr_leaf_opt_ltlt(MAYBE_UNUSED(CALL_DATA cd))
 {
     return
-#line 1260 "insns.def"
+#line 1279 "insns.def"
 false;
-#line 7308 "insns_info.inc"
+#line 7408 "insns_info.inc"
 }
 
 /* attr const char* name @ opt_ltlt(cd)(recv, obj)(val) */
@@ -7494,9 +7594,9 @@ bool
 attr_leaf_opt_aref(MAYBE_UNUSED(CALL_DATA cd))
 {
     return
-#line 1307 "insns.def"
+#line 1326 "insns.def"
 false;
-#line 7500 "insns_info.inc"
+#line 7600 "insns_info.inc"
 }
 
 /* attr const char* name @ opt_aref(cd)(recv, obj)(val) */
@@ -7560,9 +7660,9 @@ bool
 attr_leaf_opt_aset(MAYBE_UNUSED(CALL_DATA cd))
 {
     return
-#line 1324 "insns.def"
+#line 1343 "insns.def"
 false;
-#line 7566 "insns_info.inc"
+#line 7666 "insns_info.inc"
 }
 
 /* attr const char* name @ opt_aset(cd)(recv, obj, set)(val) */
@@ -7635,9 +7735,9 @@ attr_leaf_opt_aset_with(
 )
 {
     return
-#line 1340 "insns.def"
+#line 1359 "insns.def"
 false;
-#line 7641 "insns_info.inc"
+#line 7741 "insns_info.inc"
 }
 
 /* attr const char* name @ opt_aset_with(key, cd)(recv, val)(val) */
@@ -7728,9 +7828,9 @@ attr_leaf_opt_aref_with(
 )
 {
     return
-#line 1363 "insns.def"
+#line 1380 "insns.def"
 false;
-#line 7734 "insns_info.inc"
+#line 7834 "insns_info.inc"
 }
 
 /* attr const char* name @ opt_aref_with(key, cd)(recv)(val) */
@@ -8127,9 +8227,9 @@ bool
 attr_leaf_opt_regexpmatch2(MAYBE_UNUSED(CALL_DATA cd))
 {
     return
-#line 1451 "insns.def"
+#line 1466 "insns.def"
 false;
-#line 8133 "insns_info.inc"
+#line 8233 "insns_info.inc"
 }
 
 /* attr const char* name @ opt_regexpmatch2(cd)(obj2, obj1)(val) */
@@ -8193,9 +8293,9 @@ bool
 attr_leaf_invokebuiltin(MAYBE_UNUSED(RB_BUILTIN bf))
 {
     return
-#line 1487 "insns.def"
+#line 1481 "insns.def"
 false;
-#line 8199 "insns_info.inc"
+#line 8299 "insns_info.inc"
 }
 
 /* attr const char* name @ invokebuiltin(bf)(...)(val) */
@@ -8231,9 +8331,9 @@ rb_snum_t
 attr_sp_inc_invokebuiltin(MAYBE_UNUSED(RB_BUILTIN bf))
 {
     return
-#line 1488 "insns.def"
+#line 1482 "insns.def"
 1 - bf->argc;
-#line 8237 "insns_info.inc"
+#line 8337 "insns_info.inc"
 }
 
 /* attr rb_num_t width @ invokebuiltin(bf)(...)(val) */
@@ -8271,9 +8371,9 @@ attr_leaf_opt_invokebuiltin_delegate(
 )
 {
     return
-#line 1499 "insns.def"
+#line 1493 "insns.def"
 false;
-#line 8277 "insns_info.inc"
+#line 8377 "insns_info.inc"
 }
 
 /* attr const char* name @ opt_invokebuiltin_delegate(bf, index)()(val) */
@@ -8364,9 +8464,9 @@ attr_leaf_opt_invokebuiltin_delegate_leave(
 )
 {
     return
-#line 1510 "insns.def"
+#line 1504 "insns.def"
 false;
-#line 8370 "insns_info.inc"
+#line 8470 "insns_info.inc"
 }
 
 /* attr const char* name @ opt_invokebuiltin_delegate_leave(bf, index)()(val) */
@@ -8819,9 +8919,9 @@ comptime_insn_stack_increase_dispatch(enum ruby_vminsn_type insn, const VALUE *o
           -1,    1,    1,    1,    1,    1, -127,   -1,
         -127,    0, -127, -127,    1,    1, -127,   -1,
            0, -127,   -1,   -1,    1, -127,    0, -127,
-        -127, -127, -127,    0,   -1,    1,    0,   -1,
-           0,   -1, -127, -127,    0,    1,    0,    1,
-        -127, -127, -127, -127,    0,    0,    0,   -1,
+        -127, -127, -127,    0,    1,   -1,    1,    0,
+          -1,    0,   -1, -127, -127,    0,    1,    0,
+           1, -127, -127, -127,    0,    0,    0,   -1,
           -1,   -1,    1, -127,   -1,   -1,   -1,   -1,
           -1,   -1,   -1,   -1,   -1,   -1,   -1,   -1,
           -1,   -1,   -1,   -2,   -1,    0,    0,    0,
@@ -8876,10 +8976,8 @@ comptime_insn_stack_increase_dispatch(enum ruby_vminsn_type insn, const VALUE *o
         return attr_comptime_sp_inc_send((CALL_INFO)(opes[0]), (ISEQ)(opes[1]));
     case BIN(opt_send_without_block):
         return attr_comptime_sp_inc_opt_send_without_block((CALL_INFO)(opes[0]));
-    case BIN(opt_newarray_max):
-        return attr_sp_inc_opt_newarray_max(NUM2LONG(opes[0]));
-    case BIN(opt_newarray_min):
-        return attr_sp_inc_opt_newarray_min(NUM2LONG(opes[0]));
+    case BIN(opt_newarray_send):
+        return attr_comptime_sp_inc_opt_newarray_send(NUM2LONG(opes[0]), SYM2ID(opes[1]));
     case BIN(invokesuper):
         return attr_comptime_sp_inc_invokesuper((CALL_INFO)(opes[0]), (ISEQ)(opes[1]));
     case BIN(invokeblock):
@@ -8923,6 +9021,7 @@ insn_may_depend_on_sp_or_pc(int insn, const VALUE *opes)
       case BIN(newhash):
       case BIN(newrange):
       case BIN(defined):
+      case BIN(definedivar):
       case BIN(checkmatch):
       case BIN(defineclass):
       case BIN(definemethod):
@@ -8930,8 +9029,7 @@ insn_may_depend_on_sp_or_pc(int insn, const VALUE *opes)
       case BIN(send):
       case BIN(opt_send_without_block):
       case BIN(objtostring):
-      case BIN(opt_newarray_max):
-      case BIN(opt_newarray_min):
+      case BIN(opt_newarray_send):
       case BIN(invokesuper):
       case BIN(invokeblock):
       case BIN(leave):
@@ -8996,6 +9094,7 @@ insn_may_depend_on_sp_or_pc(int insn, const VALUE *opes)
       case BIN(trace_setn):
       case BIN(trace_adjuststack):
       case BIN(trace_defined):
+      case BIN(trace_definedivar):
       case BIN(trace_checkmatch):
       case BIN(trace_checkkeyword):
       case BIN(trace_checktype):
@@ -9008,8 +9107,7 @@ insn_may_depend_on_sp_or_pc(int insn, const VALUE *opes)
       case BIN(trace_opt_str_freeze):
       case BIN(trace_opt_nil_p):
       case BIN(trace_opt_str_uminus):
-      case BIN(trace_opt_newarray_max):
-      case BIN(trace_opt_newarray_min):
+      case BIN(trace_opt_newarray_send):
       case BIN(trace_invokesuper):
       case BIN(trace_invokeblock):
       case BIN(trace_leave):

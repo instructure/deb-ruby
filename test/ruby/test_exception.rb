@@ -1266,7 +1266,7 @@ $stderr = $stdout; raise "\x82\xa0"') do |outs, errs, status|
     begin;
       class Bug < RuntimeError
         def backtrace
-          IO.readlines(IO::NULL)
+          File.readlines(IO::NULL)
         end
       end
       bug = Bug.new '[ruby-core:85939] [Bug #14577]'
@@ -1468,6 +1468,19 @@ $stderr = $stdout; raise "\x82\xa0"') do |outs, errs, status|
     end
     assert_match("BOO!", e.full_message.lines.first)
     assert_equal({ highlight: Exception.to_tty? }, opt_)
+  end
+
+  def test_full_message_with_encoding
+    message = "\u{dc}bersicht"
+    begin
+      begin
+        raise message
+      rescue => e
+        raise "\n#{e.message}"
+      end
+    rescue => e
+    end
+    assert_include(e.full_message, message)
   end
 
   def test_syntax_error_detailed_message

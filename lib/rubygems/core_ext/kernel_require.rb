@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+
 #--
 # Copyright 2006 by Chad Fowler, Rich Kilmer, Jim Weirich and others.
 # All rights reserved.
@@ -8,13 +9,12 @@
 require "monitor"
 
 module Kernel
-
   RUBYGEMS_ACTIVATION_MONITOR = Monitor.new # :nodoc:
 
   # Make sure we have a reference to Ruby's original Kernel#require
   unless defined?(gem_original_require)
     # :stopdoc:
-    alias gem_original_require require
+    alias_method :gem_original_require, :require
     private :gem_original_require
     # :startdoc:
   end
@@ -71,7 +71,7 @@ module Kernel
 
         begin
           Kernel.send(:gem, spec.name, Gem::Requirement.default_prerelease)
-        rescue Exception
+        rescue StandardError
           RUBYGEMS_ACTIVATION_MONITOR.exit
           raise
         end unless resolved_path
@@ -113,9 +113,7 @@ module Kernel
       if found_specs.empty?
         found_specs = Gem::Specification.find_in_unresolved_tree path
 
-        found_specs.each do |found_spec|
-          found_spec.activate
-        end
+        found_specs.each(&:activate)
 
       # We found +path+ directly in an unresolved gem. Now we figure out, of
       # the possible found specs, which one we should activate.
@@ -127,7 +125,7 @@ module Kernel
 
         if names.size > 1
           RUBYGEMS_ACTIVATION_MONITOR.exit
-          raise Gem::LoadError, "#{path} found in multiple gems: #{names.join ', '}"
+          raise Gem::LoadError, "#{path} found in multiple gems: #{names.join ", "}"
         end
 
         # Ok, now find a gem that has no conflicts, starting
@@ -145,7 +143,7 @@ module Kernel
       end
 
       RUBYGEMS_ACTIVATION_MONITOR.exit
-      return gem_original_require(path)
+      gem_original_require(path)
     rescue LoadError => load_error
       if load_error.path == path
         RUBYGEMS_ACTIVATION_MONITOR.enter
@@ -164,5 +162,4 @@ module Kernel
   end
 
   private :require
-
 end

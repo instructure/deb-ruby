@@ -775,13 +775,13 @@ NULLCMD
 ENABLE_DEBUG_ENV
 DLNOBJ
 INSTALL_STATIC_LIBRARY
+RJIT_SUPPORT
 YJIT_OBJ
 YJIT_LIBS
 CARGO_BUILD_ARGS
 YJIT_SUPPORT
 CARGO
 RUSTC
-MJIT_SUPPORT
 INSTALLDOC
 CAPITARGET
 RDOCTARGET
@@ -827,15 +827,12 @@ LDSHAREDXX
 LDSHARED
 CCDLFLAGS
 STATIC
-MJIT_LDSHARED
-MJIT_DEBUGFLAGS
-MJIT_OPTFLAGS
-MJIT_CFLAGS
-MJIT_HEADER_INSTALL_DIR
-MJIT_HEADER_FLAGS
+RJIT_LDSHARED
+RJIT_DEBUGFLAGS
+RJIT_OPTFLAGS
+RJIT_CFLAGS
 ARCH_FLAG
 DLDFLAGS
-MJIT_TABS
 X_COROUTINE_SRC
 X_COROUTINE_H
 ALLOCA
@@ -871,7 +868,7 @@ ARFLAGS
 try_header
 CC_VERSION_MESSAGE
 CC_VERSION
-MJIT_CC
+RJIT_CC
 CSRCFLAG
 COUTFLAG
 OUTFLAG
@@ -998,7 +995,6 @@ enable_mathn
 enable_setreuid
 with_coroutine
 with_dln_a_out
-with_mjit_tabs
 with_static_linked_ext
 with_valgrind
 with_ext
@@ -1016,8 +1012,8 @@ enable_install_doc
 with_rdoc
 enable_install_rdoc
 enable_install_capi
-enable_jit_support
 enable_yjit
+enable_rjit
 enable_install_static_library
 enable_dln
 enable_debug_env
@@ -1715,10 +1711,11 @@ Optional Features:
                           documents during install
   --disable-install-rdoc  do not install rdoc indexes during install
   --disable-install-capi  do not install C API documents during install
-  --disable-jit-support   disable JIT features
   --enable-yjit           enable in-process JIT compiler that requires Rust
                           build tools. enabled by default on supported
                           platforms if rustc 1.58.0+ is available
+  --enable-rjit           enable pure-Ruby JIT compiler. enabled by default on
+                          Unix x86_64 platforms
   --disable-install-static-library
                           do not install static ruby library
   --disable-dln           disable dynamic link feature
@@ -1753,7 +1750,6 @@ Optional Packages:
   --with-coroutine=IMPLEMENTATION
                           specify the coroutine implementation to use
   --with-dln-a-out        dln_a_out is deprecated
-  --without-mjit-tabs     expand tabs in mjit header
   --with-static-linked-ext
                           link external modules statically
   --without-valgrind      disable valgrind memcheck support
@@ -3742,8 +3738,8 @@ fi
 
 fi
 
-# BASERUBY must be >= 2.2.0. Note that `"2.2.0" > "2.2"` is true.
-if test "$HAVE_BASERUBY" != no -a "`RUBYOPT=- $BASERUBY --disable=gems -e 'print 42 if RUBY_VERSION > "2.2"' 2>/dev/null`" = 42
+# BASERUBY must be >= 2.5.0. Note that `"2.5.0" > "2.5"` is true.
+if test "$HAVE_BASERUBY" != no -a "`RUBYOPT=- $BASERUBY --disable=gems -e 'print 42 if RUBY_VERSION > "2.5"' 2>/dev/null`" = 42
 then :
 
     case "$build_os" in #(
@@ -3755,7 +3751,15 @@ then :
   *) :
      ;;
 esac
-    BASERUBY="$BASERUBY --disable=gems"
+    # RUBY_APPEND_OPTION(BASERUBY)
+	case " ${BASERUBY-} " in #(
+  *" "--disable=gems" "*) :
+     ;; #(
+  '  ') :
+     BASERUBY=""--disable=gems"" ;; #(
+  *) :
+     BASERUBY="$BASERUBY "--disable=gems"" ;;
+esac
     BASERUBY_VERSION=`$BASERUBY -v`
     $BASERUBY -C "$srcdir" tool/downloader.rb -d tool -e gnu config.guess config.sub >&6
 
@@ -4948,7 +4952,51 @@ fi
 
     # Ditto for LLVM.  Note however that llvm-as is a LLVM-IR to LLVM bitcode
     # assembler that does not target your machine native binary.
-    : ${LD:="${CC}"}         # ... try -fuse-ld=lld ?
+
+    rb_prog=`echo "${rb_CC}" | sed "s/clang/ld/"`
+    # Extract the first word of "$rb_prog", so it can be a program name with args.
+set dummy $rb_prog; ac_word=$2
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
+printf %s "checking for $ac_word... " >&6; }
+if test ${ac_cv_prog_LD+y}
+then :
+  printf %s "(cached) " >&6
+else $as_nop
+  if test -n "$LD"; then
+  ac_cv_prog_LD="$LD" # Let the user override the test.
+else
+as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
+for as_dir in $PATH
+do
+  IFS=$as_save_IFS
+  case $as_dir in #(((
+    '') as_dir=./ ;;
+    */) ;;
+    *) as_dir=$as_dir/ ;;
+  esac
+    for ac_exec_ext in '' $ac_executable_extensions; do
+  if as_fn_executable_p "$as_dir$ac_word$ac_exec_ext"; then
+    ac_cv_prog_LD="$rb_prog"
+    printf "%s\n" "$as_me:${as_lineno-$LINENO}: found $as_dir$ac_word$ac_exec_ext" >&5
+    break 2
+  fi
+done
+  done
+IFS=$as_save_IFS
+
+fi
+fi
+LD=$ac_cv_prog_LD
+if test -n "$LD"; then
+  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $LD" >&5
+    colorize_result "$LD" ; }
+else
+  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no" >&5
+    printf "%s\n" "${msg_result_no}no${msg_reset}" >&6 ; }
+fi
+
+
+ # ... maybe try lld ?
 
     rb_prog=`echo "${rb_CC}" | sed "s/clang/llvm-ar/"`
     # Extract the first word of "$rb_prog", so it can be a program name with args.
@@ -5499,11 +5547,18 @@ else
 fi
 
  ;; #(
+  darwin*) :
+
+    # For Apple clang version 14.0.3 (clang-1403.0.22.14.1)
+    ac_cv_prog_ac_ct_AR=`$CC -print-prog-name=ar`
+    ac_cv_prog_ac_ct_LD=`$CC -print-prog-name=ld`
+    ac_cv_prog_ac_ct_NM=`$CC -print-prog-name=nm`
+ ;; #(
   *) :
      ;;
 esac
 case "${target_os}" in #(
-  cygwin*|msys*|mingw*) :
+  cygwin*|msys*|mingw*|darwin*) :
 
     ac_cv_prog_ac_ct_OBJCOPY=":"
  ;; #(
@@ -7659,7 +7714,7 @@ fi
 done
 
   if test "x$ac_ct_OBJCOPY" = x; then
-    OBJCOPY=""
+    OBJCOPY=":"
   else
     case $cross_compiling:$ac_tool_warned in
 yes:)
@@ -7891,6 +7946,13 @@ esac
   fi
 fi
 
+
+# nm errors with Rust's LLVM bitcode when Rust uses a newer LLVM version than nm.
+# In case we're working with llvm-nm, tell it to not worry about the bitcode.
+if ${NM} --help | grep -q 'llvm-bc'
+then :
+  NM="$NM --no-llvm-bc"
+fi
 
 if test ! $rb_test_CFLAGS
 then :
@@ -8319,40 +8381,6 @@ then :
 
 fi
 
-    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking if thread-local storage is supported" >&5
-printf %s "checking if thread-local storage is supported... " >&6; }
-if test ${rb_cv_tls_supported+y}
-then :
-  printf %s "(cached) " >&6
-else $as_nop
-  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
-/* end confdefs.h.  */
-int __thread conftest;
-int
-main (void)
-{
-
-  ;
-  return 0;
-}
-_ACEOF
-if ac_fn_c_try_link "$LINENO"
-then :
-  rb_cv_tls_supported=yes
-else $as_nop
-  rb_cv_tls_supported=no
-fi
-rm -f core conftest.err conftest.$ac_objext conftest.beam \
-    conftest$ac_exeext conftest.$ac_ext
-fi
-{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $rb_cv_tls_supported" >&5
-    colorize_result "$rb_cv_tls_supported" ; }
-    if test x"$rb_cv_tls_supported" != xyes
-then :
-  printf "%s\n" "#define RB_THREAD_LOCAL_SPECIFIER_IS_UNSUPPORTED 1" >>confdefs.h
-
-fi
-
 else $as_nop
 
     linker_flag=
@@ -8428,21 +8456,21 @@ fi
 
 
 
-: ${MJIT_CC=$CC}
+: ${RJIT_CC=$CC}
 if test "x$cross_compiling" = xno
 then :
 
-    # Extract the first word of "${MJIT_CC}", so it can be a program name with args.
-set dummy ${MJIT_CC}; ac_word=$2
+    # Extract the first word of "${RJIT_CC}", so it can be a program name with args.
+set dummy ${RJIT_CC}; ac_word=$2
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
 printf %s "checking for $ac_word... " >&6; }
-if test ${ac_cv_path_MJIT_CC+y}
+if test ${ac_cv_path_RJIT_CC+y}
 then :
   printf %s "(cached) " >&6
 else $as_nop
-  case $MJIT_CC in
+  case $RJIT_CC in
   [\\/]* | ?:[\\/]*)
-  ac_cv_path_MJIT_CC="$MJIT_CC" # Let the user override the test with a path.
+  ac_cv_path_RJIT_CC="$RJIT_CC" # Let the user override the test with a path.
   ;;
   *)
   as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
@@ -8456,7 +8484,7 @@ do
   esac
     for ac_exec_ext in '' $ac_executable_extensions; do
   if as_fn_executable_p "$as_dir$ac_word$ac_exec_ext"; then
-    ac_cv_path_MJIT_CC="$as_dir$ac_word$ac_exec_ext"
+    ac_cv_path_RJIT_CC="$as_dir$ac_word$ac_exec_ext"
     printf "%s\n" "$as_me:${as_lineno-$LINENO}: found $as_dir$ac_word$ac_exec_ext" >&5
     break 2
   fi
@@ -8467,10 +8495,10 @@ IFS=$as_save_IFS
   ;;
 esac
 fi
-MJIT_CC=$ac_cv_path_MJIT_CC
-if test -n "$MJIT_CC"; then
-  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $MJIT_CC" >&5
-    colorize_result "$MJIT_CC" ; }
+RJIT_CC=$ac_cv_path_RJIT_CC
+if test -n "$RJIT_CC"; then
+  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $RJIT_CC" >&5
+    colorize_result "$RJIT_CC" ; }
 else
   { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no" >&5
     printf "%s\n" "${msg_result_no}no${msg_reset}" >&6 ; }
@@ -8480,20 +8508,20 @@ fi
 
     # if $CC is in /usr/lib/ccache/$CC, search original $CC (disable ccache)
     if echo $RUBY_DEBUG | grep ci > /dev/null &&
-           echo $MJIT_CC | grep ^/usr/lib/ccache > /dev/null
+           echo $RJIT_CC | grep ^/usr/lib/ccache > /dev/null
 then :
 
-           PATH=`echo $PATH | sed "s/\/usr\/lib\/ccache://"` MJIT_CC=`which $CC`
+           PATH=`echo $PATH | sed "s/\/usr\/lib\/ccache://"` RJIT_CC=`which $CC`
 fi
 
     case $target_os in #(
   *mingw*) :
-    command -v cygpath > /dev/null && MJIT_CC=`cygpath -ma $MJIT_CC` ;; #(
+    command -v cygpath > /dev/null && RJIT_CC=`cygpath -ma $RJIT_CC` ;; #(
   *) :
      ;;
 esac
     shift 2
-    MJIT_CC="$MJIT_CC${1+ }$*"
+    RJIT_CC="$RJIT_CC${1+ }$*"
 
 fi
 
@@ -9050,6 +9078,7 @@ esac
   *) :
      ;;
 esac    # by TOYODA Eizi <toyoda@npd.kishou.go.jp>
+
 
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking whether ln -s works" >&5
 printf %s "checking whether ln -s works... " >&6; }
@@ -10712,8 +10741,6 @@ fi
 
 fi
 
-    : ${MJIT_HEADER_FLAGS='-P -dD'}
-
     # -fstack-protector
     case "$target_os" in #(
   emscripten*|wasi*) :
@@ -11510,7 +11537,6 @@ fi
 
 
 fi
-    test "$visibility_option" = no || OBJCOPY=:
 
 fi
 
@@ -12851,7 +12877,7 @@ esac
   *) :
      ;;
 esac
-		# With gcc-8's -fcf-protection, MJIT's __builtin_longjmp fails.
+		# With gcc-8's -fcf-protection, RJIT's __builtin_longjmp fails.
 		case "$CC $CFLAGS " in #(
   *" -fcf-protection "*) :
     cf_protection=yes ;; #(
@@ -16924,7 +16950,13 @@ fi
 if test "$rb_cv_packed_struct" != no
 then :
 
-    printf "%s\n" "#define PACKED_STRUCT(x) $rb_cv_packed_struct" >>confdefs.h
+    cat >>confdefs.h <<_ACEOF
+#define RBIMPL_ATTR_PACKED_STRUCT_BEGIN() `echo " $rb_cv_packed_struct " | sed 's/ x .*//;s/^ *//'`
+_ACEOF
+
+    cat >>confdefs.h <<_ACEOF
+#define RBIMPL_ATTR_PACKED_STRUCT_END() `echo " $rb_cv_packed_struct " | sed 's/.* x //;s/ *$//'`
+_ACEOF
 
 
     { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking whether -Wno-address-of-packed-member is accepted as CFLAGS" >&5
@@ -16980,11 +17012,6 @@ else $as_nop
   unset ac_c_werror_flag
 
 fi
-
-
-else $as_nop
-
-    printf "%s\n" "#define PACKED_STRUCT(x) x" >>confdefs.h
 
 
 fi
@@ -26342,6 +26369,13 @@ then :
 
 fi
 
+ac_fn_c_check_func "$LINENO" "fchdir" "ac_cv_func_fchdir"
+if test "x$ac_cv_func_fchdir" = xyes
+then :
+  printf "%s\n" "#define HAVE_FCHDIR 1" >>confdefs.h
+
+fi
+
 ac_fn_c_check_func "$LINENO" "fchmod" "ac_cv_func_fchmod"
 if test "x$ac_cv_func_fchmod" = xyes
 then :
@@ -29217,7 +29251,7 @@ then :
 else $as_nop
 
 case "$archs" in #(
-  m68*|x86*|x64|i?86|ppc*|sparc*|alpha*) :
+  m68*|x86*|x64|i?86|ppc*|sparc*|alpha*|arm*|aarch*) :
      dir=-1 ;; #(
   hppa*) :
      dir=+1 ;; #(
@@ -29312,7 +29346,7 @@ then :
 else $as_nop
 
 case "$target_cpu" in #(
-  m68*|x86*|x64|i?86|ppc*|sparc*|alpha*) :
+  m68*|x86*|x64|i?86|ppc*|sparc*|alpha*|arm*|aarch*) :
      dir=-1 ;; #(
   hppa*) :
      dir=+1 ;; #(
@@ -29443,6 +29477,10 @@ esac
 
             coroutine_type=riscv64
          ;; #(
+  loongarch64-linux*) :
+
+            coroutine_type=loongarch64
+         ;; #(
   x86_64-freebsd*) :
 
             coroutine_type=amd64
@@ -29474,6 +29512,10 @@ esac
   i386-openbsd*) :
 
             coroutine_type=x86
+         ;; #(
+  aarch64-openbsd*) :
+
+            coroutine_type=arm64
          ;; #(
   *-openbsd*) :
 
@@ -29770,6 +29812,73 @@ then :
   *) :
      ;;
 esac
+
+fi
+
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for thread-local storage sepcifier" >&5
+printf %s "checking for thread-local storage sepcifier... " >&6; }
+if test ${rb_cv_tls_specifier+y}
+then :
+  printf %s "(cached) " >&6
+else $as_nop
+  rb_cv_tls_specifier=none
+        save_CFLAGS="$CFLAGS"
+CFLAGS="$CFLAGS $rb_cv_warnflags"
+if test "${ac_c_werror_flag+set}"
+then :
+
+  rb_c_werror_flag="$ac_c_werror_flag"
+
+else $as_nop
+
+  unset rb_c_werror_flag
+
+fi
+ac_c_werror_flag=yes
+
+            for attr in \
+                _Thread_local \
+                __thread \
+                ; do
+                cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+$attr int conftest;
+int
+main (void)
+{
+
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"
+then :
+  rb_cv_tls_specifier=$attr; break
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.beam \
+    conftest$ac_exeext conftest.$ac_ext
+            done
+
+CFLAGS="$save_CFLAGS"
+save_CFLAGS=
+if test "${rb_c_werror_flag+set}"
+then :
+
+  ac_c_werror_flag="$rb_c_werror_flag"
+
+else $as_nop
+
+  unset ac_c_werror_flag
+
+fi
+
+fi
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $rb_cv_tls_specifier" >&5
+    colorize_result "$rb_cv_tls_specifier" ; }
+    if test x"${rb_cv_tls_specifier}" != xnone
+then :
+  printf "%s\n" "#define RB_THREAD_LOCAL_SPECIFIER ${rb_cv_tls_specifier}" >>confdefs.h
+
 
 fi
 
@@ -30244,25 +30353,15 @@ fi ;; #(
 esac
 LIBEXT=a
 
-
-# Check whether --with-mjit-tabs was given.
-if test ${with_mjit_tabs+y}
-then :
-  withval=$with_mjit_tabs; if test $withval = no
-then :
-  MJIT_TABS=false
-fi
-fi
-
 case "$GCC:$target_os" in #(
   yes:aix*) :
-    mjit_std_cflag="-std=gnu99" ;; #(
+    rjit_std_cflag="-std=gnu99" ;; #(
   *) :
-    mjit_std_cflag= ;;
+    rjit_std_cflag= ;;
 esac
-MJIT_CFLAGS=${MJIT_CFLAGS-"-w ${mjit_std_cflag} ${orig_cflags}"}
-MJIT_OPTFLAGS=${MJIT_OPTFLAGS-'$(optflags)'}
-MJIT_DEBUGFLAGS=${MJIT_DEBUGFLAGS-'$(debugflags)'}
+RJIT_CFLAGS=${RJIT_CFLAGS-"-w ${rjit_std_cflag} ${orig_cflags}"}
+RJIT_OPTFLAGS=${RJIT_OPTFLAGS-'$(optflags)'}
+RJIT_DEBUGFLAGS=${RJIT_DEBUGFLAGS-'$(debugflags)'}
 
 ASMEXT=S
 
@@ -31355,11 +31454,6 @@ then :
 
    printf "%s\n" "#define ENABLE_MULTIARCH 1" >>confdefs.h
 
-   MJIT_HEADER_INSTALL_DIR=include/'${arch}/${RUBY_VERSION_NAME}'
-
-else $as_nop
-
-   MJIT_HEADER_INSTALL_DIR=include/'${RUBY_VERSION_NAME}/${arch}'
 
 fi
 
@@ -32598,32 +32692,6 @@ case "$RDOCTARGET:$CAPITARGET" in #(
 esac
 
 
-# Check whether --enable-jit-support was given.
-if test ${enable_jit_support+y}
-then :
-  enableval=$enable_jit_support; MJIT_SUPPORT=$enableval
-else $as_nop
-  case "$target_os" in #(
-  wasi | mingw* | solaris*) :
-    MJIT_SUPPORT=no ;; #(
-  *) :
-    MJIT_SUPPORT=yes
-     ;;
-esac
-fi
-
-
-if test x"$MJIT_SUPPORT" = "xyes"
-then :
-  printf "%s\n" "#define USE_MJIT 1" >>confdefs.h
-
-else $as_nop
-  printf "%s\n" "#define USE_MJIT 0" >>confdefs.h
-
-fi
-
-
-
 # Extract the first word of "rustc", so it can be a program name with args.
 set dummy rustc; ac_word=$2
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
@@ -32724,8 +32792,8 @@ if test ${enable_yjit+y}
 then :
   enableval=$enable_yjit; YJIT_SUPPORT=$enableval
 else $as_nop
-  case "$enable_jit_support:$YJIT_TARGET_OK:$YJIT_RUSTC_OK" in #(
-  yes:yes:yes|:yes:yes) :
+  case "$YJIT_TARGET_OK:$YJIT_RUSTC_OK" in #(
+  yes:yes) :
 
             YJIT_SUPPORT=yes
          ;; #(
@@ -32743,11 +32811,6 @@ YJIT_LIBS=
 case "${YJIT_SUPPORT}" in #(
   yes|dev|stats|dev_nodebug) :
 
-    if test x"$enable_jit_support" = "xno"
-then :
-  as_fn_error $? "--disable-jit-support but --enable-yjit. YJIT requires JIT support" "$LINENO" 5
-
-fi
     if test x"$RUSTC" = "xno"
 then :
   as_fn_error $? "rustc is required. Installation instructions available at https://www.rust-lang.org/tools/install" "$LINENO" 5
@@ -32770,6 +32833,8 @@ fi
 
 	rb_rust_target_subdir=dev_nodebug
 	CARGO_BUILD_ARGS='--profile dev_nodebug --features stats,disasm'
+	printf "%s\n" "#define YJIT_STATS 1" >>confdefs.h
+
      ;; #(
   stats) :
 
@@ -32916,9 +32981,172 @@ fi
 
  ;; #(
   *) :
+
     printf "%s\n" "#define USE_YJIT 0" >>confdefs.h
+
  ;;
 esac
+
+
+RJIT_TARGET_OK=no
+if test "$cross_compiling" = no
+then :
+  case "$target_cpu-$target_os" in #(
+  *android*) :
+
+            RJIT_TARGET_OK=no
+         ;; #(
+  x86_64-darwin*) :
+
+            RJIT_TARGET_OK=yes
+         ;; #(
+  x86_64-*linux*) :
+
+            RJIT_TARGET_OK=yes
+         ;; #(
+  x86_64-*bsd*) :
+
+            RJIT_TARGET_OK=yes
+
+     ;; #(
+  *) :
+     ;;
+esac
+
+fi
+
+# Check whether --enable-rjit was given.
+if test ${enable_rjit+y}
+then :
+  enableval=$enable_rjit; RJIT_SUPPORT=$enableval
+else $as_nop
+  case "$YJIT_TARGET_OK" in #(
+  yes) :
+    RJIT_SUPPORT=yes ;; #(
+  *) :
+    RJIT_SUPPORT=no
+     ;;
+esac
+
+fi
+
+
+case "$RJIT_SUPPORT" in #(
+  yes|dev|disasm) :
+
+    case "$RJIT_SUPPORT" in #(
+  dev) :
+
+        # Link libcapstone for --rjit-dump-disasm
+        { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for cs_disasm in -lcapstone" >&5
+printf %s "checking for cs_disasm in -lcapstone... " >&6; }
+if test ${ac_cv_lib_capstone_cs_disasm+y}
+then :
+  printf %s "(cached) " >&6
+else $as_nop
+  ac_check_lib_save_LIBS=$LIBS
+LIBS="-lcapstone  $LIBS"
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+/* Override any GCC internal prototype to avoid an error.
+   Use char because int might match the return type of a GCC
+   builtin and then its argument prototype would still apply.  */
+char cs_disasm ();
+int
+main (void)
+{
+return cs_disasm ();
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"
+then :
+  ac_cv_lib_capstone_cs_disasm=yes
+else $as_nop
+  ac_cv_lib_capstone_cs_disasm=no
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.beam \
+    conftest$ac_exeext conftest.$ac_ext
+LIBS=$ac_check_lib_save_LIBS
+fi
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_capstone_cs_disasm" >&5
+    colorize_result "$ac_cv_lib_capstone_cs_disasm" ; }
+if test "x$ac_cv_lib_capstone_cs_disasm" = xyes
+then :
+  printf "%s\n" "#define HAVE_LIBCAPSTONE 1" >>confdefs.h
+
+  LIBS="-lcapstone $LIBS"
+
+fi
+
+
+        # Enable extra stats (vm_insns_count, ratio_in_rjit)
+        printf "%s\n" "#define RJIT_STATS 1" >>confdefs.h
+
+     ;; #(
+  disasm) :
+
+        # Link libcapstone for --rjit-dump-disasm
+        { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for cs_disasm in -lcapstone" >&5
+printf %s "checking for cs_disasm in -lcapstone... " >&6; }
+if test ${ac_cv_lib_capstone_cs_disasm+y}
+then :
+  printf %s "(cached) " >&6
+else $as_nop
+  ac_check_lib_save_LIBS=$LIBS
+LIBS="-lcapstone  $LIBS"
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+/* Override any GCC internal prototype to avoid an error.
+   Use char because int might match the return type of a GCC
+   builtin and then its argument prototype would still apply.  */
+char cs_disasm ();
+int
+main (void)
+{
+return cs_disasm ();
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"
+then :
+  ac_cv_lib_capstone_cs_disasm=yes
+else $as_nop
+  ac_cv_lib_capstone_cs_disasm=no
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.beam \
+    conftest$ac_exeext conftest.$ac_ext
+LIBS=$ac_check_lib_save_LIBS
+fi
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_capstone_cs_disasm" >&5
+    colorize_result "$ac_cv_lib_capstone_cs_disasm" ; }
+if test "x$ac_cv_lib_capstone_cs_disasm" = xyes
+then :
+  printf "%s\n" "#define HAVE_LIBCAPSTONE 1" >>confdefs.h
+
+  LIBS="-lcapstone $LIBS"
+
+fi
+
+     ;; #(
+  *) :
+     ;;
+esac
+
+    printf "%s\n" "#define USE_RJIT 1" >>confdefs.h
+
+ ;; #(
+  *) :
+
+    printf "%s\n" "#define USE_RJIT 0" >>confdefs.h
+
+ ;;
+esac
+
 
 
 # Check whether --enable-install-static-library was given.
@@ -33396,7 +33624,7 @@ fi
 
 fi
 
-: ${MJIT_LDSHARED=`echo "$LDSHARED" | sed 's|\$(LD)|'"${LD}"'|g;s|\$(CC)|$(MJIT_CC)|g'`}
+: ${RJIT_LDSHARED=`echo "$LDSHARED" | sed 's|\$(LD)|'"${LD}"'|g;s|\$(CC)|$(RJIT_CC)|g'`}
 
 MAINLIBS="$LIBS"
 LIBS=$ORIG_LIBS
@@ -35292,8 +35520,8 @@ config_summary "debugflags"          "$debugflags"
 config_summary "warnflags"           "$warnflags"
 config_summary "strip command"       "$STRIP"
 config_summary "install doc"         "$DOCTARGETS"
-config_summary "MJIT support"        "$MJIT_SUPPORT"
 config_summary "YJIT support"        "$YJIT_SUPPORT"
+config_summary "RJIT support"        "$RJIT_SUPPORT"
 config_summary "man page type"       "$MANTYPE"
 config_summary "search path"         "$search_path"
 config_summary "static-linked-ext"   ${EXTSTATIC:+"yes"}

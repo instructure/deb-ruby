@@ -23,10 +23,11 @@
 
 #include "eval_intern.h"
 #include "internal.h"
+#include "internal/class.h"
 #include "internal/hash.h"
 #include "internal/symbol.h"
 #include "iseq.h"
-#include "mjit.h"
+#include "rjit.h"
 #include "ruby/debug.h"
 #include "vm_core.h"
 #include "ruby/ractor.h"
@@ -66,6 +67,17 @@ rb_hook_list_mark(rb_hook_list_t *hooks)
     }
 }
 
+void
+rb_hook_list_mark_and_update(rb_hook_list_t *hooks)
+{
+    rb_event_hook_t *hook = hooks->hooks;
+
+    while (hook) {
+        rb_gc_mark_and_move(&hook->data);
+        hook = hook->next;
+    }
+}
+
 static void clean_hooks(const rb_execution_context_t *ec, rb_hook_list_t *list);
 
 void
@@ -81,6 +93,7 @@ rb_hook_list_free(rb_hook_list_t *hooks)
 /* ruby_vm_event_flags management */
 
 void rb_clear_attr_ccs(void);
+void rb_clear_bf_ccs(void);
 
 static void
 update_global_event_hook(rb_event_flag_t prev_events, rb_event_flag_t new_events)
@@ -90,6 +103,8 @@ update_global_event_hook(rb_event_flag_t prev_events, rb_event_flag_t new_events
     bool first_time_iseq_events_p = new_iseq_events & ~enabled_iseq_events;
     bool enable_c_call   = (prev_events & RUBY_EVENT_C_CALL)   == 0 && (new_events & RUBY_EVENT_C_CALL);
     bool enable_c_return = (prev_events & RUBY_EVENT_C_RETURN) == 0 && (new_events & RUBY_EVENT_C_RETURN);
+    bool enable_call     = (prev_events & RUBY_EVENT_CALL)     == 0 && (new_events & RUBY_EVENT_CALL);
+    bool enable_return   = (prev_events & RUBY_EVENT_RETURN)   == 0 && (new_events & RUBY_EVENT_RETURN);
 
     // Modify ISEQs or CCs to enable tracing
     if (first_time_iseq_events_p) {
@@ -99,6 +114,9 @@ update_global_event_hook(rb_event_flag_t prev_events, rb_event_flag_t new_events
     // if c_call or c_return is activated
     else if (enable_c_call || enable_c_return) {
         rb_clear_attr_ccs();
+    }
+    else if (enable_call || enable_return) {
+        rb_clear_bf_ccs();
     }
 
     ruby_vm_event_flags = new_events;
@@ -114,7 +132,7 @@ update_global_event_hook(rb_event_flag_t prev_events, rb_event_flag_t new_events
         // Do this after event flags updates so other ractors see updated vm events
         // when they wake up.
         rb_yjit_tracing_invalidate_all();
-        rb_mjit_tracing_invalidate_all(new_iseq_events);
+        rb_rjit_tracing_invalidate_all(new_iseq_events);
     }
 }
 
@@ -390,7 +408,7 @@ exec_hooks_protected(rb_execution_context_t *ec, rb_hook_list_t *list, const rb_
 }
 
 // pop_p: Whether to pop the frame for the TracePoint when it throws.
-MJIT_FUNC_EXPORTED void
+void
 rb_exec_event_hooks(rb_trace_arg_t *trace_arg, rb_hook_list_t *hooks, int pop_p)
 {
     rb_execution_context_t *ec = trace_arg->ec;
@@ -713,7 +731,7 @@ call_trace_func(rb_event_flag_t event, VALUE proc, VALUE self, ID id, VALUE klas
             klass = RBASIC(klass)->klass;
         }
         else if (FL_TEST(klass, FL_SINGLETON)) {
-            klass = rb_ivar_get(klass, id__attached__);
+            klass = RCLASS_ATTACHED_OBJECT(klass);
         }
     }
 
@@ -1246,13 +1264,17 @@ rb_tracepoint_enable_for_target(VALUE tpval, VALUE target, VALUE target_line)
     n += rb_iseq_add_local_tracepoint_recursively(iseq, tp->events, tpval, line, target_bmethod);
     rb_hash_aset(tp->local_target_set, (VALUE)iseq, Qtrue);
 
+    if ((tp->events & (RUBY_EVENT_CALL | RUBY_EVENT_RETURN)) &&
+        iseq->body->builtin_attrs & BUILTIN_ATTR_SINGLE_NOARG_INLINE) {
+        rb_clear_bf_ccs();
+    }
 
     if (n == 0) {
         rb_raise(rb_eArgError, "can not enable any hooks");
     }
 
     rb_yjit_tracing_invalidate_all();
-    rb_mjit_tracing_invalidate_all(tp->events);
+    rb_rjit_tracing_invalidate_all(tp->events);
 
     ruby_vm_event_local_num++;
 

@@ -144,31 +144,37 @@ round_half_down(double x, double s)
 static double
 round_half_even(double x, double s)
 {
-    double f, d, xs = x * s;
+    double u, v, us, vs, f, d, uf;
+
+    v = modf(x, &u);
+    us = u * s;
+    vs = v * s;
 
     if (x > 0.0) {
-        f = floor(xs);
-        d = xs - f;
+        f = floor(vs);
+        uf = us + f;
+        d = vs - f;
         if (d > 0.5)
             d = 1.0;
-        else if (d == 0.5 || ((double)((f + 0.5) / s) <= x))
-            d = fmod(f, 2.0);
+        else if (d == 0.5 || ((double)((uf + 0.5) / s) <= x))
+            d = fmod(uf, 2.0);
         else
             d = 0.0;
         x = f + d;
     }
     else if (x < 0.0) {
-        f = ceil(xs);
-        d = f - xs;
+        f = ceil(vs);
+        uf = us + f;
+        d = f - vs;
         if (d > 0.5)
             d = 1.0;
-        else if (d == 0.5 || ((double)((f - 0.5) / s) >= x))
-            d = fmod(-f, 2.0);
+        else if (d == 0.5 || ((double)((uf - 0.5) / s) >= x))
+            d = fmod(-uf, 2.0);
         else
             d = 0.0;
         x = f - d;
     }
-    return x;
+    return us + x;
 }
 
 static VALUE fix_lshift(long, unsigned long);
@@ -688,8 +694,6 @@ num_div(VALUE x, VALUE y)
  *    (-r) % r2             # => (119/100)
  *    (-r) %-r2             # => (-21/100)
  *
- *  Numeric#modulo is an alias for Numeric#%.
- *
  */
 
 static VALUE
@@ -734,6 +738,9 @@ num_modulo(VALUE x, VALUE y)
 static VALUE
 num_remainder(VALUE x, VALUE y)
 {
+    if (!rb_obj_is_kind_of(y, rb_cNumeric)) {
+        do_coerce(&x, &y, TRUE);
+    }
     VALUE z = num_funcall1(x, '%', y);
 
     if ((!rb_equal(z, INT2FIX(0))) &&
@@ -794,8 +801,6 @@ num_divmod(VALUE x, VALUE y)
  *    12.abs        #=> 12
  *    (-34.56).abs  #=> 34.56
  *    -34.56.abs    #=> 34.56
- *
- *  Numeric#magnitude is an alias for Numeric#abs.
  *
  */
 
@@ -1013,7 +1018,7 @@ num_negative_p(VALUE num)
 VALUE
 rb_float_new_in_heap(double d)
 {
-    NEWOBJ_OF(flt, struct RFloat, rb_cFloat, T_FLOAT | (RGENGC_WB_PROTECTED_FLOAT ? FL_WB_PROTECTED : 0));
+    NEWOBJ_OF(flt, struct RFloat, rb_cFloat, T_FLOAT | (RGENGC_WB_PROTECTED_FLOAT ? FL_WB_PROTECTED : 0), sizeof(struct RFloat), 0);
 
 #if SIZEOF_DOUBLE <= SIZEOF_VALUE
     flt->float_value = d;
@@ -1147,7 +1152,7 @@ flo_coerce(VALUE x, VALUE y)
     return rb_assoc_new(rb_Float(y), x);
 }
 
-MJIT_FUNC_EXPORTED VALUE
+VALUE
 rb_float_uminus(VALUE flt)
 {
     return DBL2NUM(-RFLOAT_VALUE(flt));
@@ -1260,7 +1265,7 @@ double_div_double(double x, double y)
     }
 }
 
-MJIT_FUNC_EXPORTED VALUE
+VALUE
 rb_flo_div_flo(VALUE x, VALUE y)
 {
     double num = RFLOAT_VALUE(x);
@@ -1319,8 +1324,6 @@ rb_float_div(VALUE x, VALUE y)
  *    f.quo(Rational(2, 1)) # => 1.57
  *    f.quo(Complex(2, 0))  # => (1.57+0.0i)
  *
- *  Float#fdiv is an alias for Float#quo.
- *
  */
 
 static VALUE
@@ -1372,7 +1375,7 @@ flodivmod(double x, double y, double *divp, double *modp)
  * An error will be raised if y == 0.
  */
 
-MJIT_FUNC_EXPORTED double
+double
 ruby_float_mod(double x, double y)
 {
     double mod;
@@ -1406,8 +1409,6 @@ ruby_float_mod(double x, double y)
  *
  *    10.0 % 4.0            # => 2.0
  *    10.0 % Rational(4, 1) # => 2.0
- *
- *  Float#modulo is an alias for Float#%.
  *
  */
 
@@ -1609,7 +1610,7 @@ num_equal(VALUE x, VALUE y)
  *
  */
 
-MJIT_FUNC_EXPORTED VALUE
+VALUE
 rb_float_equal(VALUE x, VALUE y)
 {
     volatile double a, b;
@@ -1727,7 +1728,7 @@ flo_cmp(VALUE x, VALUE y)
     return rb_dbl_cmp(a, b);
 }
 
-MJIT_FUNC_EXPORTED int
+int
 rb_float_cmp(VALUE x, VALUE y)
 {
     return NUM2INT(ensure_cmp(flo_cmp(x, y), x, y));
@@ -1921,7 +1922,7 @@ flo_le(VALUE x, VALUE y)
  *  Related: Float#== (performs type conversions).
  */
 
-MJIT_FUNC_EXPORTED VALUE
+VALUE
 rb_float_eql(VALUE x, VALUE y)
 {
     if (RB_FLOAT_TYPE_P(y)) {
@@ -1937,7 +1938,7 @@ rb_float_eql(VALUE x, VALUE y)
 
 #define flo_eql rb_float_eql
 
-MJIT_FUNC_EXPORTED VALUE
+VALUE
 rb_float_abs(VALUE flt)
 {
     double val = fabs(RFLOAT_VALUE(flt));
@@ -2591,7 +2592,6 @@ float_round_underflow(int ndigits, int binexp)
  *
  *    (0.3 / 0.1).to_i  # => 2 (!)
  *
- *  Float#to_int is an alias for Float#to_i.
  */
 
 static VALUE
@@ -3695,8 +3695,6 @@ int_nobits_p(VALUE num, VALUE mask)
  *    1.succ  #=> 2
  *    -1.succ #=> 0
  *
- *  Integer#next is an alias for Integer#succ.
- *
  *  Related: Integer#pred (predecessor value).
  */
 
@@ -3893,7 +3891,7 @@ rb_fix2str(VALUE x, int base)
 
 static VALUE rb_fix_to_s_static[10];
 
-MJIT_FUNC_EXPORTED VALUE
+VALUE
 rb_fix_to_s(VALUE x)
 {
     long i = FIX2LONG(x);
@@ -3919,12 +3917,9 @@ rb_fix_to_s(VALUE x)
  *    78546939656932.to_s(36)  # => "rubyrules"
  *
  *  Raises an exception if +base+ is out of range.
- *
- *  Integer#inspect is an alias for Integer#to_s.
- *
  */
 
-MJIT_FUNC_EXPORTED VALUE
+VALUE
 rb_int_to_s(int argc, VALUE *argv, VALUE x)
 {
     int base;
@@ -4315,8 +4310,6 @@ fix_mod(VALUE x, VALUE y)
  *    10 % 3.0            # => 1.0
  *    10 % Rational(3, 1) # => (1/1)
  *
- *  Integer#modulo is an alias for Integer#%.
- *
  */
 VALUE
 rb_int_modulo(VALUE x, VALUE y)
@@ -4357,12 +4350,22 @@ static VALUE
 int_remainder(VALUE x, VALUE y)
 {
     if (FIXNUM_P(x)) {
-        return num_remainder(x, y);
+        if (FIXNUM_P(y)) {
+            VALUE z = fix_mod(x, y);
+            assert(FIXNUM_P(z));
+            if (z != INT2FIX(0) && (SIGNED_VALUE)(x ^ y) < 0)
+                z = fix_minus(z, y);
+            return z;
+        }
+        else if (!RB_BIGNUM_TYPE_P(y)) {
+            return num_remainder(x, y);
+        }
+        x = rb_int2big(FIX2LONG(x));
     }
-    else if (RB_BIGNUM_TYPE_P(x)) {
-        return rb_big_remainder(x, y);
+    else if (!RB_BIGNUM_TYPE_P(x)) {
+        return Qnil;
     }
-    return Qnil;
+    return rb_big_remainder(x, y);
 }
 
 static VALUE
@@ -4625,9 +4628,6 @@ fix_equal(VALUE x, VALUE y)
  *    1 == 1.0   #=> true
  *
  *  Related: Integer#eql? (requires +other+ to be an \Integer).
- *
- *  Integer#=== is an alias for Integer#==.
- *
  */
 
 VALUE
@@ -5174,7 +5174,7 @@ rb_int_rshift(VALUE x, VALUE y)
     return Qnil;
 }
 
-MJIT_FUNC_EXPORTED VALUE
+VALUE
 rb_fix_aref(VALUE fix, VALUE idx)
 {
     long val = FIX2LONG(fix);
@@ -5398,7 +5398,7 @@ fix_size(VALUE fix)
     return INT2FIX(sizeof(long));
 }
 
-MJIT_FUNC_EXPORTED VALUE
+VALUE
 rb_int_size(VALUE num)
 {
     if (FIXNUM_P(num)) {
@@ -5989,7 +5989,22 @@ rb_int_s_isqrt(VALUE self, VALUE num)
     }
 }
 
-/* :nodoc: */
+/*
+ * call-seq:
+ *   Integer.try_convert(object) -> object, integer, or nil
+ *
+ * If +object+ is an \Integer object, returns +object+.
+ *   Integer.try_convert(1) # => 1
+ *
+ * Otherwise if +object+ responds to <tt>:to_int</tt>,
+ * calls <tt>object.to_int</tt> and returns the result.
+ *   Integer.try_convert(1.25) # => 1
+ *
+ * Returns +nil+ if +object+ does not respond to <tt>:to_int</tt>
+ *   Integer.try_convert([]) # => nil
+ *
+ * Raises an exception unless <tt>object.to_int</tt> returns an \Integer object.
+ */
 static VALUE
 int_s_try_convert(VALUE self, VALUE num)
 {

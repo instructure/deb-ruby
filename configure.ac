@@ -64,13 +64,13 @@ AC_ARG_WITH(baseruby,
 	[
 		AC_PATH_PROG([BASERUBY], [ruby], [false])
 	])
-# BASERUBY must be >= 2.2.0. Note that `"2.2.0" > "2.2"` is true.
-AS_IF([test "$HAVE_BASERUBY" != no -a "`RUBYOPT=- $BASERUBY --disable=gems -e 'print 42 if RUBY_VERSION > "2.2"' 2>/dev/null`" = 42], [
+# BASERUBY must be >= 2.5.0. Note that `"2.5.0" > "2.5"` is true.
+AS_IF([test "$HAVE_BASERUBY" != no -a "`RUBYOPT=- $BASERUBY --disable=gems -e 'print 42 if RUBY_VERSION > "2.5"' 2>/dev/null`" = 42], [
     AS_CASE(["$build_os"], [mingw*], [
         # Can MSys shell run a command with a drive letter?
         RUBYOPT=- `cygpath -ma "$BASERUBY"` --disable=gems -e exit 2>/dev/null || HAVE_BASERUBY=no
     ])
-    BASERUBY="$BASERUBY --disable=gems"
+    RUBY_APPEND_OPTION(BASERUBY, "--disable=gems")
     BASERUBY_VERSION=`$BASERUBY -v`
     $BASERUBY -C "$srcdir" tool/downloader.rb -d tool -e gnu config.guess config.sub >&AS_MESSAGE_FD
 ], [
@@ -214,7 +214,7 @@ AS_CASE(["/${rb_CC} "],
 [*clang*],            [
     # Ditto for LLVM.  Note however that llvm-as is a LLVM-IR to LLVM bitcode
     # assembler that does not target your machine native binary.
-    : ${LD:="${CC}"}         # ... try -fuse-ld=lld ?
+    RUBY_CHECK_PROG_FOR_CC([LD],      [s/clang/ld/]) # ... maybe try lld ?
     RUBY_CHECK_PROG_FOR_CC([AR],      [s/clang/llvm-ar/])
 #   RUBY_CHECK_PROG_FOR_CC([AS],      [s/clang/llvm-as/])
     RUBY_CHECK_PROG_FOR_CC([CXX],     [s/clang/clang++/])
@@ -233,9 +233,15 @@ AS_CASE(["${build_os}"],
 ],
 [aix*], [
     AC_PATH_TOOL([NM], [nm], [/usr/ccs/bin/nm], [/usr/ccs/bin:$PATH])
+],
+[darwin*], [
+    # For Apple clang version 14.0.3 (clang-1403.0.22.14.1)
+    ac_cv_prog_ac_ct_AR=`$CC -print-prog-name=ar`
+    ac_cv_prog_ac_ct_LD=`$CC -print-prog-name=ld`
+    ac_cv_prog_ac_ct_NM=`$CC -print-prog-name=nm`
 ])
 AS_CASE(["${target_os}"],
-[cygwin*|msys*|mingw*], [
+[cygwin*|msys*|mingw*|darwin*], [
     ac_cv_prog_ac_ct_OBJCOPY=":"
 ])
 
@@ -254,9 +260,13 @@ AC_CHECK_TOOLS([AR],      [gar ar])
 AC_CHECK_TOOLS([AS],      [gas as])
 AC_CHECK_TOOLS([LD],      [gld ld]) # ... try gold ?
 AC_CHECK_TOOLS([NM],      [gnm nm])
-AC_CHECK_TOOLS([OBJCOPY], [gobjcopy objcopy])
+AC_CHECK_TOOLS([OBJCOPY], [gobjcopy objcopy], [:])
 AC_CHECK_TOOLS([OBJDUMP], [gobjdump objdump])
 AC_CHECK_TOOLS([STRIP],   [gstrip strip], [:])
+
+# nm errors with Rust's LLVM bitcode when Rust uses a newer LLVM version than nm.
+# In case we're working with llvm-nm, tell it to not worry about the bitcode.
+AS_IF([${NM} --help | grep -q 'llvm-bc'], [NM="$NM --no-llvm-bc"])
 
 AS_IF([test ! $rb_test_CFLAGS], [AS_UNSET(CFLAGS)]); AS_UNSET(rb_test_CFLAGS)
 AS_IF([test ! $rb_test_CXXFLAGS], [AS_UNSET(CXXFLAGS)]); AS_UNSET(rb_save_CXXFLAGS)
@@ -385,13 +395,6 @@ AS_IF([test "$GCC" = yes], [
     AS_IF([test "$gcc_major" -lt 4], [
         AC_MSG_ERROR([too old GCC: $gcc_major.$gcc_minor])
     ])
-
-    AC_CACHE_CHECK([if thread-local storage is supported], [rb_cv_tls_supported],
-        [AC_LINK_IFELSE([AC_LANG_PROGRAM([[int __thread conftest;]])],
-            [rb_cv_tls_supported=yes],
-            [rb_cv_tls_supported=no])])
-    AS_IF([test x"$rb_cv_tls_supported" != xyes],
-        [AC_DEFINE(RB_THREAD_LOCAL_SPECIFIER_IS_UNSUPPORTED)])
 ], [
     linker_flag=
 ])
@@ -406,19 +409,19 @@ AC_SUBST(OUTFLAG)
 AC_SUBST(COUTFLAG)
 AC_SUBST(CSRCFLAG)
 
-: ${MJIT_CC=$CC}
+: ${RJIT_CC=$CC}
 AS_IF([test "x$cross_compiling" = xno], [
-    AC_PATH_PROG([MJIT_CC], ${MJIT_CC})
+    AC_PATH_PROG([RJIT_CC], ${RJIT_CC})
 
     # if $CC is in /usr/lib/ccache/$CC, search original $CC (disable ccache)
     AS_IF([echo $RUBY_DEBUG | grep ci > /dev/null &&
-           echo $MJIT_CC | grep ^/usr/lib/ccache > /dev/null], [
-           PATH=`echo $PATH | sed "s/\/usr\/lib\/ccache://"` MJIT_CC=`which $CC`])
+           echo $RJIT_CC | grep ^/usr/lib/ccache > /dev/null], [
+           PATH=`echo $PATH | sed "s/\/usr\/lib\/ccache://"` RJIT_CC=`which $CC`])
 
     AS_CASE([$target_os],
-	[*mingw*], [command -v cygpath > /dev/null && MJIT_CC=`cygpath -ma $MJIT_CC`])
+	[*mingw*], [command -v cygpath > /dev/null && RJIT_CC=`cygpath -ma $RJIT_CC`])
     shift 2
-    MJIT_CC="$MJIT_CC${1+ }$*"
+    RJIT_CC="$RJIT_CC${1+ }$*"
 ])
 
 AS_CASE(["$build_os"],
@@ -506,6 +509,7 @@ AS_CASE(["$target_os"],
     : ${enable_shared=yes}
     ],
 [hiuxmpp*], [AC_DEFINE(__HIUX_MPP__)])    # by TOYODA Eizi <toyoda@npd.kishou.go.jp>
+
 
 AC_PROG_LN_S
 AC_PROG_MAKE_SET
@@ -797,8 +801,6 @@ AS_IF([test "$GCC" = yes], [
                         [@%:@include <stdio.h>])
     ])
 
-    : ${MJIT_HEADER_FLAGS='-P -dD'}
-
     # -fstack-protector
     AS_CASE(["$target_os"],
     [emscripten*|wasi*], [
@@ -902,7 +904,6 @@ AS_IF([test "$GCC" = yes], [
     ], [
 	RUBY_TRY_LDFLAGS([-Wl,-unexported_symbol,_Init_*], [visibility_option=ld], [visibility_option=no])
     ])
-    test "$visibility_option" = no || OBJCOPY=:
 ])
 
 AS_IF([test "$GCC" = yes], [
@@ -1239,7 +1240,7 @@ main()
 		AS_CASE(["$target_cpu"], [powerpc64*], [
 			ac_cv_func___builtin_setjmp=no
 		])
-		# With gcc-8's -fcf-protection, MJIT's __builtin_longjmp fails.
+		# With gcc-8's -fcf-protection, RJIT's __builtin_longjmp fails.
 		AS_CASE(["$CC $CFLAGS "], [*" -fcf-protection "*], [cf_protection=yes], [cf_protection=no])
 		AS_IF([test "$cf_protection" = yes], [
 			ac_cv_func___builtin_setjmp=no
@@ -1486,10 +1487,9 @@ AC_CACHE_CHECK(packed struct attribute, rb_cv_packed_struct,
 		[rb_cv_packed_struct=$mac; break])
     done])
 AS_IF([test "$rb_cv_packed_struct" != no], [
-    AC_DEFINE_UNQUOTED([PACKED_STRUCT(x)], [$rb_cv_packed_struct])
+    AC_DEFINE_UNQUOTED([RBIMPL_ATTR_PACKED_STRUCT_BEGIN()], [`echo " $rb_cv_packed_struct " | sed 's/ x .*//;s/^ *//'`])
+    AC_DEFINE_UNQUOTED([RBIMPL_ATTR_PACKED_STRUCT_END()], [`echo " $rb_cv_packed_struct " | sed 's/.* x //;s/ *$//'`])
     RUBY_TRY_CFLAGS(-Wno-address-of-packed-member, [AC_DEFINE(USE_UNALIGNED_MEMBER_ACCESS)])
-], [
-    AC_DEFINE_UNQUOTED([PACKED_STRUCT(x)], x)
 ])
 
 AS_IF([test "x$ac_cv_type_long_long" = xyes], [
@@ -2021,6 +2021,7 @@ AC_CHECK_FUNCS(execv)
 AC_CHECK_FUNCS(execve)
 AC_CHECK_FUNCS(explicit_memset)
 AC_CHECK_FUNCS(fcopyfile)
+AC_CHECK_FUNCS(fchdir)
 AC_CHECK_FUNCS(fchmod)
 AC_CHECK_FUNCS(fchown)
 AC_CHECK_FUNCS(fcntl)
@@ -2625,6 +2626,9 @@ AS_CASE([$coroutine_type], [yes|''], [
         [riscv64-linux*], [
             coroutine_type=riscv64
         ],
+        [loongarch64-linux*], [
+            coroutine_type=loongarch64
+        ],
         [x86_64-freebsd*], [
             coroutine_type=amd64
         ],
@@ -2648,6 +2652,9 @@ AS_CASE([$coroutine_type], [yes|''], [
         ],
         [i386-openbsd*], [
             coroutine_type=x86
+        ],
+        [aarch64-openbsd*], [
+            coroutine_type=arm64
         ],
         [*-openbsd*], [
             coroutine_type=pthread
@@ -2746,6 +2753,22 @@ AS_IF([test "$THREAD_MODEL" = pthread], [
 		AC_DEFINE_UNQUOTED(SET_ANOTHER_THREAD_NAME(thid,name), $set_another_thread_name)
 	    ])
     ])
+
+    AC_CACHE_CHECK([for thread-local storage sepcifier], [rb_cv_tls_specifier],
+        rb_cv_tls_specifier=none
+        RUBY_WERROR_FLAG([
+            for attr in \
+                _Thread_local \
+                __thread \
+                ; do
+                AC_LINK_IFELSE([AC_LANG_PROGRAM([[$attr int conftest;]])],
+                    [rb_cv_tls_specifier=$attr; break])
+            done
+        ])
+    )
+    AS_IF([test x"${rb_cv_tls_specifier}" != xnone],
+        [AC_DEFINE_UNQUOTED(RB_THREAD_LOCAL_SPECIFIER, ${rb_cv_tls_specifier})]
+    )
 ])
 
 AS_IF([test x"$ac_cv_header_ucontext_h" = xno], [
@@ -2923,22 +2946,16 @@ AS_CASE(["$target_os"],
     ])])
 LIBEXT=a
 
-AC_ARG_WITH(mjit-tabs,
-    AS_HELP_STRING([--without-mjit-tabs], [expand tabs in mjit header]),
-    [AS_IF([test $withval = no], [MJIT_TABS=false])])
-AC_SUBST(MJIT_TABS)dnl
 AC_SUBST(DLDFLAGS)dnl
 AC_SUBST(ARCH_FLAG)dnl
-AC_SUBST(MJIT_HEADER_FLAGS)dnl
-AC_SUBST(MJIT_HEADER_INSTALL_DIR)dnl
-AC_SUBST(MJIT_CC)dnl
+AC_SUBST(RJIT_CC)dnl
 AS_CASE(["$GCC:$target_os"],
-    [yes:aix*], [mjit_std_cflag="-std=gnu99"],
-    [mjit_std_cflag=])
-AC_SUBST(MJIT_CFLAGS, [${MJIT_CFLAGS-"-w ${mjit_std_cflag} ${orig_cflags}"}])dnl
-AC_SUBST(MJIT_OPTFLAGS, [${MJIT_OPTFLAGS-'$(optflags)'}])dnl
-AC_SUBST(MJIT_DEBUGFLAGS, [${MJIT_DEBUGFLAGS-'$(debugflags)'}])dnl
-AC_SUBST(MJIT_LDSHARED)dnl
+    [yes:aix*], [rjit_std_cflag="-std=gnu99"],
+    [rjit_std_cflag=])
+AC_SUBST(RJIT_CFLAGS, [${RJIT_CFLAGS-"-w ${rjit_std_cflag} ${orig_cflags}"}])dnl
+AC_SUBST(RJIT_OPTFLAGS, [${RJIT_OPTFLAGS-'$(optflags)'}])dnl
+AC_SUBST(RJIT_DEBUGFLAGS, [${RJIT_DEBUGFLAGS-'$(debugflags)'}])dnl
+AC_SUBST(RJIT_LDSHARED)dnl
 
 AC_SUBST(STATIC)dnl
 AC_SUBST(CCDLFLAGS)dnl
@@ -3405,9 +3422,6 @@ AC_ARG_ENABLE(multiarch,
 	      [multiarch=], [unset multiarch])
 AS_IF([test ${multiarch+set}], [
    AC_DEFINE(ENABLE_MULTIARCH)
-   MJIT_HEADER_INSTALL_DIR=include/'${arch}/${RUBY_VERSION_NAME}'
-], [
-   MJIT_HEADER_INSTALL_DIR=include/'${RUBY_VERSION_NAME}/${arch}'
 ])
 
 archlibdir='${libdir}/${arch}'
@@ -3735,20 +3749,6 @@ AC_SUBST(CAPITARGET)
 AS_CASE(["$RDOCTARGET:$CAPITARGET"],[nodoc:nodoc],[INSTALLDOC=nodoc],[INSTALLDOC=all])
 AC_SUBST(INSTALLDOC)
 
-AC_ARG_ENABLE(jit-support,
-    AS_HELP_STRING([--disable-jit-support], [disable JIT features]),
-    [MJIT_SUPPORT=$enableval],
-    [AS_CASE(["$target_os"],
-        [wasi | mingw* | solaris*], [MJIT_SUPPORT=no],
-        [MJIT_SUPPORT=yes]
-    )])
-
-AS_IF([test x"$MJIT_SUPPORT" = "xyes"],
-	[AC_DEFINE(USE_MJIT, 1)],
-	[AC_DEFINE(USE_MJIT, 0)])
-
-AC_SUBST(MJIT_SUPPORT)
-
 AC_CHECK_PROG(RUSTC, [rustc], [rustc], [no]) dnl no ac_tool_prefix
 
 dnl check if rustc is recent enough to build YJIT (rustc >= 1.58.0)
@@ -3794,8 +3794,8 @@ AC_ARG_ENABLE(yjit,
     AS_HELP_STRING([--enable-yjit],
     [enable in-process JIT compiler that requires Rust build tools. enabled by default on supported platforms if rustc 1.58.0+ is available]),
     [YJIT_SUPPORT=$enableval],
-    [AS_CASE(["$enable_jit_support:$YJIT_TARGET_OK:$YJIT_RUSTC_OK"],
-        [yes:yes:yes|:yes:yes], [
+    [AS_CASE(["$YJIT_TARGET_OK:$YJIT_RUSTC_OK"],
+        [yes:yes], [
             YJIT_SUPPORT=yes
         ],
         [YJIT_SUPPORT=no]
@@ -3807,9 +3807,6 @@ CARGO_BUILD_ARGS=
 YJIT_LIBS=
 AS_CASE(["${YJIT_SUPPORT}"],
 [yes|dev|stats|dev_nodebug], [
-    AS_IF([test x"$enable_jit_support" = "xno"],
-        AC_MSG_ERROR([--disable-jit-support but --enable-yjit. YJIT requires JIT support])
-    )
     AS_IF([test x"$RUSTC" = "xno"],
         AC_MSG_ERROR([rustc is required. Installation instructions available at https://www.rust-lang.org/tools/install])
     )
@@ -3826,6 +3823,7 @@ AS_CASE(["${YJIT_SUPPORT}"],
     [dev_nodebug], [
 	rb_rust_target_subdir=dev_nodebug
 	CARGO_BUILD_ARGS='--profile dev_nodebug --features stats,disasm'
+	AC_DEFINE(YJIT_STATS, 1)
     ],
     [stats], [
 	rb_rust_target_subdir=stats
@@ -3849,7 +3847,9 @@ AS_CASE(["${YJIT_SUPPORT}"],
         AC_DEFINE_UNQUOTED(YJIT_SUPPORT, [$YJIT_SUPPORT])
     ])
     AC_DEFINE(USE_YJIT, 1)
-], [AC_DEFINE(USE_YJIT, 0)])
+], [
+    AC_DEFINE(USE_YJIT, 0)
+])
 
 dnl These variables end up in ::RbConfig::CONFIG
 AC_SUBST(YJIT_SUPPORT)dnl what flavor of YJIT the Ruby build includes
@@ -3858,6 +3858,58 @@ AC_SUBST(CARGO)dnl Cargo command for Rust builds
 AC_SUBST(CARGO_BUILD_ARGS)dnl for selecting Rust build profiles
 AC_SUBST(YJIT_LIBS)dnl for optionally building the Rust parts of YJIT
 AC_SUBST(YJIT_OBJ)dnl for optionally building the C parts of YJIT
+
+dnl Currently, RJIT only supports Unix x86_64 platforms.
+RJIT_TARGET_OK=no
+AS_IF([test "$cross_compiling" = no],
+    AS_CASE(["$target_cpu-$target_os"],
+        [*android*], [
+            RJIT_TARGET_OK=no
+        ],
+        [x86_64-darwin*], [
+            RJIT_TARGET_OK=yes
+        ],
+        [x86_64-*linux*], [
+            RJIT_TARGET_OK=yes
+        ],
+        [x86_64-*bsd*], [
+            RJIT_TARGET_OK=yes
+        ]
+    )
+)
+
+dnl Build RJIT on Unix x86_64 platforms or if --enable-rjit is specified.
+AC_ARG_ENABLE(rjit,
+    AS_HELP_STRING([--enable-rjit],
+    [enable pure-Ruby JIT compiler. enabled by default on Unix x86_64 platforms]),
+    [RJIT_SUPPORT=$enableval],
+    [AS_CASE(["$YJIT_TARGET_OK"],
+        [yes], [RJIT_SUPPORT=yes],
+        [RJIT_SUPPORT=no]
+    )]
+)
+
+AS_CASE(["$RJIT_SUPPORT"],
+[yes|dev|disasm], [
+    AS_CASE(["$RJIT_SUPPORT"],
+    [dev], [
+        # Link libcapstone for --rjit-dump-disasm
+        AC_CHECK_LIB([capstone], [cs_disasm])
+
+        # Enable extra stats (vm_insns_count, ratio_in_rjit)
+        AC_DEFINE(RJIT_STATS, 1)
+    ],
+    [disasm], [
+        # Link libcapstone for --rjit-dump-disasm
+        AC_CHECK_LIB([capstone], [cs_disasm])
+    ])
+
+    AC_DEFINE(USE_RJIT, 1)
+], [
+    AC_DEFINE(USE_RJIT, 0)
+])
+
+AC_SUBST(RJIT_SUPPORT)
 
 AC_ARG_ENABLE(install-static-library,
 	AS_HELP_STRING([--disable-install-static-library], [do not install static ruby library]),
@@ -4058,7 +4110,7 @@ AS_IF([test "${universal_binary-no}" = yes ], [
 		[rb_cv_architecture_available=yes], [rb_cv_architecture_available=no]))
 ])
 
-: ${MJIT_LDSHARED=`echo "$LDSHARED" | sed ['s|\$(LD)|'"${LD}"'|g;s|\$(CC)|$(MJIT_CC)|g']`}
+: ${RJIT_LDSHARED=`echo "$LDSHARED" | sed ['s|\$(LD)|'"${LD}"'|g;s|\$(CC)|$(RJIT_CC)|g']`}
 
 MAINLIBS="$LIBS"
 LIBS=$ORIG_LIBS
@@ -4545,8 +4597,8 @@ config_summary "debugflags"          "$debugflags"
 config_summary "warnflags"           "$warnflags"
 config_summary "strip command"       "$STRIP"
 config_summary "install doc"         "$DOCTARGETS"
-config_summary "MJIT support"        "$MJIT_SUPPORT"
 config_summary "YJIT support"        "$YJIT_SUPPORT"
+config_summary "RJIT support"        "$RJIT_SUPPORT"
 config_summary "man page type"       "$MANTYPE"
 config_summary "search path"         "$search_path"
 config_summary "static-linked-ext"   ${EXTSTATIC:+"yes"}

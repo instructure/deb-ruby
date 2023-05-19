@@ -176,8 +176,8 @@ static rb_ast_t *
 prelude_ast(VALUE name, VALUE code, int line)
 {
     rb_ast_t *ast = rb_parser_compile_string_path(rb_parser_new(), name, code, line);
-    if (!ast->body.root) {
-        rb_ast_dispose(ast);
+    if (!ast || !ast->body.root) {
+        if (ast) rb_ast_dispose(ast);
         rb_exc_raise(rb_errinfo());
     }
     return ast;

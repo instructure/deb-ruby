@@ -523,7 +523,7 @@ hash_each(VALUE key, VALUE value, VALUE v)
 
 #define SINGLETON_DUMP_UNABLE_P(klass) \
     (rb_id_table_size(RCLASS_M_TBL(klass)) > 0 || \
-     rb_ivar_count(klass) > 1)
+     rb_ivar_count(klass) > 0)
 
 static void
 w_extended(VALUE klass, struct dump_arg *arg, int check)
@@ -1878,6 +1878,7 @@ r_object_for(struct load_arg *arg, bool partial, int *ivp, VALUE extmod, int typ
                     rb_extend_object(v, m);
                 }
             }
+            v = r_leave(v, arg, partial);
         }
         break;
 
@@ -2154,7 +2155,12 @@ r_object_for(struct load_arg *arg, bool partial, int *ivp, VALUE extmod, int typ
                 marshal_compat_t *compat = (marshal_compat_t*)d;
                 v = compat->loader(klass, v);
             }
-            if (!partial) v = r_post_proc(v, arg);
+            if (!partial) {
+                if (arg->freeze) {
+                    OBJ_FREEZE(v);
+                }
+                v = r_post_proc(v, arg);
+            }
         }
         break;
 
@@ -2179,6 +2185,9 @@ r_object_for(struct load_arg *arg, bool partial, int *ivp, VALUE extmod, int typ
             load_funcall(arg, v, s_mload, 1, &data);
             v = r_fixup_compat(v, arg);
             v = r_copy_ivar(v, data);
+            if (arg->freeze) {
+                OBJ_FREEZE(v);
+            }
             v = r_post_proc(v, arg);
             if (!NIL_P(extmod)) {
                 if (oldclass) append_extmod(v, extmod);

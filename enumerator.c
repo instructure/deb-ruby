@@ -73,7 +73,7 @@
  *   puts %w[foo bar baz].map.with_index { |w, i| "#{i}:#{w}" }
  *   # => ["0:foo", "1:bar", "2:baz"]
  *
- *  == External Iteration
+ * == External Iteration
  *
  * An Enumerator can also be used as an external iterator.
  * For example, Enumerator#next returns the next value of the iterator
@@ -93,18 +93,19 @@
  *
  * External iteration differs *significantly* from internal iteration
  * due to using a Fiber:
- *  - The Fiber adds some overhead compared to internal enumeration.
- *  - The stacktrace will only include the stack from the Enumerator, not above.
- *  - Fiber-local variables are *not* inherited inside the Enumerator Fiber,
- *    which instead starts with no Fiber-local variables.
- *  - Fiber storage variables *are* inherited and are designed
- *    to handle Enumerator Fibers. Assigning to a Fiber storage variable
- *    only affects the current Fiber, so if you want to change state
- *    in the caller Fiber of the Enumerator Fiber, you need to use an
- *    extra indirection (e.g., use some object in the Fiber storage
- *    variable and mutate some ivar of it).
+ * - The Fiber adds some overhead compared to internal enumeration.
+ * - The stacktrace will only include the stack from the Enumerator, not above.
+ * - Fiber-local variables are *not* inherited inside the Enumerator Fiber,
+ *   which instead starts with no Fiber-local variables.
+ * - Fiber storage variables *are* inherited and are designed
+ *   to handle Enumerator Fibers. Assigning to a Fiber storage variable
+ *   only affects the current Fiber, so if you want to change state
+ *   in the caller Fiber of the Enumerator Fiber, you need to use an
+ *   extra indirection (e.g., use some object in the Fiber storage
+ *   variable and mutate some ivar of it).
  *
  * Concretely:
+ *
  *   Thread.current[:fiber_local] = 1
  *   Fiber[:storage_var] = 1
  *   e = Enumerator.new do |y|
@@ -120,7 +121,7 @@
  *   e.each { p _1 }
  *   p Fiber[:storage_var] # => 2 (it ran in the same Fiber/"stack" as the current Fiber)
  *
- *  == Convert External Iteration to Internal Iteration
+ * == Convert External Iteration to Internal Iteration
  *
  * You can use an external iterator to implement an internal iterator as follows:
  *
@@ -187,6 +188,18 @@ struct enumerator {
     int kw_splat;
 };
 
+RUBY_REFERENCES_START(enumerator_refs)
+    REF_EDGE(enumerator, obj),
+    REF_EDGE(enumerator, args),
+    REF_EDGE(enumerator, fib),
+    REF_EDGE(enumerator, dst),
+    REF_EDGE(enumerator, lookahead),
+    REF_EDGE(enumerator, feedvalue),
+    REF_EDGE(enumerator, stop_exc),
+    REF_EDGE(enumerator, size),
+    REF_EDGE(enumerator, procs),
+RUBY_REFERENCES_END
+
 static VALUE rb_cGenerator, rb_cYielder, rb_cEnumProducer;
 
 struct generator {
@@ -236,39 +249,6 @@ struct enum_product {
 
 VALUE rb_cArithSeq;
 
-/*
- * Enumerator
- */
-static void
-enumerator_mark(void *p)
-{
-    struct enumerator *ptr = p;
-    rb_gc_mark_movable(ptr->obj);
-    rb_gc_mark_movable(ptr->args);
-    rb_gc_mark_movable(ptr->fib);
-    rb_gc_mark_movable(ptr->dst);
-    rb_gc_mark_movable(ptr->lookahead);
-    rb_gc_mark_movable(ptr->feedvalue);
-    rb_gc_mark_movable(ptr->stop_exc);
-    rb_gc_mark_movable(ptr->size);
-    rb_gc_mark_movable(ptr->procs);
-}
-
-static void
-enumerator_compact(void *p)
-{
-    struct enumerator *ptr = p;
-    ptr->obj = rb_gc_location(ptr->obj);
-    ptr->args = rb_gc_location(ptr->args);
-    ptr->fib = rb_gc_location(ptr->fib);
-    ptr->dst = rb_gc_location(ptr->dst);
-    ptr->lookahead = rb_gc_location(ptr->lookahead);
-    ptr->feedvalue = rb_gc_location(ptr->feedvalue);
-    ptr->stop_exc = rb_gc_location(ptr->stop_exc);
-    ptr->size = rb_gc_location(ptr->size);
-    ptr->procs = rb_gc_location(ptr->procs);
-}
-
 #define enumerator_free RUBY_TYPED_DEFAULT_FREE
 
 static size_t
@@ -280,12 +260,12 @@ enumerator_memsize(const void *p)
 static const rb_data_type_t enumerator_data_type = {
     "enumerator",
     {
-        enumerator_mark,
+        REFS_LIST_PTR(enumerator_refs),
         enumerator_free,
         enumerator_memsize,
-        enumerator_compact,
+        NULL,
     },
-    0, 0, RUBY_TYPED_FREE_IMMEDIATELY
+    0, NULL, RUBY_TYPED_FREE_IMMEDIATELY | RUBY_TYPED_DECL_MARKING
 };
 
 static struct enumerator *
