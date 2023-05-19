@@ -1,3 +1,9 @@
+ruby3.3 (3.3.0~preview1-1ppa5) focal; urgency=medium
+
+  * Don't bump dependencies that didn't change
+
+ -- Jacob Burroughs <maths22@gmail.com>  Fri, 19 May 2023 14:24:46 -0500
+
 ruby3.3 (3.3.0~preview1-1ppa4) focal; urgency=medium
 
   * Fix symbols and genprovides
