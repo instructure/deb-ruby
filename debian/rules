@@ -151,7 +151,7 @@ override_dh_auto_install-arch:
 	$(RM) -r $(CURDIR)/debian/tmp/usr/lib/ruby/$(RUBY_API_VERSION)/rubygems/ssl_certs/*
 	$(RM) -r $(CURDIR)/debian/tmp/usr/lib/ruby/$(RUBY_API_VERSION)/bundler/ssl_certs/*
 	# remove extension build directories
-	$(RM) -r $(CURDIR)/debian/tmp/usr/lib/ruby/gems/$(RUBY_API_VERSION)/gems/*/ext/
+	$(RM) -r $(CURDIR)/debian/tmp/usr/lib/ruby/gems/$(RUBY_API_VERSION)*/gems/*/ext/
 	# ship rubygems system install directory
 	mkdir -p $(CURDIR)/debian/tmp/var/lib/gems/$(RUBY_API_VERSION)
 	# fix pkg-config
@@ -173,11 +173,11 @@ override_dh_install-arch:
 	mkdir -p $(CURDIR)/debian/tmp/usr/share/systemtap/tapset
 	sed 's|@LIBRARY_PATH@|/usr/lib/$(DEB_HOST_MULTIARCH)/libruby-$(RUBY_VERSION).so|g' $(CURDIR)/debian/libruby.stp > $(CURDIR)/debian/tmp/usr/share/systemtap/tapset/libruby$(RUBY_VERSION)-$(DEB_HOST_MULTIARCH).stp
 	dh_install
-	find $(CURDIR)/debian/libruby$(RUBY_VERSION)/usr/lib/ruby/gems/$(RUBY_API_VERSION)/gems/ \
+	find $(CURDIR)/debian/libruby$(RUBY_VERSION)/usr/lib/ruby/gems/$(RUBY_API_VERSION)*/gems/ \
 		'(' -name \*.so -or -name \*.o ')' \
 		-delete
 
 override_dh_gencontrol:
-	./debian/genprovides $(CURDIR)/debian/libruby$(RUBY_VERSION)/usr/lib/ruby/gems/$(RUBY_API_VERSION)/specifications/ \
+	./debian/genprovides $(CURDIR)/debian/libruby$(RUBY_VERSION)/usr/lib/ruby/gems/$(RUBY_API_VERSION)*/specifications/ \
 		>> debian/libruby$(RUBY_VERSION).substvars
 	dh_gencontrol

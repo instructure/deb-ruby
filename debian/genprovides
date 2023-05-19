@@ -8,4 +8,4 @@ find "$@" -name \*.gemspec \
 	| xargs -n 1 basename \
 	| sort \
 	| grep -v 'bundler\|rake\|ruby2_keywords' \
-	| sed -e 's/_/-/g; s/\(.*\)-\([0-9.]\+\)\.gemspec/ruby-\1 (= \2), /' | xargs echo
+	| sed -e 's/_/-/g; s/\(.*\)-\([0-9.a-z]\+\)\.gemspec/ruby-\1 (= \2), /' | xargs echo
