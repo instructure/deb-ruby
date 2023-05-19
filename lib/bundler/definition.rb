@@ -652,8 +652,8 @@ module Bundler
 
       Bundler.settings.local_overrides.map do |k, v|
         spec   = @dependencies.find {|s| s.name == k }
-        source = spec && spec.source
-        if source && source.respond_to?(:local_override!)
+        source = spec&.source
+        if source&.respond_to?(:local_override!)
           source.unlock! if @unlock[:gems].include?(spec.name)
           locals << [source, source.local_override!(v)]
         end
@@ -668,8 +668,16 @@ module Bundler
     def check_missing_lockfile_specs
       all_locked_specs = @locked_specs.map(&:name) << "bundler"
 
-      @locked_specs.any? do |s|
+      missing = @locked_specs.select do |s|
         s.dependencies.any? {|dep| !all_locked_specs.include?(dep.name) }
+      end
+
+      if missing.any?
+        @locked_specs.delete(missing)
+
+        true
+      else
+        false
       end
     end
 
@@ -785,7 +793,7 @@ module Bundler
         dep = @dependencies.find {|d| s.satisfies?(d) }
 
         # Replace the locked dependency's source with the equivalent source from the Gemfile
-        s.source = if dep && dep.source
+        s.source = if dep&.source
           gemfile_source = dep.source
           lockfile_source = s.source
 

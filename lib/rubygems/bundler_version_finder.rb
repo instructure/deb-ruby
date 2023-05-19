@@ -47,7 +47,7 @@ module Gem::BundlerVersionFinder
 
   def self.lockfile_contents
     gemfile = ENV["BUNDLE_GEMFILE"]
-    gemfile = nil if gemfile && gemfile.empty?
+    gemfile = nil if gemfile&.empty?
 
     unless gemfile
       begin
@@ -65,8 +65,8 @@ module Gem::BundlerVersionFinder
     return unless gemfile
 
     lockfile = case gemfile
-    when "gems.rb" then "gems.locked"
-    else "#{gemfile}.lock"
+               when "gems.rb" then "gems.locked"
+               else "#{gemfile}.lock"
     end.dup.tap(&Gem::UNTAINT)
 
     return unless File.file?(lockfile)

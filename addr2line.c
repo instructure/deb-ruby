@@ -840,7 +840,11 @@ enum
     DW_FORM_addrx1 = 0x29,
     DW_FORM_addrx2 = 0x2a,
     DW_FORM_addrx3 = 0x2b,
-    DW_FORM_addrx4 = 0x2c
+    DW_FORM_addrx4 = 0x2c,
+
+    /* GNU extensions for referring to .gnu_debugaltlink dwz-compressed info */
+    DW_FORM_GNU_ref_alt = 0x1f20,
+    DW_FORM_GNU_strp_alt = 0x1f21
 };
 
 /* Range list entry encodings */
@@ -1315,6 +1319,14 @@ debug_info_reader_read_value(DebugInfoReader *reader, uint64_t form, DebugInfoVa
       case DW_FORM_addrx4:
         set_addr_idx_value(v, read_uint32(&reader->p));
         break;
+      /* we have no support for actually reading the real values of these refs out
+       * of the .gnu_debugaltlink dwz-compressed debuginfo at the moment, but "read"
+       * them anyway so that we advance the reader by the right amount. */
+      case DW_FORM_GNU_ref_alt:
+      case DW_FORM_GNU_strp_alt:
+        read_uint(reader);
+        set_uint_value(v, 0);
+        break;
       case 0:
         goto fail;
         break;
@@ -1725,10 +1737,6 @@ di_read_cu(DebugInfoReader *reader)
     di_read_debug_abbrev_cu(reader);
     if (di_read_debug_line_cu(reader)) return -1;
 
-#if defined(__GNUC__) && !defined(__clang__) && !defined(__INTEL_COMPILER_BUILD_DATE)
-    /* Though DWARF specifies "the applicable base address defaults to the base
-       address of the compilation unit", but GCC seems to use zero as default */
-#else
     do {
         DIE die;
 
@@ -1772,14 +1780,14 @@ di_read_cu(DebugInfoReader *reader)
                 break;
             case VAL_addr:
                 {
-                    addr_header_t header;
+                    addr_header_t header = {};
                     addr_header_init(reader->obj, &header);
                     reader->current_low_pc = read_addr(&header, reader->current_addr_base, low_pc.as.addr_idx);
                 }
                 break;
         }
     } while (0);
-#endif
+
     return 0;
 }
 

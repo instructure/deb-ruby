@@ -311,7 +311,7 @@ class TestGCCompact < Test::Unit::TestCase
   def test_moving_arrays_down_size_pools
     omit if GC::INTERNAL_CONSTANTS[:SIZE_POOL_COUNT] == 1
 
-    assert_separately([], "#{<<~"begin;"}\n#{<<~"end;"}", timeout: 10, signal: :SEGV)
+    assert_separately(%w[-robjspace], "#{<<~"begin;"}\n#{<<~"end;"}", timeout: 10, signal: :SEGV)
     begin;
       ARY_COUNT = 500
 
@@ -323,15 +323,15 @@ class TestGCCompact < Test::Unit::TestCase
       end
 
       stats = GC.verify_compaction_references(expand_heap: true, toward: :empty)
-      assert_operator(stats.dig(:moved_down, :T_ARRAY), :>=, ARY_COUNT)
-      assert(arys) # warning: assigned but unused variable - arys
+      assert_operator(stats.dig(:moved_down, :T_ARRAY) || 0, :>=, ARY_COUNT)
+      assert_include(ObjectSpace.dump(arys[0]), '"embedded":true')
     end;
   end
 
   def test_moving_arrays_up_size_pools
     omit if GC::INTERNAL_CONSTANTS[:SIZE_POOL_COUNT] == 1
 
-    assert_separately([], "#{<<~"begin;"}\n#{<<~"end;"}", timeout: 10, signal: :SEGV)
+    assert_separately(%w[-robjspace], "#{<<~"begin;"}\n#{<<~"end;"}", timeout: 10, signal: :SEGV)
     begin;
       ARY_COUNT = 500
 
@@ -345,15 +345,15 @@ class TestGCCompact < Test::Unit::TestCase
       end
 
       stats = GC.verify_compaction_references(expand_heap: true, toward: :empty)
-      assert_operator(stats.dig(:moved_up, :T_ARRAY), :>=, ARY_COUNT)
-      assert(arys) # warning: assigned but unused variable - arys
+      assert_operator(stats.dig(:moved_up, :T_ARRAY) || 0, :>=, ARY_COUNT)
+      assert_include(ObjectSpace.dump(arys[0]), '"embedded":true')
     end;
   end
 
   def test_moving_objects_between_size_pools
     omit if GC::INTERNAL_CONSTANTS[:SIZE_POOL_COUNT] == 1
 
-    assert_separately([], "#{<<~"begin;"}\n#{<<~"end;"}", timeout: 10, signal: :SEGV)
+    assert_separately(%w[-robjspace], "#{<<~"begin;"}\n#{<<~"end;"}", timeout: 10, signal: :SEGV)
     begin;
       class Foo
         def add_ivars
@@ -375,7 +375,8 @@ class TestGCCompact < Test::Unit::TestCase
 
       stats = GC.verify_compaction_references(expand_heap: true, toward: :empty)
 
-      assert_operator(stats[:moved_up][:T_OBJECT], :>=, OBJ_COUNT)
+      assert_operator(stats.dig(:moved_up, :T_OBJECT) || 0, :>=, OBJ_COUNT)
+      assert_include(ObjectSpace.dump(ary[0]), '"embedded":true')
     end;
   end
 

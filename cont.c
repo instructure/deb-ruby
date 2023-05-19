@@ -26,15 +26,15 @@ extern int madvise(caddr_t, size_t, int);
 #include COROUTINE_H
 
 #include "eval_intern.h"
-#include "gc.h"
 #include "internal.h"
 #include "internal/cont.h"
 #include "internal/error.h"
+#include "internal/gc.h"
 #include "internal/proc.h"
 #include "internal/sanitizers.h"
 #include "internal/warnings.h"
 #include "ruby/fiber/scheduler.h"
-#include "mjit.h"
+#include "rjit.h"
 #include "yjit.h"
 #include "vm_core.h"
 #include "vm_sync.h"
@@ -70,7 +70,7 @@ static VALUE rb_cFiberPool;
 #define FIBER_POOL_ALLOCATION_FREE
 #endif
 
-#define jit_cont_enabled (mjit_enabled || rb_yjit_enabled_p())
+#define jit_cont_enabled (rb_rjit_enabled || rb_yjit_enabled_p())
 
 enum context_type {
     CONTINUATION_CONTEXT = 0,
@@ -1255,6 +1255,8 @@ jit_cont_new(rb_execution_context_t *ec)
 static void
 jit_cont_free(struct rb_jit_cont *cont)
 {
+    if (!cont) return;
+
     rb_native_mutex_lock(&jit_cont_lock);
     if (cont == first_jit_cont) {
         first_jit_cont = cont->next;
@@ -2059,10 +2061,10 @@ fiber_storage_set(struct rb_fiber_struct *fiber, VALUE storage)
 }
 
 static inline VALUE
-fiber_storage_get(rb_fiber_t *fiber)
+fiber_storage_get(rb_fiber_t *fiber, int allocate)
 {
     VALUE storage = fiber->cont.saved_ec.storage;
-    if (storage == Qnil) {
+    if (storage == Qnil && allocate) {
         storage = rb_hash_new();
         fiber_storage_set(fiber, storage);
     }
@@ -2089,7 +2091,15 @@ static VALUE
 rb_fiber_storage_get(VALUE self)
 {
     storage_access_must_be_from_same_fiber(self);
-    return rb_obj_dup(fiber_storage_get(fiber_ptr(self)));
+
+    VALUE storage = fiber_storage_get(fiber_ptr(self), FALSE);
+
+    if (storage == Qnil) {
+        return Qnil;
+    }
+    else {
+        return rb_obj_dup(storage);
+    }
 }
 
 static int
@@ -2170,8 +2180,7 @@ rb_fiber_storage_aref(VALUE class, VALUE key)
     ID id = rb_check_id(&key);
     if (!id) return Qnil;
 
-    VALUE storage = fiber_storage_get(fiber_current());
-
+    VALUE storage = fiber_storage_get(fiber_current(), FALSE);
     if (storage == Qnil) return Qnil;
 
     return rb_hash_aref(storage, key);
@@ -2193,9 +2202,15 @@ rb_fiber_storage_aset(VALUE class, VALUE key, VALUE value)
     ID id = rb_check_id(&key);
     if (!id) return Qnil;
 
-    VALUE storage = fiber_storage_get(fiber_current());
+    VALUE storage = fiber_storage_get(fiber_current(), value != Qnil);
+    if (storage == Qnil) return Qnil;
 
-    return rb_hash_aset(storage, key, value);
+    if (value == Qnil) {
+        return rb_hash_delete(storage, key);
+    }
+    else {
+        return rb_hash_aset(storage, key, value);
+    }
 }
 
 static VALUE
@@ -2534,7 +2549,7 @@ rb_threadptr_root_fiber_setup(rb_thread_t *th)
     fiber->blocking = 1;
     fiber_status_set(fiber, FIBER_RESUMED); /* skip CREATED */
     th->ec = &fiber->cont.saved_ec;
-    // When rb_threadptr_root_fiber_setup is called for the first time, mjit_enabled and
+    // When rb_threadptr_root_fiber_setup is called for the first time, rb_rjit_enabled and
     // rb_yjit_enabled_p() are still false. So this does nothing and rb_jit_cont_init() that is
     // called later will take care of it. However, you still have to call cont_init_jit_cont()
     // here for other Ractors, which are not initialized by rb_jit_cont_init().
@@ -2799,7 +2814,8 @@ rb_fiber_blocking(VALUE class)
     // If we are already blocking, this is essentially a no-op:
     if (fiber->blocking) {
         return rb_yield(fiber_value);
-    } else {
+    }
+    else {
         return rb_ensure(fiber_blocking_yield, fiber_value, fiber_blocking_ensure, fiber_value);
     }
 }

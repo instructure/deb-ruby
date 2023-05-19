@@ -165,14 +165,16 @@ class TestCoverage < Test::Unit::TestCase
   end
 
   def test_eval_coverage
-    assert_in_out_err(%w[-rcoverage], <<-"end;", ["[1, nil, 1, nil]"], [])
+    assert_in_out_err(%w[-rcoverage], <<-"end;", ["[1, 1, 1, nil, 0, nil]"], [])
       Coverage.start(eval: true, lines: true)
 
       eval(<<-RUBY, TOPLEVEL_BINDING, "test.rb")
-      s = String.new
-      begin
-      s << "foo
-      bar".freeze; end
+      _out = String.new
+      if _out.empty?
+        _out << 'Hello World'
+      else
+        _out << 'Goodbye World'
+      end
       RUBY
 
       p Coverage.result["test.rb"][:lines]
@@ -181,6 +183,7 @@ class TestCoverage < Test::Unit::TestCase
 
   def test_coverage_supported
     assert Coverage.supported?(:lines)
+    assert Coverage.supported?(:oneshot_lines)
     assert Coverage.supported?(:branches)
     assert Coverage.supported?(:methods)
     assert Coverage.supported?(:eval)

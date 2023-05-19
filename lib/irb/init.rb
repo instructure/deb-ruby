@@ -1,13 +1,7 @@
 # frozen_string_literal: false
 #
 #   irb/init.rb - irb initialize module
-#   	$Release Version: 0.9.6$
-#   	$Revision$
 #   	by Keiju ISHITSUKA(keiju@ruby-lang.org)
-#
-# --
-#
-#
 #
 
 module IRB # :nodoc:
@@ -407,9 +401,9 @@ module IRB # :nodoc:
     end
     if home = ENV["HOME"]
       yield proc{|rc| home+"/.irb#{rc}"}
+      yield proc{|rc| home+"/.config/irb/irb#{rc}"}
     end
     current_dir = Dir.pwd
-    yield proc{|rc| current_dir+"/.config/irb/irb#{rc}"}
     yield proc{|rc| current_dir+"/.irb#{rc}"}
     yield proc{|rc| current_dir+"/irb#{rc.sub(/\A_?/, '.')}"}
     yield proc{|rc| current_dir+"/_irb#{rc}"}
@@ -427,8 +421,6 @@ module IRB # :nodoc:
     end
   end
 
-
-  DefaultEncodings = Struct.new(:external, :internal)
   class << IRB
     private
     def set_encoding(extern, intern = nil, override: true)

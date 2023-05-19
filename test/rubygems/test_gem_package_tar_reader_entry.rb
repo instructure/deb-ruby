@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+
 require_relative "package/tar_test_case"
 require "rubygems/package"
 
@@ -23,11 +24,11 @@ class TestGemPackageTarReaderEntry < Gem::Package::TarTestCase
   def test_open
     io = TempIO.new @tar
     header = Gem::Package::TarHeader.from io
-    retval = Gem::Package::TarReader::Entry.open header, io do |entry|
-      entry.getc
-    end
+    retval = Gem::Package::TarReader::Entry.open header, io, &:getc
     assert_equal "a", retval
     assert_equal @tar.size, io.pos, "should have read to end of entry"
+  ensure
+    io&.close!
   end
 
   def test_open_closes_entry
@@ -39,6 +40,8 @@ class TestGemPackageTarReaderEntry < Gem::Package::TarTestCase
     end
     assert entry.closed?
     assert_raise(IOError) { entry.getc }
+  ensure
+    io&.close!
   end
 
   def test_open_returns_entry
@@ -46,9 +49,11 @@ class TestGemPackageTarReaderEntry < Gem::Package::TarTestCase
     header = Gem::Package::TarHeader.from io
     entry = Gem::Package::TarReader::Entry.open header, io
     refute entry.closed?
-    assert_equal ?a, entry.getc
+    assert_equal "a", entry.getc
     assert_nil entry.close
     assert entry.closed?
+  ensure
+    io&.close!
   end
 
   def test_bytes_read
@@ -112,7 +117,7 @@ class TestGemPackageTarReaderEntry < Gem::Package::TarTestCase
   end
 
   def test_getc
-    assert_equal ?a, @entry.getc
+    assert_equal "a", @entry.getc
   end
 
   def test_directory_eh
@@ -232,12 +237,16 @@ class TestGemPackageTarReaderEntry < Gem::Package::TarTestCase
     zero_entry = util_entry(tar_file_header("foo", "", 0, 0, Time.now))
     expected = StringIO.new("")
     assert_equal expected.read, zero_entry.read
+  ensure
+    close_util_entry(zero_entry) if zero_entry
   end
 
   def test_zero_byte_file_readpartial
     zero_entry = util_entry(tar_file_header("foo", "", 0, 0, Time.now))
     expected = StringIO.new("")
     assert_equal expected.readpartial(0), zero_entry.readpartial(0)
+  ensure
+    close_util_entry(zero_entry) if zero_entry
   end
 
   def test_read_from_gzip_io
