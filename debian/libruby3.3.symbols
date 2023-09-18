@@ -189,7 +189,6 @@ libruby-3.3.so.3.3 libruby3.3 #MINVER#
  rb_ary_concat@Base 3.3.0~preview1
  rb_ary_delete@Base 3.3.0~preview1
  rb_ary_delete_at@Base 3.3.0~preview1
- rb_ary_detransient@Base 3.3.0~preview1
  rb_ary_dup@Base 3.3.0~preview1
  rb_ary_each@Base 3.3.0~preview1
  rb_ary_entry@Base 3.3.0~preview1
@@ -237,7 +236,6 @@ libruby-3.3.so.3.3 libruby3.3 #MINVER#
  rb_ast_new@Base 3.3.0~preview1
  rb_ast_new_local_table@Base 3.3.0~preview1
  rb_ast_newnode@Base 3.3.0~preview1
- rb_ast_node_type_change@Base 3.3.0~preview1
  rb_ast_resize_latest_local_table@Base 3.3.0~preview1
  rb_ast_set_tokens@Base 3.3.0~preview1
  rb_ast_tokens@Base 3.3.0~preview1
@@ -1173,18 +1171,11 @@ libruby-3.3.so.3.3 libruby3.3 #MINVER#
  rb_output_rs@Base 3.3.0~preview1
  rb_p@Base 3.3.0~preview1
  rb_parser_calloc@Base 3.3.0~preview1
- rb_parser_compile_file_path@Base 3.3.0~preview1
- rb_parser_compile_generic@Base 3.3.0~preview1
- rb_parser_compile_string@Base 3.3.0~preview1
- rb_parser_compile_string_path@Base 3.3.0~preview1
  rb_parser_dump_tree@Base 3.3.0~preview1
- rb_parser_encoding@Base 3.3.0~preview1
- rb_parser_end_seen_p@Base 3.3.0~preview1
  rb_parser_fatal@Base 3.3.0~preview1
  rb_parser_free@Base 3.3.0~preview1
  rb_parser_lex_state_name@Base 3.3.0~preview1
  rb_parser_malloc@Base 3.3.0~preview1
- rb_parser_new@Base 3.3.0~preview1
  rb_parser_printf@Base 3.3.0~preview1
  rb_parser_realloc@Base 3.3.0~preview1
  rb_parser_reg_compile@Base 3.3.0~preview1
@@ -1195,8 +1186,6 @@ libruby-3.3.so.3.3 libruby3.3 #MINVER#
  rb_parser_set_location_of_dummy_end@Base 3.3.0~preview1
  rb_parser_set_location_of_heredoc_end@Base 3.3.0~preview1
  rb_parser_set_location_of_none@Base 3.3.0~preview1
- rb_parser_set_options@Base 3.3.0~preview1
- rb_parser_set_yydebug@Base 3.3.0~preview1
  rb_parser_show_bitstack@Base 3.3.0~preview1
  rb_parser_trace_lex_state@Base 3.3.0~preview1
  rb_path2class@Base 3.3.0~preview1
@@ -1622,12 +1611,10 @@ libruby-3.3.so.3.3 libruby3.3 #MINVER#
  rb_yield_values_kw@Base 3.3.0~preview1
  rb_yjit_before_ractor_spawn@Base 3.3.0~preview1
  rb_yjit_bop_redefined@Base 3.3.0~preview1
- rb_yjit_call_threshold@Base 3.3.0~preview1
  rb_yjit_cme_invalidate@Base 3.3.0~preview1
  rb_yjit_code_gc@Base 3.3.0~preview1
  rb_yjit_collect_binding_alloc@Base 3.3.0~preview1
  rb_yjit_collect_binding_set@Base 3.3.0~preview1
- rb_yjit_collect_vm_usage_insn@Base 3.3.0~preview1
  rb_yjit_compile_new_iseqs@Base 3.3.0~preview1
  rb_yjit_constant_ic_update@Base 3.3.0~preview1
  rb_yjit_constant_state_changed@Base 3.3.0~preview1
@@ -1658,7 +1645,6 @@ libruby-3.3.so.3.3 libruby3.3 #MINVER#
  ruby_brace_glob@Base 3.3.0~preview1
  ruby_cleanup@Base 3.3.0~preview1
  ruby_copyright@Base 3.3.0~preview1
- ruby_current_ec@Base 3.3.0~preview1
  ruby_debug_breakpoint@Base 3.3.0~preview1
  ruby_debug_counter_get@Base 3.3.0~preview1
  ruby_debug_counter_reset@Base 3.3.0~preview1
@@ -1690,11 +1676,9 @@ libruby-3.3.so.3.3 libruby3.3 #MINVER#
  ruby_malloc_size_overflow@Base 3.3.0~preview1
  ruby_native_thread_p@Base 3.3.0~preview1
  ruby_node_name@Base 3.3.0~preview1
- ruby_nt_serial@Base 3.3.0~preview1
  ruby_options@Base 3.3.0~preview1
  ruby_patchlevel@Base 3.3.0~preview1
  ruby_platform@Base 3.3.0~preview1
- ruby_posix_signal@Base 3.3.0~preview1
  ruby_process_options@Base 3.3.0~preview1
  ruby_prog_init@Base 3.3.0~preview1
  ruby_release_date@Base 3.3.0~preview1
