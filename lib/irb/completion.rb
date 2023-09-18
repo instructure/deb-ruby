@@ -218,7 +218,7 @@ module IRB
         else
           sym = $1
           candidates = Symbol.all_symbols.collect do |s|
-            ":" + s.id2name.encode(Encoding.default_external)
+            s.inspect
           rescue EncodingError
             # ignore
           end
@@ -233,7 +233,7 @@ module IRB
         if doc_namespace
           candidates.find { |i| i == receiver }
         else
-          candidates.grep(/^#{receiver}/).collect{|e| "::" + e}
+          candidates.grep(/^#{Regexp.quote(receiver)}/).collect{|e| "::" + e}
         end
 
       when /^([A-Z].*)::([^:.]*)$/

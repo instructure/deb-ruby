@@ -62,23 +62,6 @@ module TestIRB
     end
   end
 
-  class CommnadAliasTest < CommandTestCase
-    def test_vars_with_aliases
-      @foo = "foo"
-      $bar = "bar"
-      out, err = execute_lines(
-        "@foo\n",
-        "$bar\n",
-      )
-      assert_empty err
-      assert_match(/"foo"/, out)
-      assert_match(/"bar"/, out)
-    ensure
-      remove_instance_variable(:@foo)
-      $bar = nil
-    end
-  end
-
   class InfoTest < CommandTestCase
     def setup
       super
@@ -228,8 +211,7 @@ module TestIRB
           DEFAULT: {
             PROMPT_I: '> ',
             PROMPT_S: '> ',
-            PROMPT_C: '> ',
-            PROMPT_N: '> '
+            PROMPT_C: '> '
           }
         },
         PROMPT_MODE: :DEFAULT,
@@ -252,14 +234,40 @@ module TestIRB
       assert_empty(c.class_variables)
     end
 
+    def test_measure_keeps_previous_value
+      conf = {
+        PROMPT: {
+          DEFAULT: {
+            PROMPT_I: '> ',
+            PROMPT_S: '> ',
+            PROMPT_C: '> '
+          }
+        },
+        PROMPT_MODE: :DEFAULT,
+        MEASURE: false
+      }
+
+      c = Class.new(Object)
+      out, err = execute_lines(
+        "measure\n",
+        "3\n",
+        "_\n",
+        conf: conf,
+        main: c
+      )
+
+      assert_empty err
+      assert_match(/\ATIME is added\.\n=> nil\nprocessing time: .+\n=> 3\nprocessing time: .+\n=> 3/, out)
+      assert_empty(c.class_variables)
+    end
+
     def test_measure_enabled_by_rc
       conf = {
         PROMPT: {
           DEFAULT: {
             PROMPT_I: '> ',
             PROMPT_S: '> ',
-            PROMPT_C: '> ',
-            PROMPT_N: '> '
+            PROMPT_C: '> '
           }
         },
         PROMPT_MODE: :DEFAULT,
@@ -289,8 +297,7 @@ module TestIRB
           DEFAULT: {
             PROMPT_I: '> ',
             PROMPT_S: '> ',
-            PROMPT_C: '> ',
-            PROMPT_N: '> '
+            PROMPT_C: '> '
           }
         },
         PROMPT_MODE: :DEFAULT,
@@ -320,8 +327,7 @@ module TestIRB
           DEFAULT: {
             PROMPT_I: '> ',
             PROMPT_S: '> ',
-            PROMPT_C: '> ',
-            PROMPT_N: '> '
+            PROMPT_C: '> '
           }
         },
         PROMPT_MODE: :DEFAULT,
@@ -347,8 +353,7 @@ module TestIRB
           DEFAULT: {
             PROMPT_I: '> ',
             PROMPT_S: '> ',
-            PROMPT_C: '> ',
-            PROMPT_N: '> '
+            PROMPT_C: '> '
           }
         },
         PROMPT_MODE: :DEFAULT,
@@ -473,7 +478,6 @@ module TestIRB
     end
 
     def test_show_source_end_finder
-      pend if RUBY_ENGINE == 'truffleruby'
       eval(code = <<-EOS, binding, __FILE__, __LINE__ + 1)
         def show_source_test_method
           unless true
@@ -487,6 +491,45 @@ module TestIRB
 
       assert_empty err
       assert_include(out, code)
+    end
+
+    def test_show_source_private_instance
+      eval(code = <<-EOS, binding, __FILE__, __LINE__ + 1)
+        class PrivateInstanceTest
+          private def show_source_test_method
+            unless true
+            end
+          end unless private_method_defined?(:show_source_test_method)
+        end
+      EOS
+
+      out, err = execute_lines(
+        "show_source '#{self.class.name}::PrivateInstanceTest#show_source_test_method'\n",
+      )
+
+      assert_empty err
+      assert_include(out, code.lines[1..-2].join)
+    end
+
+
+    def test_show_source_private
+      eval(code = <<-EOS, binding, __FILE__, __LINE__ + 1)
+        class PrivateTest
+          private def show_source_test_method
+            unless true
+            end
+          end unless private_method_defined?(:show_source_test_method)
+        end
+
+        Instance = PrivateTest.new unless defined?(Instance)
+      EOS
+
+      out, err = execute_lines(
+        "show_source '#{self.class.name}::Instance.show_source_test_method'\n",
+      )
+
+      assert_empty err
+      assert_include(out, code.lines[1..-4].join)
     end
   end
 
@@ -622,6 +665,16 @@ module TestIRB
 
 
   class ShowCmdsTest < CommandTestCase
+    def setup
+      STDIN.singleton_class.define_method :tty? do
+        false
+      end
+    end
+
+    def teardown
+      STDIN.singleton_class.remove_method :tty?
+    end
+
     def test_show_cmds
       out, err = execute_lines(
         "show_cmds\n"
@@ -634,6 +687,16 @@ module TestIRB
   end
 
   class LsTest < CommandTestCase
+    def setup
+      STDIN.singleton_class.define_method :tty? do
+        false
+      end
+    end
+
+    def teardown
+      STDIN.singleton_class.remove_method :tty?
+    end
+
     def test_ls
       out, err = execute_lines(
         "class P\n",
@@ -783,19 +846,33 @@ module TestIRB
   end
 
   class ShowDocTest < CommandTestCase
-    def test_help_and_show_doc
-      ["help", "show_doc"].each do |cmd|
-        out, err = execute_lines(
-          "#{cmd} String#gsub\n",
-          "\n",
-        )
+    def test_help
+      out, err = execute_lines(
+        "help String#gsub\n",
+        "\n",
+      )
 
-        # the former is what we'd get without document content installed, like on CI
-        # the latter is what we may get locally
-        possible_rdoc_output = [/Nothing known about String#gsub/, /gsub\(pattern\)/]
-        assert_empty err
-        assert(possible_rdoc_output.any? { |output| output.match?(out) }, "Expect the `#{cmd}` command to match one of the possible outputs. Got:\n#{out}")
-      end
+      # the former is what we'd get without document content installed, like on CI
+      # the latter is what we may get locally
+      possible_rdoc_output = [/Nothing known about String#gsub/, /gsub\(pattern\)/]
+      assert_include err, "[Deprecation] The `help` command will be repurposed to display command help in the future.\n"
+      assert(possible_rdoc_output.any? { |output| output.match?(out) }, "Expect the `help` command to match one of the possible outputs. Got:\n#{out}")
+    ensure
+      # this is the only way to reset the redefined method without coupling the test with its implementation
+      EnvUtil.suppress_warning { load "irb/cmd/help.rb" }
+    end
+
+    def test_show_doc
+      out, err = execute_lines(
+        "show_doc String#gsub\n",
+        "\n",
+      )
+
+      # the former is what we'd get without document content installed, like on CI
+      # the latter is what we may get locally
+      possible_rdoc_output = [/Nothing known about String#gsub/, /gsub\(pattern\)/]
+      assert_not_include err, "[Deprecation]"
+      assert(possible_rdoc_output.any? { |output| output.match?(out) }, "Expect the `show_doc` command to match one of the possible outputs. Got:\n#{out}")
     ensure
       # this is the only way to reset the redefined method without coupling the test with its implementation
       EnvUtil.suppress_warning { load "irb/cmd/help.rb" }
@@ -820,12 +897,15 @@ module TestIRB
 
   class EditTest < CommandTestCase
     def setup
+      @original_visual = ENV["VISUAL"]
       @original_editor = ENV["EDITOR"]
       # noop the command so nothing gets executed
-      ENV["EDITOR"] = ": code"
+      ENV["VISUAL"] = ": code"
+      ENV["EDITOR"] = ": code2"
     end
 
     def teardown
+      ENV["VISUAL"] = @original_visual
       ENV["EDITOR"] = @original_editor
     end
 
@@ -887,6 +967,19 @@ module TestIRB
       assert_empty err
       assert_match(/path: .*\/lib\/irb\.rb/, out)
       assert_match("command: ': code'", out)
+    end
+
+    def test_edit_with_editor_env_var
+      ENV.delete("VISUAL")
+
+      out, err = execute_lines(
+        "edit",
+        irb_path: __FILE__
+      )
+
+      assert_empty err
+      assert_match("path: #{__FILE__}", out)
+      assert_match("command: ': code2'", out)
     end
   end
 end

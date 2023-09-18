@@ -271,6 +271,11 @@ In auto-split mode, Ruby executes
 .Dl $F = $_.split
 at beginning of each loop.
 .Pp
+.It Fl -backtrace-limit Ns = Ns Ar num
+Limits the maximum length of backtraces to
+.Ar num
+lines (default -1, meaning no limit).
+.Pp
 .It Fl c
 Causes Ruby to check the syntax of the script and exit without
 executing. If there are no syntax errors, Ruby will print
@@ -388,7 +393,7 @@ before executing script.
 .Pp
 .It Fl y
 .It Fl -yydebug
-DO NOT USE.
+This option is not guaranteed to be compatible.
 .Pp
 Turns on compiler debug mode.  Ruby will print a bunch of internal
 state messages during compilation.  Only specify this switch you are going to
@@ -552,9 +557,9 @@ the following 11 environment variables:
 .It Ev RUBY_GC_HEAP_INIT_SLOTS
 Initial allocation slots. Applies to all slot sizes.  Introduced in Ruby 2.1, default: 10000.
 .Pp
-.It Ev RUBY_GC_HEAP_INIT_SIZE_%d_SLOTS
-Initial allocation of slots in a specific size pool.
-The available size pools can be found in `GC.stat_heap`.
+.It Ev RUBY_GC_HEAP_%d_INIT_SLOTS
+Initial allocation of slots in a specific heap.
+The available heaps can be found in the keys of `GC.stat_heap`.
 Introduced in Ruby 3.3.
 .Pp
 .It Ev RUBY_GC_HEAP_FREE_SLOTS
@@ -667,5 +672,5 @@ Ruby is designed and implemented by
 .An Yukihiro Matsumoto Aq matz@netlab.jp .
 .Pp
 See
-.Aq Lk https://bugs.ruby-lang.org/projects/ruby/wiki/Contributors
+.Aq Lk https://github.com/ruby/ruby/graphs/contributors
 for contributors to Ruby.

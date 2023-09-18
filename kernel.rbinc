@@ -48,6 +48,8 @@ void Init_builtin_kernel(void)
     RB_BUILTIN_FUNCTION(4, _bi3, builtin_inline_class_146, 0),
     RB_BUILTIN_FUNCTION(5, rb_f_float1, rb_f_float1, 1),
     RB_BUILTIN_FUNCTION(6, rb_f_float, rb_f_float, 2),
+    RB_BUILTIN_FUNCTION(7, rb_f_integer1, rb_f_integer1, 1),
+    RB_BUILTIN_FUNCTION(8, rb_f_integer, rb_f_integer, 3),
     RB_BUILTIN_FUNCTION(-1, NULL, NULL, 0),
   };
 
@@ -63,6 +65,8 @@ COMPILER_WARNING_ERROR(-Wincompatible-pointer-types)
   if (0) rb_builtin_function_check_arity0(builtin_inline_class_146);
   if (0) rb_builtin_function_check_arity1(rb_f_float1);
   if (0) rb_builtin_function_check_arity2(rb_f_float);
+  if (0) rb_builtin_function_check_arity1(rb_f_integer1);
+  if (0) rb_builtin_function_check_arity3(rb_f_integer);
 COMPILER_WARNING_POP
 
   // load

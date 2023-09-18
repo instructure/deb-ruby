@@ -33,8 +33,8 @@
 #include "ruby/encoding.h"
 #include "ruby/st.h"
 #include "ruby/util.h"
-#include "transient_heap.h"
 #include "shape.h"
+#include "symbol.h"
 #include "variable.h"
 #include "vm_core.h"
 #include "ractor_core.h"
@@ -132,6 +132,111 @@ rb_mod_name(VALUE mod)
 {
     bool permanent;
     return classname(mod, &permanent);
+}
+
+// Similar to logic in rb_mod_const_get()
+static bool
+is_constant_path(VALUE name)
+{
+    const char *path = RSTRING_PTR(name);
+    const char *pend = RSTRING_END(name);
+    rb_encoding *enc = rb_enc_get(name);
+
+    const char *p = path;
+
+    if (p >= pend || !*p) {
+        return false;
+    }
+
+    while (p < pend) {
+        if (p + 2 <= pend && p[0] == ':' && p[1] == ':') {
+            p += 2;
+        }
+
+        const char *pbeg = p;
+        while (p < pend && *p != ':') p++;
+
+        if (pbeg == p) return false;
+
+        if (rb_enc_symname_type(pbeg, p - pbeg, enc, 0) != ID_CONST) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/*
+ *  call-seq:
+ *     mod.set_temporary_name(string) -> self
+ *     mod.set_temporary_name(nil) -> self
+ *
+ *  Sets the temporary name of the module +mod+. This name is used as a prefix
+ *  for the names of constants declared in +mod+. If the module is assigned a
+ *  permanent name, the temporary name is discarded.
+ *
+ *  After a permanent name is assigned, a temporary name can no longer be set,
+ *  and this method raises a RuntimeError.
+ *
+ *  If the name given is not a string or is a zero length string, this method
+ *  raises an ArgumentError.
+ *
+ *  The temporary name must not be a valid constant name, to avoid confusion
+ *  with actual constants. If you attempt to set a temporary name that is a
+ *  a valid constant name, this method raises an ArgumentError.
+ *
+ *  If the given name is +nil+, the module becomes anonymous.
+ *
+ *  Example:
+ *
+ *    m = Module.new # => #<Module:0x0000000102c68f38>
+ *    m.name #=> nil
+ *
+ *    m.set_temporary_name("fake_name") # => fake_name
+ *    m.name #=> "fake_name"
+ *
+ *    m.set_temporary_name(nil) # => #<Module:0x0000000102c68f38>
+ *    m.name #=> nil
+ *
+ *    n = Module.new
+ *    n.set_temporary_name("fake_name")
+ *
+ *    n::M = m
+ *    n::M.name #=> "fake_name::M"
+ *    N = n
+ *
+ *    N.name #=> "nested_fake_name"
+ *    N::M.name #=> "N::M"
+ */
+
+VALUE
+rb_mod_set_temporary_name(VALUE mod, VALUE name)
+{
+    // We don't allow setting the name if the classpath is already permanent:
+    if (RCLASS_EXT(mod)->permanent_classpath) {
+        rb_raise(rb_eRuntimeError, "can't change permanent name");
+    }
+
+    if (NIL_P(name)) {
+        // Set the temporary classpath to NULL (anonymous):
+        RCLASS_SET_CLASSPATH(mod, 0, FALSE);
+    } else {
+        // Ensure the name is a string:
+        StringValue(name);
+
+        if (RSTRING_LEN(name) == 0) {
+            rb_raise(rb_eArgError, "empty class/module name");
+        }
+
+        if (is_constant_path(name)) {
+            rb_raise(rb_eArgError, "the temporary name must not be a constant path to avoid confusion");
+        }
+
+        // Set the temporary classpath to the given name:
+        RCLASS_SET_CLASSPATH(mod, name, FALSE);
+    }
+
+    return mod;
 }
 
 static VALUE
@@ -501,12 +606,13 @@ mark_global_entry(VALUE v, void *ignored)
     return ID_TABLE_CONTINUE;
 }
 
+#define gc_mark_table(task) \
+    if (rb_global_tbl) { rb_id_table_foreach_values(rb_global_tbl, task##_global_entry, 0); }
+
 void
 rb_gc_mark_global_tbl(void)
 {
-    if (rb_global_tbl) {
-        rb_id_table_foreach_values(rb_global_tbl, mark_global_entry, 0);
-    }
+    gc_mark_table(mark);
 }
 
 static enum rb_id_table_iterator_result
@@ -522,9 +628,7 @@ update_global_entry(VALUE v, void *ignored)
 void
 rb_gc_update_global_tbl(void)
 {
-    if (rb_global_tbl) {
-        rb_id_table_foreach_values(rb_global_tbl, update_global_entry, 0);
-    }
+    gc_mark_table(update);
 }
 
 static ID
@@ -830,7 +934,7 @@ rb_f_global_variables(void)
         int i, nmatch = rb_match_count(backref);
         buf[0] = '$';
         for (i = 1; i <= nmatch; ++i) {
-            if (!rb_match_nth_defined(i, backref)) continue;
+            if (!RTEST(rb_reg_nth_defined(i, backref))) continue;
             if (i < 10) {
                 /* probably reused, make static ID */
                 buf[1] = (char)(i + '0');
@@ -1291,85 +1395,20 @@ generic_ivar_set(VALUE obj, ID id, VALUE val)
     }
 }
 
-static VALUE *
-obj_ivar_heap_alloc(VALUE obj, size_t newsize)
-{
-    VALUE *newptr = rb_transient_heap_alloc(obj, sizeof(VALUE) * newsize);
-
-    if (newptr != NULL) {
-        ROBJ_TRANSIENT_SET(obj);
-    }
-    else {
-        ROBJ_TRANSIENT_UNSET(obj);
-        newptr = ALLOC_N(VALUE, newsize);
-    }
-    return newptr;
-}
-
-static VALUE *
-obj_ivar_heap_realloc(VALUE obj, int32_t len, size_t newsize)
-{
-    VALUE *newptr;
-    int i;
-
-    if (ROBJ_TRANSIENT_P(obj)) {
-        const VALUE *orig_ptr = ROBJECT(obj)->as.heap.ivptr;
-        newptr = obj_ivar_heap_alloc(obj, newsize);
-
-        assert(newptr);
-        ROBJECT(obj)->as.heap.ivptr = newptr;
-        for (i=0; i<(int)len; i++) {
-            newptr[i] = orig_ptr[i];
-        }
-    }
-    else {
-        REALLOC_N(ROBJECT(obj)->as.heap.ivptr, VALUE, newsize);
-        newptr = ROBJECT(obj)->as.heap.ivptr;
-    }
-
-    return newptr;
-}
-
-#if USE_TRANSIENT_HEAP
-void
-rb_obj_transient_heap_evacuate(VALUE obj, int promote)
-{
-    if (ROBJ_TRANSIENT_P(obj)) {
-        assert(!RB_FL_TEST_RAW(obj, ROBJECT_EMBED));
-
-        uint32_t len = ROBJECT_IV_CAPACITY(obj);
-        RUBY_ASSERT(!rb_shape_obj_too_complex(obj));
-        const VALUE *old_ptr = ROBJECT_IVPTR(obj);
-        VALUE *new_ptr;
-
-        if (promote) {
-            new_ptr = ALLOC_N(VALUE, len);
-            ROBJ_TRANSIENT_UNSET(obj);
-        }
-        else {
-            new_ptr = obj_ivar_heap_alloc(obj, len);
-        }
-        MEMCPY(new_ptr, old_ptr, VALUE, len);
-        ROBJECT(obj)->as.heap.ivptr = new_ptr;
-    }
-}
-#endif
-
 void
 rb_ensure_iv_list_size(VALUE obj, uint32_t current_capacity, uint32_t new_capacity)
 {
     RUBY_ASSERT(!rb_shape_obj_too_complex(obj));
-    VALUE *ptr = ROBJECT_IVPTR(obj);
-    VALUE *newptr;
 
     if (RBASIC(obj)->flags & ROBJECT_EMBED) {
-        newptr = obj_ivar_heap_alloc(obj, new_capacity);
+        VALUE *ptr = ROBJECT_IVPTR(obj);
+        VALUE *newptr = ALLOC_N(VALUE, new_capacity);
         MEMCPY(newptr, ptr, VALUE, current_capacity);
         RB_FL_UNSET_RAW(obj, ROBJECT_EMBED);
         ROBJECT(obj)->as.heap.ivptr = newptr;
     }
     else {
-        newptr = obj_ivar_heap_realloc(obj, current_capacity, new_capacity);
+        REALLOC_N(ROBJECT(obj)->as.heap.ivptr, VALUE, new_capacity);
     }
 }
 
@@ -1470,10 +1509,7 @@ rb_obj_ivar_set(VALUE obj, ID id, VALUE val)
             rb_shape_set_too_complex(obj);
             RUBY_ASSERT(rb_shape_obj_too_complex(obj));
 
-            if (ROBJ_TRANSIENT_P(obj)) {
-                ROBJ_TRANSIENT_UNSET(obj);
-            }
-            else if (!(RBASIC(obj)->flags & ROBJECT_EMBED)) {
+            if (!(RBASIC(obj)->flags & ROBJECT_EMBED)) {
                 xfree(ROBJECT(obj)->as.heap.ivptr);
             }
 
@@ -1634,14 +1670,19 @@ struct iv_itr_data {
     rb_ivar_foreach_callback_func *func;
 };
 
-static void
+/*
+ * Returns a flag to stop iterating depending on the result of +callback+.
+ */
+static bool
 iterate_over_shapes_with_callback(rb_shape_t *shape, rb_ivar_foreach_callback_func *callback, struct iv_itr_data * itr_data)
 {
     switch ((enum shape_type)shape->type) {
       case SHAPE_ROOT:
-        return;
+        return false;
       case SHAPE_IVAR:
-        iterate_over_shapes_with_callback(rb_shape_get_parent(shape), callback, itr_data);
+        ASSUME(callback);
+        if (iterate_over_shapes_with_callback(rb_shape_get_parent(shape), callback, itr_data))
+            return true;
         VALUE * iv_list;
         switch (BUILTIN_TYPE(itr_data->obj)) {
           case T_OBJECT:
@@ -1658,17 +1699,25 @@ iterate_over_shapes_with_callback(rb_shape_t *shape, rb_ivar_foreach_callback_fu
         }
         VALUE val = iv_list[shape->next_iv_index - 1];
         if (!UNDEF_P(val)) {
-            callback(shape->edge_name, val, itr_data->arg);
+            switch (callback(shape->edge_name, val, itr_data->arg)) {
+              case ST_CHECK:
+              case ST_CONTINUE:
+                break;
+              case ST_STOP:
+                return true;
+              default:
+                rb_bug("unreachable");
+            }
         }
-        return;
+        return false;
       case SHAPE_INITIAL_CAPACITY:
       case SHAPE_CAPACITY_CHANGE:
       case SHAPE_FROZEN:
       case SHAPE_T_OBJECT:
-        iterate_over_shapes_with_callback(rb_shape_get_parent(shape), callback, itr_data);
-        return;
+        return iterate_over_shapes_with_callback(rb_shape_get_parent(shape), callback, itr_data);
       case SHAPE_OBJ_TOO_COMPLEX:
-        rb_bug("Unreachable\n");
+      default:
+        rb_bug("Unreachable");
     }
 }
 
@@ -3694,6 +3743,7 @@ rb_cvar_set(VALUE klass, ID id, VALUE val)
         ent = ALLOC(struct rb_cvar_class_tbl_entry);
         ent->class_value = target;
         ent->global_cvar_state = GET_GLOBAL_CVAR_STATE();
+        ent->cref = 0;
         rb_id_table_insert(rb_cvc_tbl, id, (VALUE)ent);
         RB_DEBUG_COUNTER_INC(cvar_inline_miss);
     }

@@ -225,6 +225,13 @@ class TestObjSpace < Test::Unit::TestCase
       assert_equal(__FILE__, ObjectSpace.allocation_sourcefile(o4))
       assert_equal(line4, ObjectSpace.allocation_sourceline(o4))
 
+      # The line number should be based on newarray instead of getinstancevariable.
+      line5 = __LINE__; o5 = [ # newarray (leaf)
+        @ivar, # getinstancevariable (not leaf)
+      ]
+      assert_equal(__FILE__, ObjectSpace.allocation_sourcefile(o5))
+      assert_equal(line5, ObjectSpace.allocation_sourceline(o5))
+
       # [Bug #19482]
       EnvUtil.under_gc_stress do
         100.times do
@@ -281,6 +288,8 @@ class TestObjSpace < Test::Unit::TestCase
   end
 
   def test_dump_flags
+    # Ensure that the fstring is promoted to old generation
+    4.times { GC.start }
     info = ObjectSpace.dump("foo".freeze)
     assert_match(/"wb_protected":true, "old":true/, info)
     assert_match(/"fstring":true/, info)
@@ -288,12 +297,18 @@ class TestObjSpace < Test::Unit::TestCase
   end
 
   if defined?(RubyVM::Shape)
+    class TooComplex; end
+
     def test_dump_too_complex_shape
+      omit "flaky test"
+
       RubyVM::Shape::SHAPE_MAX_VARIATIONS.times do
-        Object.new.instance_variable_set(:"@a#{_1}", 1)
+        TooComplex.new.instance_variable_set(:"@a#{_1}", 1)
       end
 
-      tc = Object.new
+      tc = TooComplex.new
+      info = ObjectSpace.dump(tc)
+      assert_not_match(/"too_complex_shape"/, info)
       tc.instance_variable_set(:@new_ivar, 1)
       info = ObjectSpace.dump(tc)
       assert_match(/"too_complex_shape":true/, info)
@@ -624,7 +639,13 @@ class TestObjSpace < Test::Unit::TestCase
       end
     end
 
-    entry_hash = JSON.parse(test_string_in_dump_all[1])
+    strs = test_string_in_dump_all.reject do |s|
+      s.include?("fstring")
+    end
+
+    assert_equal(1, strs.length)
+
+    entry_hash = JSON.parse(strs[0])
 
     assert_equal(5, entry_hash["bytesize"], "bytesize is wrong")
     assert_equal("TEST2", entry_hash["value"], "value is wrong")

@@ -547,8 +547,7 @@ class TestYJIT < Test::Unit::TestCase
   end
 
   def test_getblockparamproxy
-    # Currently two side exits as OPTIMIZED_METHOD_TYPE_CALL is unimplemented
-    assert_compiles(<<~'RUBY', insns: [:getblockparamproxy], exits: { opt_send_without_block: 2 })
+    assert_compiles(<<~'RUBY', insns: [:getblockparamproxy], exits: {})
       def foo &blk
         p blk.call
         p blk.call
@@ -556,6 +555,24 @@ class TestYJIT < Test::Unit::TestCase
 
       foo { 1 }
       foo { 2 }
+    RUBY
+  end
+
+  def test_ifunc_getblockparamproxy
+    assert_compiles(<<~'RUBY', insns: [:getblockparamproxy], exits: {})
+      class Foo
+        include Enumerable
+
+        def each(&block)
+          block.call 1
+          block.call 2
+          block.call 3
+        end
+      end
+
+      foo = Foo.new
+      foo.map { _1 * 2 }
+      foo.map { _1 * 2 }
     RUBY
   end
 
@@ -607,7 +624,7 @@ class TestYJIT < Test::Unit::TestCase
 
   def test_send_kwargs
     # For now, this side-exits when calls include keyword args
-    assert_compiles(<<~'RUBY', result: "2#a:1,b:2/A", exits: {opt_send_without_block: 1})
+    assert_compiles(<<~'RUBY', result: "2#a:1,b:2/A")
       def internal_method(**kw)
         "#{kw.size}##{kw.keys.map { |k| "#{k}:#{kw[k]}" }.join(",")}"
       end
@@ -647,7 +664,7 @@ class TestYJIT < Test::Unit::TestCase
 
   def test_send_kwargs_splat
     # For now, this side-exits when calling with a splat
-    assert_compiles(<<~'RUBY', result: "2#a:1,b:2/B", exits: {opt_send_without_block: 1})
+    assert_compiles(<<~'RUBY', result: "2#a:1,b:2/B")
       def internal_method(**kw)
         "#{kw.size}##{kw.keys.map { |k| "#{k}:#{kw[k]}" }.join(",")}"
       end
@@ -661,7 +678,7 @@ class TestYJIT < Test::Unit::TestCase
 
   def test_send_block
     # Setlocal_wc_0 sometimes side-exits on write barrier
-    assert_compiles(<<~'RUBY', result: "b:n/b:y/b:y/b:n", exits: { :setlocal_WC_0 => 0..1 })
+    assert_compiles(<<~'RUBY', result: "b:n/b:y/b:y/b:n")
       def internal_method(&b)
         "b:#{block_given? ? "y" : "n"}"
       end
@@ -1238,6 +1255,29 @@ class TestYJIT < Test::Unit::TestCase
     RUBY
   end
 
+  def test_setivar_on_class
+    # Bug in https://github.com/ruby/ruby/pull/8152
+    assert_compiles(<<~RUBY, result: :ok)
+      class Base
+        def self.or_equal
+          @or_equal ||= Object.new
+        end
+      end
+
+      Base.or_equal # ensure compiled
+
+      class Child < Base
+      end
+
+      200.times do |iv| # Need to be more than MAX_IVAR
+        Child.instance_variable_set("@_iv_\#{iv}", Object.new)
+      end
+
+      Child.or_equal
+      :ok
+    RUBY
+  end
+
   def test_nested_send
     #[Bug #19464]
     assert_compiles(<<~RUBY, result: [:ok, :ok])
@@ -1274,6 +1314,36 @@ class TestYJIT < Test::Unit::TestCase
       h = Hash.new { nil }
       foo("\x80".b, "\xA1A1".force_encoding("EUC-JP"), h)
       foo("\x80".b, "\xA1A1".force_encoding("EUC-JP"), h)
+    RUBY
+  end
+
+  def test_io_reopen_clobbering_singleton_class
+    assert_compiles(<<~RUBY, result: [:ok, :ok])
+      def $stderr.to_i = :i
+
+      def test = $stderr.to_i
+
+      [test, test]
+      $stderr.reopen($stderr.dup)
+      [test, test].map { :ok unless _1 == :i }
+    RUBY
+  end
+
+  def test_opt_aref_with
+    assert_compiles(<<~RUBY, insns: %i[opt_aref_with], result: "bar")
+      h = {"foo" => "bar"}
+
+      h["foo"]
+    RUBY
+  end
+
+  def test_proc_block_arg
+    assert_compiles(<<~RUBY, result: [:proc, :no_block])
+      def yield_if_given = block_given? ? yield : :no_block
+
+      def call(block_arg = nil) = yield_if_given(&block_arg)
+
+      [call(-> { :proc }), call]
     RUBY
   end
 

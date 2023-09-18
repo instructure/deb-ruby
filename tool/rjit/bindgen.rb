@@ -526,6 +526,7 @@ generator = BindingGenerator.new(
     rb_hash_bulk_insert
     rb_hash_new
     rb_hash_new_with_size
+    rb_hash_resurrect
     rb_ivar_get
     rb_obj_as_string_result
     rb_obj_is_kind_of
@@ -637,7 +638,7 @@ generator = BindingGenerator.new(
   skip_fields: {
     'rb_execution_context_struct.machine': %w[regs], # differs between macOS and Linux
     rb_execution_context_struct: %w[method_missing_reason], # non-leading bit fields not supported
-    rb_iseq_constant_body: %w[yjit_payload], # conditionally defined
+    rb_iseq_constant_body: %w[jit_exception jit_exception_calls yjit_payload], # conditionally defined
     rb_thread_struct: %w[status has_dedicated_nt to_kill abort_on_exception report_on_exception pending_interrupt_queue_checked],
     :'' => %w[is_from_method is_lambda is_isolated], # rb_proc_t
   },

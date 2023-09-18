@@ -1052,6 +1052,22 @@ x = __ENCODING__
     assert_syntax_error("    0b\n", /\^/)
   end
 
+  def test_unclosed_unicode_escape_at_eol_bug_19750
+    assert_separately([], "#{<<-"begin;"}\n#{<<~'end;'}")
+    begin;
+      assert_syntax_error("/\\u", /too short escape sequence/)
+      assert_syntax_error("/\\u{", /unterminated regexp meets end of file/)
+      assert_syntax_error("/\\u{\\n", /invalid Unicode list/)
+      assert_syntax_error("/a#\\u{\\n/", /invalid Unicode list/)
+      re = eval("/a#\\u{\n$/x")
+      assert_match(re, 'a')
+      assert_not_match(re, 'a#')
+      re = eval("/a#\\u\n$/x")
+      assert_match(re, 'a')
+      assert_not_match(re, 'a#')
+    end;
+  end
+
   def test_error_def_in_argument
     assert_separately([], "#{<<-"begin;"}\n#{<<~"end;"}")
     begin;
@@ -1095,31 +1111,40 @@ x = __ENCODING__
     end;
   end
 
-    def test_heredoc_interpolation
-      var = 1
+  def test_heredoc_interpolation
+    var = 1
 
-      v1 = <<~HEREDOC
-        something
-        #{"/#{var}"}
-      HEREDOC
+    v1 = <<~HEREDOC
+      something
+      #{"/#{var}"}
+    HEREDOC
 
-      v2 = <<~HEREDOC
-        something
-        #{_other = "/#{var}"}
-      HEREDOC
+    v2 = <<~HEREDOC
+      something
+      #{_other = "/#{var}"}
+    HEREDOC
 
-      v3 = <<~HEREDOC
-        something
-        #{("/#{var}")}
-      HEREDOC
+    v3 = <<~HEREDOC
+      something
+      #{("/#{var}")}
+    HEREDOC
 
-      assert_equal "something\n/1\n", v1
-      assert_equal "something\n/1\n", v2
-      assert_equal "something\n/1\n", v3
-      assert_equal v1, v2
-      assert_equal v2, v3
-      assert_equal v1, v3
-    end
+    assert_equal "something\n/1\n", v1
+    assert_equal "something\n/1\n", v2
+    assert_equal "something\n/1\n", v3
+    assert_equal v1, v2
+    assert_equal v2, v3
+    assert_equal v1, v3
+  end
+
+  def test_heredoc_unterminated_interpolation
+    code = <<~'HEREDOC'
+    <<A+1
+    #{
+    HEREDOC
+
+    assert_syntax_error(code, /can't find string "A"/)
+  end
 
   def test_unexpected_token_error
     assert_syntax_error('"x"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', /unexpected/)
@@ -1129,6 +1154,8 @@ x = __ENCODING__
     assert_syntax_error('0000xyz', /^    \^~~\Z/)
     assert_syntax_error('1.2i1.1', /^    \^~~\Z/)
     assert_syntax_error('1.2.3', /^   \^~\Z/)
+    assert_syntax_error('1.', /unexpected end-of-input/)
+    assert_syntax_error('1e', /expecting end-of-input/)
   end
 
   def test_truncated_source_line
@@ -1414,6 +1441,11 @@ x = __ENCODING__
     end;
     assert_equal(expected, eval(code))
     assert_equal(expected, obj.arg)
+  end
+
+  def test_ungettable_gvar
+    assert_syntax_error('$01234', /not valid to get/)
+    assert_syntax_error('"#$01234"', /not valid to get/)
   end
 
 =begin

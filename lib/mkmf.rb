@@ -1965,14 +1965,14 @@ SRC
 
   def configuration(srcdir)
     mk = []
-    CONFIG['MKMF_VERBOSE'] ||= "0"
+    verbose = with_config('verbose') ?  "1" : (CONFIG['MKMF_VERBOSE'] || "0")
     vpath = $VPATH.dup
     CONFIG["hdrdir"] ||= $hdrdir
     mk << %{
 SHELL = /bin/sh
 
 # V=0 quiet, V=1 verbose.  other values don't work.
-V = #{CONFIG['MKMF_VERBOSE']}
+V = #{verbose}
 V0 = $(V:0=)
 Q1 = $(V:1=)
 Q = $(Q1:0=@)
@@ -2699,7 +2699,7 @@ MESSAGE
   when $mswin
     $nmake = ?m if /nmake/i =~ make
   end
-  $ignore_error = $nmake ? '' : ' 2> /dev/null || true'
+  $ignore_error = " 2> #{File::NULL} || #{$mswin ? 'exit /b0' : 'true'}"
 
   RbConfig::CONFIG["srcdir"] = CONFIG["srcdir"] =
     $srcdir = arg_config("--srcdir", File.dirname($0))

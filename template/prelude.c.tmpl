@@ -43,7 +43,10 @@ class Prelude
     lineno = 0
     result = [@preludes.size, @vpath.strip(filename), lines, sub]
     @vpath.foreach(filename) do |line|
-      line.force_encoding("ASCII-8BIT") if line.respond_to?(:force_encoding)
+      if line.respond_to?(:force_encoding)
+        enc = line.encoding
+        line.force_encoding("ASCII-8BIT")
+      end
       line.rstrip!
       lineno += 1
       @preludes[filename] ||= result
@@ -71,6 +74,7 @@ class Prelude
           orig
         end
       end
+      comment.force_encoding(enc) if enc and comment
       lines << [line, comment]
     end
     result << (start_line || 1)
@@ -86,6 +90,7 @@ Prelude.new(output, ARGV, vpath).instance_eval do
 */
 %unless @preludes.empty?
 #include "internal.h"
+#include "internal/ruby_parser.h"
 #include "internal/warnings.h"
 #include "iseq.h"
 #include "ruby/ruby.h"
@@ -179,15 +184,14 @@ static void
 prelude_eval(VALUE code, VALUE name, int line)
 {
     static const rb_compile_option_t optimization = {
-        TRUE, /* int inline_const_cache; */
-        TRUE, /* int peephole_optimization; */
-        FALSE,/* int tailcall_optimization; */
-        TRUE, /* int specialized_instruction; */
-        TRUE, /* int operands_unification; */
-        TRUE, /* int instructions_unification; */
-        TRUE, /* int stack_caching; */
-        TRUE, /* int frozen_string_literal; */
-        FALSE, /* int debug_frozen_string_literal; */
+        TRUE, /* unsigned int inline_const_cache; */
+        TRUE, /* unsigned int peephole_optimization; */
+        FALSE,/* unsigned int tailcall_optimization; */
+        TRUE, /* unsigned int specialized_instruction; */
+        TRUE, /* unsigned int operands_unification; */
+        TRUE, /* unsigned int instructions_unification; */
+        TRUE, /* unsigned int frozen_string_literal; */
+        FALSE, /* unsigned int debug_frozen_string_literal; */
         FALSE, /* unsigned int coverage_enabled; */
         0, /* int debug_level; */
     };

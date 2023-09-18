@@ -9,27 +9,27 @@
 #include "builtin.h"                /* for RB_BUILTIN_FUNCTION */
 struct rb_execution_context_struct; /* in vm_core.h */
 
-static VALUE builtin_inline_class_262(struct rb_execution_context_struct *ec, const VALUE self)
+static VALUE builtin_inline_class_296(struct rb_execution_context_struct *ec, const VALUE self)
 {
 MAYBE_UNUSED(const VALUE) flag = rb_vm_lvar(ec, -3);
-#line 262 "gc.rb"
+#line 296 "gc.rb"
 
       rb_objspace.flags.measure_gc = RTEST(flag) ? TRUE : FALSE;
       return flag;
 #line 20 "gc.rbinc"
 }
 
-static VALUE builtin_inline_class_274(struct rb_execution_context_struct *ec, const VALUE self)
+static VALUE builtin_inline_class_308(struct rb_execution_context_struct *ec, const VALUE self)
 {
-#line 274 "gc.rb"
+#line 308 "gc.rb"
 return 
       RBOOL(rb_objspace.flags.measure_gc);
 #line 28 "gc.rbinc"
 }
 
-static VALUE builtin_inline_class_284(struct rb_execution_context_struct *ec, const VALUE self)
+static VALUE builtin_inline_class_318(struct rb_execution_context_struct *ec, const VALUE self)
 {
-#line 284 "gc.rb"
+#line 318 "gc.rb"
 return 
       ULL2NUM(rb_objspace.profile.marking_time_ns + rb_objspace.profile.sweeping_time_ns);
 #line 36 "gc.rbinc"
@@ -49,9 +49,9 @@ void Init_builtin_gc(void)
     RB_BUILTIN_FUNCTION(7, gc_stat_heap, gc_stat_heap, 2),
     RB_BUILTIN_FUNCTION(8, gc_latest_gc_info, gc_latest_gc_info, 1),
     RB_BUILTIN_FUNCTION(9, gc_verify_compaction_references, gc_verify_compaction_references, 3),
-    RB_BUILTIN_FUNCTION(10, _bi0, builtin_inline_class_262, 0),
-    RB_BUILTIN_FUNCTION(11, _bi1, builtin_inline_class_274, 0),
-    RB_BUILTIN_FUNCTION(12, _bi2, builtin_inline_class_284, 0),
+    RB_BUILTIN_FUNCTION(10, _bi0, builtin_inline_class_296, 0),
+    RB_BUILTIN_FUNCTION(11, _bi1, builtin_inline_class_308, 0),
+    RB_BUILTIN_FUNCTION(12, _bi2, builtin_inline_class_318, 0),
     RB_BUILTIN_FUNCTION(-1, NULL, NULL, 0),
   };
 
@@ -70,9 +70,9 @@ COMPILER_WARNING_ERROR(-Wincompatible-pointer-types)
   if (0) rb_builtin_function_check_arity2(gc_stat_heap);
   if (0) rb_builtin_function_check_arity1(gc_latest_gc_info);
   if (0) rb_builtin_function_check_arity3(gc_verify_compaction_references);
-  if (0) rb_builtin_function_check_arity0(builtin_inline_class_262);
-  if (0) rb_builtin_function_check_arity0(builtin_inline_class_274);
-  if (0) rb_builtin_function_check_arity0(builtin_inline_class_284);
+  if (0) rb_builtin_function_check_arity0(builtin_inline_class_296);
+  if (0) rb_builtin_function_check_arity0(builtin_inline_class_308);
+  if (0) rb_builtin_function_check_arity0(builtin_inline_class_318);
 COMPILER_WARNING_POP
 
   // load

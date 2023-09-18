@@ -3,7 +3,7 @@ require 'reline'
 begin
   require 'yamatanooroti'
 
-  class Reline::TestRendering < Yamatanooroti::TestCase
+  class Reline::RenderingTest < Yamatanooroti::TestCase
     def setup
       @pwd = Dir.pwd
       suffix = '%010d' % Random.rand(0..65535)
@@ -234,6 +234,21 @@ begin
       assert_screen(<<~EOC)
         Multiline REPL.
         (ins)prompt> :a
+      EOC
+    end
+
+    def test_esc_input
+      omit if Reline::IOGate.win?
+      start_terminal(5, 20, %W{ruby -I#{@pwd}/lib #{@pwd}/test/reline/yamatanooroti/multiline_repl}, startup_message: 'Multiline REPL.')
+      write("def\C-aabc")
+      write("\e") # single ESC
+      sleep 1
+      write("A")
+      write("B\eAC") # ESC + A (M-A, specified ed_unassigned in Reline::KeyActor::Emacs)
+      close
+      assert_screen(<<~EOC)
+        Multiline REPL.
+        prompt> abcABCdef
       EOC
     end
 
@@ -490,7 +505,7 @@ begin
     end
 
     def test_enable_bracketed_paste
-      omit if Reline::IOGate.win?
+      omit if Reline.core.io_gate.win?
       write_inputrc <<~LINES
         set enable-bracketed-paste on
       LINES
@@ -676,6 +691,7 @@ begin
       EOC
       write("\C-p" * 4 + "\C-e" + "\C-p" * 4)
       write("2")
+      close
       assert_screen(<<~EOC)
         prompt> if 12
         prompt>   if 2
@@ -728,6 +744,24 @@ begin
         Multiline REPL.
         prompt> aa(bb(cc(d
         prompt>       d(ee(
+      EOC
+    end
+
+    def test_auto_indent_multibyte_insert_line
+      start_terminal(10, 30, %W{ruby -I#{@pwd}/lib #{@pwd}/test/reline/yamatanooroti/multiline_repl --auto-indent}, startup_message: 'Multiline REPL.')
+      write "if true\n"
+      write "あいうえお\n"
+      4.times { write "\C-b\C-b\C-b\C-b\e\r" }
+      close
+      assert_screen(<<~EOC)
+        Multiline REPL.
+        prompt> if true
+        prompt>   あ
+        prompt>   い
+        prompt>   う
+        prompt>   え
+        prompt>   お
+        prompt>
       EOC
     end
 
@@ -859,7 +893,7 @@ begin
     end
 
     def test_with_newline
-      omit if Reline::IOGate.win?
+      omit if Reline.core.io_gate.win?
       cmd = %Q{ruby -e 'print(%Q{abc def \\e\\r})' | ruby -I#{@pwd}/lib -rreline -e 'p Reline.readline(%{> })'}
       start_terminal(40, 50, ['bash', '-c', cmd])
       sleep 1
@@ -954,6 +988,26 @@ begin
              and productivity. It has an elegant
              syntax that is natural to read and
              easy to write.
+      EOC
+    end
+
+    def test_dialog_scroll_pushup_condition
+      start_terminal(10, 50, %W{ruby -I#{@pwd}/lib #{@pwd}/test/reline/yamatanooroti/multiline_repl --autocomplete}, startup_message: 'Multiline REPL.')
+      write("\n" * 10)
+      write("if 1\n  sSt\nend")
+      write("\C-p\C-h\C-e")
+      close
+      assert_screen(<<~'EOC')
+        prompt>
+        prompt>
+        prompt>
+        prompt>
+        prompt>
+        prompt>
+        prompt> if 1
+        prompt>   St
+        prompt> enString
+                  Struct
       EOC
     end
 
@@ -1365,21 +1419,21 @@ begin
 
     def test_scroll_at_bottom_for_dialog
       start_terminal(10, 40, %W{ruby -I#{@pwd}/lib #{@pwd}/test/reline/yamatanooroti/multiline_repl --autocomplete}, startup_message: 'Multiline REPL.')
-      write("\n\n\n\n\n\n")
-      write("def hoge\n\n\n\n\n\n\nend\C-p\C-p\C-p\C-e")
+      write("\n\n\n\n\n\n\n\n\n\n\n")
+      write("def hoge\n\nend\C-p\C-e")
       write("  S")
       close
       assert_screen(<<~'EOC')
+        prompt>
+        prompt>
+        prompt>
+        prompt>
+        prompt>
         prompt> def hoge
-        prompt>
-        prompt>
-        prompt>
         prompt>   S
-        prompt>   String
-        prompt>   Struct
-        prompt> enSymbol
-                  ScriptError
-                  SyntaxError
+        prompt> enString     █
+                  Struct     ▀
+                  Symbol
       EOC
     end
 
@@ -1433,30 +1487,35 @@ begin
 
     def test_clear_dialog_when_just_move_cursor_at_last_line
       start_terminal(10, 30, %W{ruby -I#{@pwd}/lib #{@pwd}/test/reline/yamatanooroti/multiline_repl --autocomplete}, startup_message: 'Multiline REPL.')
-      write("class A\n  3\nend\n")
-      write("\C-p\C-p\C-p\C-e\C-hS")
+      write("class A\n  3\nend\n\n\n")
+      write("\C-p\C-p\C-e; S")
       write("\C-n")
-      write("1")
+      write(";")
       close
       assert_screen(<<~'EOC')
         prompt>   3
         prompt> end
         => 3
-        prompt> class S
-        prompt>   31
-        prompt> end
+        prompt>
+        prompt>
+        prompt> class A
+        prompt>   3; S
+        prompt> end;
       EOC
     end
 
     def test_clear_dialog_when_adding_new_line_to_end_of_buffer
       start_terminal(10, 30, %W{ruby -I#{@pwd}/lib #{@pwd}/test/reline/yamatanooroti/multiline_repl --autocomplete}, startup_message: 'Multiline REPL.')
-      write("class A\n  def a\n    3\n  end\nend")
+      write("class A\n  def a\n    3\n    3\n  end\nend")
       write("\n")
       write("class S")
       write("\n")
       write("  3")
       close
       assert_screen(<<~'EOC')
+        prompt>   def a
+        prompt>     3
+        prompt>     3
         prompt>   end
         prompt> end
         => :a
@@ -1474,6 +1533,7 @@ begin
       write("  3")
       close
       assert_screen(<<~'EOC')
+        prompt>     3
         prompt>   end
         prompt> end
         => :a
@@ -1526,6 +1586,20 @@ begin
       write("a\C-h" * 4000)
       close
       assert_screen(<<~'EOC')
+        Multiline REPL.
+        prompt>
+      EOC
+    end
+
+    def test_exit_with_ctrl_d
+      start_terminal(5, 30, %W{ruby -I#{@pwd}/lib #{@pwd}/test/reline/yamatanooroti/multiline_repl --auto-indent}, startup_message: 'Multiline REPL.')
+      begin
+        write("\C-d")
+        close
+      rescue EOFError
+        # EOFError is raised when process terminated.
+      end
+      assert_screen(<<~EOC)
         Multiline REPL.
         prompt>
       EOC

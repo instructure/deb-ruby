@@ -25,7 +25,8 @@
     * libffi (to build fiddle)
     * gmp (if you with to accelerate Bignum operations)
     * libexecinfo (FreeBSD)
-    * rustc - 1.58.0 or later (if you wish to build [YJIT](/doc/yjit/yjit.md))
+    * rustc - 1.58.0 or later, if you wish to build
+      [YJIT](https://docs.ruby-lang.org/en/master/RubyVM/YJIT.html).
 
     If you installed the libraries needed for extensions (openssl, readline, libyaml, zlib) into other than the OS default place,
     typically using Homebrew on macOS, add `--with-EXTLIB-dir` options to `CONFIGURE_ARGS` environment variable.
@@ -41,29 +42,32 @@
 
 1. Download ruby source code:
 
+    Select one of the bellow.
+
     1. Build from the tarball:
 
-    Download the latest tarball from [ruby-lang.org](https://www.ruby-lang.org/en/downloads/) and
-    extract it. Example for Ruby 3.0.2:
+        Download the latest tarball from [ruby-lang.org](https://www.ruby-lang.org/en/downloads/) and
+        extract it. Example for Ruby 3.0.2:
 
-    ``` shell
-    tar -xzf ruby-3.0.2.tar.gz
-    cd ruby-3.0.2
-    ```
+        ``` shell
+        tar -xzf ruby-3.0.2.tar.gz
+        cd ruby-3.0.2
+        ```
 
     2. Build from the git repository:
 
-    Checkout the CRuby source code:
+        Checkout the CRuby source code:
 
-    ``` shell
-    git clone https://github.com/ruby/ruby.git
-    ```
+        ``` shell
+        git clone https://github.com/ruby/ruby.git
+        cd ruby
+        ```
 
-    Generate the configure file:
+        Generate the configure file:
 
-    ``` shell
-    ./autogen.sh
-    ```
+        ``` shell
+        ./autogen.sh
+        ```
 
 2. Create a `build` directory separate from the source directory:
 
@@ -152,6 +156,14 @@ with the Ruby script you'd like to run. You can use the following make targets:
 * `make runruby`: Runs `test.rb` using Ruby
 * `make lldb-ruby`: Runs `test.rb` using Ruby in lldb
 * `make gdb-ruby`: Runs `test.rb` using Ruby in gdb
+
+### Compiling for Debugging
+
+You should configure Ruby without optimization and other flags that may interfere with debugging:
+
+``` shell
+./configure --enable-debug-env optflags="-O0 -fno-omit-frame-pointer"
+```
 
 ### Building with Address Sanitizer
 

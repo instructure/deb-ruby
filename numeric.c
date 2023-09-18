@@ -671,7 +671,7 @@ num_div(VALUE x, VALUE y)
  *  Of the Core and Standard Library classes,
  *  only Rational uses this implementation.
  *
- *  For \Rational +r+ and real number +n+, these expressions are equivalent:
+ *  For Rational +r+ and real number +n+, these expressions are equivalent:
  *
  *    r % n
  *    r-n*(r/n).floor
@@ -948,7 +948,7 @@ num_negative_p(VALUE num)
  *  So you should know its esoteric system. See following:
  *
  *  - https://docs.oracle.com/cd/E19957-01/806-3568/ncg_goldberg.html
- *  - https://github.com/rdp/ruby_tutorials_core/wiki/Ruby-Talk-FAQ#floats_imprecise
+ *  - https://github.com/rdp/ruby_tutorials_core/wiki/Ruby-Talk-FAQ#-why-are-rubys-floats-imprecise
  *  - https://en.wikipedia.org/wiki/Floating_point#Accuracy_problems
  *
  *  You can create a \Float object explicitly with:
@@ -1002,7 +1002,7 @@ num_negative_p(VALUE num)
       and +self+
  *  - #divmod: Returns a 2-element array containing the quotient and remainder
  *    results of dividing +self+ by the given value.
- *  - #fdiv: Returns the Float result of dividing +self+ by the given value.
+ *  - #fdiv: Returns the \Float result of dividing +self+ by the given value.
  *  - #floor: Returns the greatest number smaller than or equal to +self+.
  *  - #next_float: Returns the next-larger representable \Float.
  *  - #prev_float: Returns the next-smaller representable \Float.
@@ -2335,7 +2335,7 @@ int_half_p_half_down(VALUE num, VALUE n, VALUE f)
 }
 
 /*
- * Assumes num is an Integer, ndigits <= 0
+ * Assumes num is an \Integer, ndigits <= 0
  */
 static VALUE
 rb_int_round(VALUE num, int ndigits, enum ruby_num_rounding_mode mode)
@@ -3165,7 +3165,7 @@ rb_num2ulong_internal(VALUE val, int *wrap_p)
 {
   again:
     if (NIL_P(val)) {
-       rb_raise(rb_eTypeError, "no implicit conversion from nil to integer");
+       rb_raise(rb_eTypeError, "no implicit conversion of nil into Integer");
     }
 
     if (FIXNUM_P(val)) {
@@ -3440,7 +3440,7 @@ unsigned LONG_LONG
 rb_num2ull(VALUE val)
 {
     if (NIL_P(val)) {
-        rb_raise(rb_eTypeError, "no implicit conversion from nil");
+        rb_raise(rb_eTypeError, "no implicit conversion of nil into Integer");
     }
     else if (FIXNUM_P(val)) {
         return (LONG_LONG)FIX2LONG(val); /* this is FIX2LONG, intended */
@@ -3459,15 +3459,10 @@ rb_num2ull(VALUE val)
     else if (RB_BIGNUM_TYPE_P(val)) {
         return rb_big2ull(val);
     }
-    else if (RB_TYPE_P(val, T_STRING)) {
-        rb_raise(rb_eTypeError, "no implicit conversion from string");
+    else {
+        val = rb_to_int(val);
+        return NUM2ULL(val);
     }
-    else if (RB_TYPE_P(val, T_TRUE) || RB_TYPE_P(val, T_FALSE)) {
-        rb_raise(rb_eTypeError, "no implicit conversion from boolean");
-    }
-
-    val = rb_to_int(val);
-    return NUM2ULL(val);
 }
 
 #endif  /* HAVE_LONG_LONG */
@@ -5344,7 +5339,7 @@ int_aref(int const argc, VALUE * const argv, VALUE const num)
  *    1.to_f  # => 1.0
  *    -1.to_f # => -1.0
  *
- *  If the value of +self+ does not fit in a \Float,
+ *  If the value of +self+ does not fit in a Float,
  *  the result is infinity:
  *
  *    (10**400).to_f  # => Infinity
@@ -5655,58 +5650,6 @@ int_downto(VALUE from, VALUE to)
         if (NIL_P(c)) rb_cmperr(i, to);
     }
     return from;
-}
-
-static VALUE
-int_dotimes_size(VALUE num, VALUE args, VALUE eobj)
-{
-    if (FIXNUM_P(num)) {
-        if (NUM2LONG(num) <= 0) return INT2FIX(0);
-    }
-    else {
-        if (RTEST(rb_funcall(num, '<', 1, INT2FIX(0)))) return INT2FIX(0);
-    }
-    return num;
-}
-
-/*
- *  call-seq:
- *    times {|i| ... } -> self
- *    times            -> enumerator
- *
- *  Calls the given block +self+ times with each integer in <tt>(0..self-1)</tt>:
- *
- *    a = []
- *    5.times {|i| a.push(i) } # => 5
- *    a                        # => [0, 1, 2, 3, 4]
- *
- *  With no block given, returns an Enumerator.
- *
- */
-
-static VALUE
-int_dotimes(VALUE num)
-{
-    RETURN_SIZED_ENUMERATOR(num, 0, 0, int_dotimes_size);
-
-    if (FIXNUM_P(num)) {
-        long i, end;
-
-        end = FIX2LONG(num);
-        for (i=0; i<end; i++) {
-            rb_yield_1(LONG2FIX(i));
-        }
-    }
-    else {
-        VALUE i = INT2FIX(0);
-
-        for (;;) {
-            if (!RTEST(int_le(i, num))) break;
-            rb_yield(i);
-            i = rb_int_plus(i, INT2FIX(1));
-        }
-    }
-    return num;
 }
 
 /*
@@ -6037,9 +5980,9 @@ int_s_try_convert(VALUE self, VALUE num)
 /*
  * Document-class: Numeric
  *
- * Numeric is the class from which all higher-level numeric classes should inherit.
+ * \Numeric is the class from which all higher-level numeric classes should inherit.
  *
- * Numeric allows instantiation of heap-allocated objects. Other core numeric classes such as
+ * \Numeric allows instantiation of heap-allocated objects. Other core numeric classes such as
  * Integer are implemented as immediates, which means that each Integer is a single immutable
  * object which is always passed by value.
  *
@@ -6053,9 +5996,9 @@ int_s_try_convert(VALUE self, VALUE num)
  *   1.dup                            #=> 1
  *   1.object_id == 1.dup.object_id   #=> true
  *
- * For this reason, Numeric should be used when defining other numeric classes.
+ * For this reason, \Numeric should be used when defining other numeric classes.
  *
- * Classes which inherit from Numeric must implement +coerce+, which returns a two-member
+ * Classes which inherit from \Numeric must implement +coerce+, which returns a two-member
  * Array containing an object that has been coerced into an instance of the new class
  * and +self+ (see #coerce).
  *
@@ -6248,7 +6191,6 @@ Init_Numeric(void)
     rb_define_method(rb_cInteger, "nobits?", int_nobits_p, 1);
     rb_define_method(rb_cInteger, "upto", int_upto, 1);
     rb_define_method(rb_cInteger, "downto", int_downto, 1);
-    rb_define_method(rb_cInteger, "times", int_dotimes, 0);
     rb_define_method(rb_cInteger, "succ", int_succ, 0);
     rb_define_method(rb_cInteger, "next", int_succ, 0);
     rb_define_method(rb_cInteger, "pred", int_pred, 0);

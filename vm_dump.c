@@ -281,14 +281,14 @@ rb_vmdebug_stack_dump_th(VALUE thval)
 
 #if VMDEBUG > 2
 
-/* copy from vm.c */
+/* copy from vm_insnhelper.c */
 static const VALUE *
 vm_base_ptr(const rb_control_frame_t *cfp)
 {
     const rb_control_frame_t *prev_cfp = RUBY_VM_PREVIOUS_CONTROL_FRAME(cfp);
     const VALUE *bp = prev_cfp->sp + ISEQ_BODY(cfp->iseq)->local_table_size + VM_ENV_DATA_SIZE;
 
-    if (ISEQ_BODY(cfp->iseq)->type == ISEQ_TYPE_METHOD) {
+    if (ISEQ_BODY(cfp->iseq)->type == ISEQ_TYPE_METHOD || VM_FRAME_BMETHOD_P(cfp)) {
         bp += 1;
     }
     return bp;
@@ -422,11 +422,7 @@ rb_vmdebug_debug_print_pre(const rb_execution_context_t *ec, const rb_control_fr
 }
 
 void
-rb_vmdebug_debug_print_post(const rb_execution_context_t *ec, const rb_control_frame_t *cfp
-#if OPT_STACK_CACHING
-                 , VALUE reg_a, VALUE reg_b
-#endif
-    )
+rb_vmdebug_debug_print_post(const rb_execution_context_t *ec, const rb_control_frame_t *cfp)
 {
 #if VMDEBUG > 9
     SDR2(cfp);
@@ -442,15 +438,6 @@ rb_vmdebug_debug_print_post(const rb_execution_context_t *ec, const rb_control_f
     /* stack_dump_thobj(ec); */
     vm_stack_dump_each(ec, ec->cfp);
 
-#if OPT_STACK_CACHING
-    {
-        VALUE rstr;
-        rstr = rb_inspect(reg_a);
-        fprintf(stderr, "  sc reg A: %s\n", StringValueCStr(rstr));
-        rstr = rb_inspect(reg_b);
-        fprintf(stderr, "  sc reg B: %s\n", StringValueCStr(rstr));
-    }
-#endif
     printf
         ("--------------------------------------------------------------\n");
 #endif

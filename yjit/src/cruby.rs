@@ -96,7 +96,7 @@ pub type size_t = u64;
 pub type RedefinitionFlag = u32;
 
 #[allow(dead_code)]
-#[allow(clippy::useless_transmute)]
+#[allow(clippy::all)]
 mod autogened {
     use super::*;
     // Textually include output from rust-bindgen as suggested by its user guide.
@@ -135,7 +135,6 @@ extern "C" {
         ic: ICVARC,
     ) -> VALUE;
     pub fn rb_vm_ic_hit_p(ic: IC, reg_ep: *const VALUE) -> bool;
-    pub fn rb_str_bytesize(str: VALUE) -> VALUE;
 }
 
 // Renames
@@ -149,6 +148,7 @@ pub use rb_get_cfp_sp as get_cfp_sp;
 pub use rb_get_cfp_self as get_cfp_self;
 pub use rb_get_cfp_ep as get_cfp_ep;
 pub use rb_get_cfp_ep_level as get_cfp_ep_level;
+pub use rb_vm_base_ptr as get_cfp_bp;
 pub use rb_get_cme_def_type as get_cme_def_type;
 pub use rb_get_cme_def_body_attr_id as get_cme_def_body_attr_id;
 pub use rb_get_cme_def_body_optimized_type as get_cme_def_body_optimized_type;
@@ -695,7 +695,7 @@ mod manual_defs {
     pub const VM_CALL_OPT_SEND : u32 = 1 << VM_CALL_OPT_SEND_bit;
 
     // From internal/struct.h - in anonymous enum, so we can't easily import it
-    pub const RSTRUCT_EMBED_LEN_MASK: usize = (RUBY_FL_USER2 | RUBY_FL_USER1) as usize;
+    pub const RSTRUCT_EMBED_LEN_MASK: usize = (RUBY_FL_USER7 | RUBY_FL_USER6 | RUBY_FL_USER5 | RUBY_FL_USER4 | RUBY_FL_USER3 |RUBY_FL_USER2 | RUBY_FL_USER1) as usize;
 
     // From iseq.h - via a different constant, which seems to confuse bindgen
     pub const ISEQ_TRANSLATED: usize = RUBY_FL_USER7 as usize;
@@ -718,9 +718,8 @@ mod manual_defs {
     pub const RUBY_OFFSET_CFP_SELF: i32 = 24;
     pub const RUBY_OFFSET_CFP_EP: i32 = 32;
     pub const RUBY_OFFSET_CFP_BLOCK_CODE: i32 = 40;
-    pub const RUBY_OFFSET_CFP_BP: i32 = 48; // field __bp__
-    pub const RUBY_OFFSET_CFP_JIT_RETURN: i32 = 56;
-    pub const RUBY_SIZEOF_CONTROL_FRAME: usize = 64;
+    pub const RUBY_OFFSET_CFP_JIT_RETURN: i32 = 48;
+    pub const RUBY_SIZEOF_CONTROL_FRAME: usize = 56;
 
     // Constants from rb_execution_context_t vm_core.h
     pub const RUBY_OFFSET_EC_CFP: i32 = 16;

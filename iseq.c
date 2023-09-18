@@ -28,7 +28,7 @@
 #include "internal/file.h"
 #include "internal/gc.h"
 #include "internal/hash.h"
-#include "internal/parse.h"
+#include "internal/ruby_parser.h"
 #include "internal/sanitizers.h"
 #include "internal/symbol.h"
 #include "internal/thread.h"
@@ -43,6 +43,7 @@
 #include "builtin.h"
 #include "insns.inc"
 #include "insns_info.inc"
+#include "yarp/yarp.h"
 
 VALUE rb_cISeq;
 static VALUE iseqw_new(const rb_iseq_t *iseq);
@@ -170,9 +171,9 @@ rb_iseq_free(const rb_iseq_t *iseq)
 #endif
         ruby_xfree((void *)body->iseq_encoded);
         ruby_xfree((void *)body->insns_info.body);
-        if (body->insns_info.positions) ruby_xfree((void *)body->insns_info.positions);
+        ruby_xfree((void *)body->insns_info.positions);
 #if VM_INSN_INFO_TABLE_IMPL == 2
-        if (body->insns_info.succ_index_table) ruby_xfree(body->insns_info.succ_index_table);
+        ruby_xfree(body->insns_info.succ_index_table);
 #endif
         if (LIKELY(body->local_table != rb_iseq_shared_exc_local_tbl))
             ruby_xfree((void *)body->local_table);
@@ -282,6 +283,29 @@ rb_iseq_mark_and_move_each_value(const rb_iseq_t *iseq, VALUE *original_iseq)
     }
 }
 
+static bool
+cc_is_active(const struct rb_callcache *cc, bool reference_updating)
+{
+    if (cc) {
+        if (reference_updating) {
+            cc = (const struct rb_callcache *)rb_gc_location((VALUE)cc);
+        }
+
+        if (vm_cc_markable(cc)) {
+            if (cc->klass) { // cc is not invalidated
+                const struct rb_callable_method_entry_struct *cme = vm_cc_cme(cc);
+                if (reference_updating) {
+                    cme = (const struct rb_callable_method_entry_struct *)rb_gc_location((VALUE)cme);
+                }
+                if (!METHOD_ENTRY_INVALIDATED(cme)) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
 void
 rb_iseq_mark_and_move(rb_iseq_t *iseq, bool reference_updating)
 {
@@ -310,27 +334,11 @@ rb_iseq_mark_and_move(rb_iseq_t *iseq, bool reference_updating)
 
                 if (cds[i].ci) rb_gc_mark_and_move_ptr(&cds[i].ci);
 
-                const struct rb_callcache *cc = cds[i].cc;
-                if (cc) {
-                    if (reference_updating) {
-                        cc = (const struct rb_callcache *)rb_gc_location((VALUE)cc);
-                    }
-
-                    if (vm_cc_markable(cc)) {
-                        VM_ASSERT((cc->flags & VM_CALLCACHE_ON_STACK) == 0);
-
-                        const struct rb_callable_method_entry_struct *cme = vm_cc_cme(cc);
-                        if (reference_updating) {
-                            cme = (const struct rb_callable_method_entry_struct *)rb_gc_location((VALUE)cme);
-                        }
-
-                        if (cc->klass && !METHOD_ENTRY_INVALIDATED(cme)) {
-                            rb_gc_mark_and_move_ptr(&cds[i].cc);
-                        }
-                        else {
-                            cds[i].cc = rb_vm_empty_cc();
-                        }
-                    }
+                if (cc_is_active(cds[i].cc, reference_updating)) {
+                    rb_gc_mark_and_move_ptr(&cds[i].cc);
+                }
+                else {
+                    cds[i].cc = rb_vm_empty_cc();
                 }
             }
         }
@@ -706,7 +714,6 @@ static rb_compile_option_t COMPILE_OPTION_DEFAULT = {
     OPT_SPECIALISED_INSTRUCTION, /* int specialized_instruction; */
     OPT_OPERANDS_UNIFICATION, /* int operands_unification; */
     OPT_INSTRUCTIONS_UNIFICATION, /* int instructions_unification; */
-    OPT_STACK_CACHING, /* int stack_caching; */
     OPT_FROZEN_STRING_LITERAL,
     OPT_DEBUG_FROZEN_STRING_LITERAL,
     TRUE,			/* coverage_enabled */
@@ -723,7 +730,7 @@ set_compile_option_from_hash(rb_compile_option_t *option, VALUE opt)
       else if (flag == Qfalse)  { (o)->mem = 0; } \
   }
 #define SET_COMPILE_OPTION_NUM(o, h, mem) \
-  { VALUE num = rb_hash_aref(opt, ID2SYM(rb_intern(#mem))); \
+  { VALUE num = rb_hash_aref((h), ID2SYM(rb_intern(#mem))); \
       if (!NIL_P(num)) (o)->mem = NUM2INT(num); \
   }
     SET_COMPILE_OPTION(option, opt, inline_const_cache);
@@ -732,7 +739,6 @@ set_compile_option_from_hash(rb_compile_option_t *option, VALUE opt)
     SET_COMPILE_OPTION(option, opt, specialized_instruction);
     SET_COMPILE_OPTION(option, opt, operands_unification);
     SET_COMPILE_OPTION(option, opt, instructions_unification);
-    SET_COMPILE_OPTION(option, opt, stack_caching);
     SET_COMPILE_OPTION(option, opt, frozen_string_literal);
     SET_COMPILE_OPTION(option, opt, debug_frozen_string_literal);
     SET_COMPILE_OPTION(option, opt, coverage_enabled);
@@ -741,11 +747,15 @@ set_compile_option_from_hash(rb_compile_option_t *option, VALUE opt)
 #undef SET_COMPILE_OPTION_NUM
 }
 
-static void
-rb_iseq_make_compile_option(rb_compile_option_t *option, VALUE opt)
+static rb_compile_option_t *
+set_compile_option_from_ast(rb_compile_option_t *option, const rb_ast_body_t *ast)
 {
-    Check_Type(opt, T_HASH);
-    set_compile_option_from_hash(option, opt);
+#define SET_COMPILE_OPTION(o, a, mem) \
+    ((a)->mem < 0 ? 0 : ((o)->mem = (a)->mem > 0))
+    SET_COMPILE_OPTION(option, ast, frozen_string_literal);
+    SET_COMPILE_OPTION(option, ast, coverage_enabled);
+#undef SET_COMPILE_OPTION
+    return option;
 }
 
 static void
@@ -786,7 +796,6 @@ make_compile_option_value(rb_compile_option_t *option)
         SET_COMPILE_OPTION(option, opt, specialized_instruction);
         SET_COMPILE_OPTION(option, opt, operands_unification);
         SET_COMPILE_OPTION(option, opt, instructions_unification);
-        SET_COMPILE_OPTION(option, opt, stack_caching);
         SET_COMPILE_OPTION(option, opt, frozen_string_literal);
         SET_COMPILE_OPTION(option, opt, debug_frozen_string_literal);
         SET_COMPILE_OPTION(option, opt, coverage_enabled);
@@ -902,13 +911,11 @@ rb_iseq_new_with_opt(const rb_ast_body_t *ast, VALUE name, VALUE path, VALUE rea
     rb_iseq_t *iseq = iseq_alloc();
     rb_compile_option_t new_opt;
 
-    if (option) {
+    if (!option) option = &COMPILE_OPTION_DEFAULT;
+    if (ast) {
         new_opt = *option;
+        option = set_compile_option_from_ast(&new_opt, ast);
     }
-    else {
-        new_opt = COMPILE_OPTION_DEFAULT;
-    }
-    if (ast && ast->compile_option) rb_iseq_make_compile_option(&new_opt, ast->compile_option);
 
     VALUE script_lines = Qnil;
 
@@ -920,9 +927,49 @@ rb_iseq_new_with_opt(const rb_ast_body_t *ast, VALUE name, VALUE path, VALUE rea
     }
 
     prepare_iseq_build(iseq, name, path, realpath, first_lineno, node ? &node->nd_loc : NULL, node ? nd_node_id(node) : -1,
-                       parent, isolated_depth, type, script_lines, &new_opt);
+                       parent, isolated_depth, type, script_lines, option);
 
     rb_iseq_compile_node(iseq, node);
+    finish_iseq_build(iseq);
+
+    return iseq_translate(iseq);
+}
+
+VALUE rb_iseq_compile_yarp_node(rb_iseq_t * iseq, const yp_node_t * yarp_pointer, yp_parser_t *parser);
+
+rb_iseq_t *
+yp_iseq_new_with_opt(yp_node_t *node, yp_parser_t *parser, VALUE name, VALUE path, VALUE realpath,
+                     int first_lineno, const rb_iseq_t *parent, int isolated_depth,
+                     enum rb_iseq_type type, const rb_compile_option_t *option)
+{
+    rb_iseq_t *iseq = iseq_alloc();
+    VALUE script_lines = Qnil;
+    rb_code_location_t code_loc;
+
+    if (!option) option = &COMPILE_OPTION_DEFAULT;
+
+    if (node) {
+        yp_line_column_t start_line_col = yp_newline_list_line_column(&(parser->newline_list), node->location.start);
+        yp_line_column_t end_line_col= yp_newline_list_line_column(&(parser->newline_list), node->location.end);
+        code_loc = (rb_code_location_t) {
+            .beg_pos = {
+                .lineno = (int)start_line_col.line,
+                .column = (int)start_line_col.column
+            },
+                .end_pos = {
+                    .lineno = (int)end_line_col.line,
+                    .column = (int)end_line_col.column
+                },
+        };
+    }
+
+    // TODO: node_id
+    int node_id = -1;
+    prepare_iseq_build(iseq, name, path, realpath, first_lineno, &code_loc, node_id,
+            parent, isolated_depth, type, script_lines, option);
+
+    rb_iseq_compile_yarp_node(iseq, node, parser);
+
     finish_iseq_build(iseq);
 
     return iseq_translate(iseq);
@@ -1109,6 +1156,7 @@ rb_iseq_compile_with_option(VALUE src, VALUE file, VALUE realpath, VALUE line, V
         const rb_iseq_t *outer_scope = rb_iseq_new(NULL, name, name, Qnil, 0, ISEQ_TYPE_TOP);
         VALUE outer_scope_v = (VALUE)outer_scope;
         rb_parser_set_context(parser, outer_scope, FALSE);
+        rb_parser_set_script_lines(parser, RBOOL(ruby_vm_keep_script_lines));
         RB_GC_GUARD(outer_scope_v);
         ast = (*parse)(parser, file, src, ln);
     }
@@ -1312,7 +1360,7 @@ rb_iseqw_new(const rb_iseq_t *iseq)
 static VALUE
 iseqw_s_compile(int argc, VALUE *argv, VALUE self)
 {
-    VALUE src, file = Qnil, path = Qnil, line = INT2FIX(1), opt = Qnil;
+    VALUE src, file = Qnil, path = Qnil, line = Qnil, opt = Qnil;
     int i;
 
     i = rb_scan_args(argc, argv, "1*:", &src, NULL, &opt);
@@ -1332,6 +1380,68 @@ iseqw_s_compile(int argc, VALUE *argv, VALUE self)
     Check_Type(file, T_STRING);
 
     return iseqw_new(rb_iseq_compile_with_option(src, file, path, line, opt));
+}
+
+static VALUE
+iseqw_s_compile_yarp(int argc, VALUE *argv, VALUE self)
+{
+    VALUE src, file = Qnil, path = Qnil, line = Qnil, opt = Qnil;
+    int i;
+
+    i = rb_scan_args(argc, argv, "1*:", &src, NULL, &opt);
+    if (i > 4+NIL_P(opt)) rb_error_arity(argc, 1, 5);
+    switch (i) {
+      case 5: opt = argv[--i];
+      case 4: line = argv[--i];
+      case 3: path = argv[--i];
+      case 2: file = argv[--i];
+    }
+
+    if (NIL_P(file)) file = rb_fstring_lit("<compiled>");
+    if (NIL_P(path)) path = file;
+    if (NIL_P(line)) line = INT2FIX(1);
+
+    Check_Type(path, T_STRING);
+    Check_Type(file, T_STRING);
+
+    rb_iseq_t *iseq = iseq_alloc();
+
+    yp_parser_t parser;
+    size_t len = RSTRING_LEN(src);
+    VALUE name = rb_fstring_lit("<compiled>");
+
+    yp_parser_init(&parser, (const uint8_t *) RSTRING_PTR(src), len, "");
+
+    yp_node_t *node = yp_parse(&parser);
+
+    int first_lineno = NUM2INT(line);
+    yp_line_column_t start_loc = yp_newline_list_line_column(&parser.newline_list, node->location.start);
+    yp_line_column_t end_loc = yp_newline_list_line_column(&parser.newline_list, node->location.end);
+
+    rb_code_location_t node_location;
+    node_location.beg_pos.lineno = (int)start_loc.line;
+    node_location.beg_pos.column = (int)start_loc.column;
+    node_location.end_pos.lineno = (int)end_loc.line;
+    node_location.end_pos.column = (int)end_loc.column;
+
+    int node_id = 0;
+
+    rb_iseq_t *parent = NULL;
+    enum rb_iseq_type iseq_type = ISEQ_TYPE_TOP;
+    rb_compile_option_t option;
+
+    make_compile_option(&option, opt);
+
+    prepare_iseq_build(iseq, name, file, path, first_lineno, &node_location, node_id,
+                       parent, 0, (enum rb_iseq_type)iseq_type, Qnil, &option);
+
+    rb_iseq_compile_yarp_node(iseq, node, &parser);
+
+    finish_iseq_build(iseq);
+    yp_node_destroy(&parser, node);
+    yp_parser_free(&parser);
+
+    return iseqw_new(iseq);
 }
 
 /*
@@ -1422,7 +1532,6 @@ iseqw_s_compile_file(int argc, VALUE *argv, VALUE self)
  *  * +:operands_unification+
  *  * +:peephole_optimization+
  *  * +:specialized_instruction+
- *  * +:stack_caching+
  *  * +:tailcall_optimization+
  *
  *  Additionally, +:debug_level+ can be set to an integer.
@@ -2207,7 +2316,7 @@ rb_iseq_disasm_insn(VALUE ret, const VALUE *code, size_t pos,
     {
         rb_event_flag_t events = rb_iseq_event_flags(iseq, pos);
         if (events) {
-            str = rb_str_catf(str, "[%s%s%s%s%s%s%s%s%s%s%s]",
+            str = rb_str_catf(str, "[%s%s%s%s%s%s%s%s%s%s%s%s]",
                               events & RUBY_EVENT_LINE     ? "Li" : "",
                               events & RUBY_EVENT_CLASS    ? "Cl" : "",
                               events & RUBY_EVENT_END      ? "En" : "",
@@ -2217,6 +2326,7 @@ rb_iseq_disasm_insn(VALUE ret, const VALUE *code, size_t pos,
                               events & RUBY_EVENT_C_RETURN ? "Cr" : "",
                               events & RUBY_EVENT_B_CALL   ? "Bc" : "",
                               events & RUBY_EVENT_B_RETURN ? "Br" : "",
+                              events & RUBY_EVENT_RESCUE   ? "Rs" : "",
                               events & RUBY_EVENT_COVERAGE_LINE   ? "Cli" : "",
                               events & RUBY_EVENT_COVERAGE_BRANCH ? "Cbr" : "");
         }
@@ -2561,6 +2671,7 @@ push_event_info(const rb_iseq_t *iseq, rb_event_flag_t events, int line, VALUE a
     C(RUBY_EVENT_END,      "end",      INT2FIX(line));
     C(RUBY_EVENT_RETURN,   "return",   INT2FIX(line));
     C(RUBY_EVENT_B_RETURN, "b_return", INT2FIX(line));
+    C(RUBY_EVENT_RESCUE,    "rescue",  INT2FIX(line));
 #undef C
 }
 
@@ -2702,17 +2813,6 @@ iseqw_s_disasm(VALUE klass, VALUE body)
 {
     VALUE iseqw = iseqw_s_of(klass, body);
     return NIL_P(iseqw) ? Qnil : rb_iseq_disasm(iseqw_check(iseqw));
-}
-
-const char *
-ruby_node_name(int node)
-{
-    switch (node) {
-#include "node_name.inc"
-      default:
-        rb_bug("unknown node: %d", node);
-        return 0;
-    }
 }
 
 static VALUE
@@ -3089,6 +3189,7 @@ iseq_data_to_ary(const rb_iseq_t *iseq)
             CHECK_EVENT(RUBY_EVENT_RETURN);
             CHECK_EVENT(RUBY_EVENT_B_CALL);
             CHECK_EVENT(RUBY_EVENT_B_RETURN);
+            CHECK_EVENT(RUBY_EVENT_RESCUE);
 #undef CHECK_EVENT
             prev_insn_info = info;
         }
@@ -3915,6 +4016,7 @@ Init_ISeq(void)
     (void)iseq_s_load;
 
     rb_define_singleton_method(rb_cISeq, "compile", iseqw_s_compile, -1);
+    rb_define_singleton_method(rb_cISeq, "compile_yarp", iseqw_s_compile_yarp, -1);
     rb_define_singleton_method(rb_cISeq, "new", iseqw_s_compile, -1);
     rb_define_singleton_method(rb_cISeq, "compile_file", iseqw_s_compile_file, -1);
     rb_define_singleton_method(rb_cISeq, "compile_option", iseqw_s_compile_option_get, 0);

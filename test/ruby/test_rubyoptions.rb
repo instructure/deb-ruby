@@ -74,7 +74,7 @@ class TestRubyOptions < Test::Unit::TestCase
   def test_backtrace_limit
     assert_in_out_err(%w(--backtrace-limit), "", [], /missing argument for --backtrace-limit/)
     assert_in_out_err(%w(--backtrace-limit= 1), "", [], /missing argument for --backtrace-limit/)
-    assert_in_out_err(%w(--backtrace-limit=-1), "", [], /wrong limit for backtrace length/)
+    assert_in_out_err(%w(--backtrace-limit=-2), "", [], /wrong limit for backtrace length/)
     code = 'def f(n);n > 0 ? f(n-1) : raise;end;f(5)'
     assert_in_out_err(%w(--backtrace-limit=1), code, [],
                       [/.*unhandled exception\n/, /^\tfrom .*\n/,
@@ -84,6 +84,18 @@ class TestRubyOptions < Test::Unit::TestCase
                        /^\t \.{3} \d+ levels\.{3}\n/])
     assert_kind_of(Integer, Thread::Backtrace.limit)
     assert_in_out_err(%w(--backtrace-limit=1), "p Thread::Backtrace.limit", ['1'], [])
+    assert_in_out_err(%w(--backtrace-limit 1), "p Thread::Backtrace.limit", ['1'], [])
+    env = {"RUBYOPT" => "--backtrace-limit=5"}
+    assert_in_out_err([env], "p Thread::Backtrace.limit", ['5'], [])
+    assert_in_out_err([env, "--backtrace-limit=1"], "p Thread::Backtrace.limit", ['1'], [])
+    assert_in_out_err([env, "--backtrace-limit=-1"], "p Thread::Backtrace.limit", ['-1'], [])
+    assert_in_out_err([env, "--backtrace-limit=3", "--backtrace-limit=1"],
+                      "p Thread::Backtrace.limit", ['1'], [])
+    assert_in_out_err([{"RUBYOPT" => "--backtrace-limit=5 --backtrace-limit=3"}],
+                      "p Thread::Backtrace.limit", ['3'], [])
+    long_max = RbConfig::LIMITS["LONG_MAX"]
+    assert_in_out_err(%W(--backtrace-limit=#{long_max}), "p Thread::Backtrace.limit",
+                      ["#{long_max}"], [])
   end
 
   def test_warning
@@ -123,12 +135,12 @@ class TestRubyOptions < Test::Unit::TestCase
   end
 
   def test_debug
-    assert_in_out_err(["--disable-gems", "-de", "p $DEBUG"], "", %w(true), [])
+    assert_in_out_err(["-de", "p $DEBUG"], "", %w(true), [])
 
-    assert_in_out_err(["--disable-gems", "--debug", "-e", "p $DEBUG"],
+    assert_in_out_err(["--debug", "-e", "p $DEBUG"],
                       "", %w(true), [])
 
-    assert_in_out_err(["--disable-gems", "--debug-", "-e", "p $DEBUG"], "", %w(), /invalid option --debug-/)
+    assert_in_out_err(["--debug-", "-e", "p $DEBUG"], "", %w(), /invalid option --debug-/)
   end
 
   q = Regexp.method(:quote)
@@ -199,9 +211,9 @@ class TestRubyOptions < Test::Unit::TestCase
     assert_in_out_err(%w(--disable foobarbazqux -e) + [""], "", [],
                       /unknown argument for --disable: `foobarbazqux'/)
     assert_in_out_err(%w(--disable), "", [], /missing argument for --disable/)
-    assert_in_out_err(%w(--disable-gems -e) + ['p defined? Gem'], "", ["nil"], [])
+    assert_in_out_err(%w(-e) + ['p defined? Gem'], "", ["nil"], [])
     assert_in_out_err(%w(--disable-did_you_mean -e) + ['p defined? DidYouMean'], "", ["nil"], [])
-    assert_in_out_err(%w(--disable-gems -e) + ['p defined? DidYouMean'], "", ["nil"], [])
+    assert_in_out_err(%w(-e) + ['p defined? DidYouMean'], "", ["nil"], [])
   end
 
   def test_kanji
@@ -786,11 +798,10 @@ class TestRubyOptions < Test::Unit::TestCase
   end
 
   def assert_segv(args, message=nil)
-    omit if ENV['RUBY_ON_BUG']
-
     # We want YJIT to be enabled in the subprocess if it's enabled for us
     # so that the Ruby description matches.
     args.unshift("--yjit") if self.class.yjit_enabled?
+    args.unshift({'RUBY_ON_BUG' => nil})
 
     test_stdin = ""
     opt = SEGVTest::ExecOptions.dup

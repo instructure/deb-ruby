@@ -1,4 +1,5 @@
-require "lrama/report"
+require "lrama/report/duration"
+require "lrama/parser/token_scanner"
 
 module Lrama
   # Parser for parse.y, generates a grammar
@@ -6,58 +7,6 @@ module Lrama
     include Lrama::Report::Duration
 
     T = Lrama::Lexer::Token
-
-    class TokenScanner
-      def initialize(tokens)
-        @tokens = tokens
-        @index = 0
-      end
-
-      def current_token
-        @tokens[@index]
-      end
-
-      def current_type
-        current_token && current_token.type
-      end
-
-      def next
-        token = current_token
-        @index += 1
-        return token
-      end
-
-      def consume(*token_types)
-        if token_types.include?(current_type)
-          token = current_token
-          self.next
-          return token
-        end
-
-        return nil
-      end
-
-      def consume!(*token_types)
-        consume(*token_types) || (raise "#{token_types} is expected but #{current_type}. #{current_token}")
-      end
-
-      def consume_multi(*token_types)
-        a = []
-
-        while token_types.include?(current_type)
-          a << current_token
-          self.next
-        end
-
-        raise "No token is consumed. #{token_types}" if a.empty?
-
-        return a
-      end
-
-      def eots?
-        current_token.nil?
-      end
-    end
 
     def initialize(text)
       @text = text
@@ -73,6 +22,7 @@ module Lrama
         process_epilogue(grammar, lexer)
         grammar.prepare
         grammar.compute_nullable
+        grammar.compute_first_set
         grammar.validate!
 
         grammar
@@ -110,6 +60,13 @@ module Lrama
           code = grammar.build_code(:printer, code)
           ident_or_tags = ts.consume_multi(T::Ident, T::Tag)
           grammar.add_printer(ident_or_tags: ident_or_tags, code: code, lineno: lineno)
+        when T::P_error_token
+          lineno = ts.current_token.line
+          ts.next
+          code = ts.consume!(T::User_code)
+          code = grammar.build_code(:printer, code)
+          ident_or_tags = ts.consume_multi(T::Ident, T::Tag)
+          grammar.add_error_token(ident_or_tags: ident_or_tags, code: code, lineno: lineno)
         when T::P_lex_param
           ts.next
           code = ts.consume!(T::User_code)
@@ -202,6 +159,14 @@ module Lrama
             grammar.add_right(sym, precedence_number)
           end
           precedence_number += 1
+        when T::P_precedence
+          # %precedence (ident|char|string)+
+          ts.next
+          while (id = ts.consume(T::Ident, T::Char, T::String)) do
+            sym = grammar.add_term(id: id)
+            grammar.add_precedence(sym, precedence_number)
+          end
+          precedence_number += 1
         when nil
           # end of input
           raise "Reach to end of input within declarations"
@@ -226,8 +191,11 @@ module Lrama
       # LHS
       lhs = ts.consume!(T::Ident_Colon) # class:
       lhs.type = T::Ident
+      if named_ref = ts.consume(T::Named_Ref)
+        lhs.alias = named_ref.s_value
+      end
 
-      rhs = parse_grammar_rule_rhs(ts, grammar)
+      rhs = parse_grammar_rule_rhs(ts, grammar, lhs)
 
       grammar.add_rule(lhs: lhs, rhs: rhs, lineno: rhs.first ? rhs.first.line : lhs.line)
 
@@ -237,7 +205,7 @@ module Lrama
           # |
           bar_lineno = ts.current_token.line
           ts.next
-          rhs = parse_grammar_rule_rhs(ts, grammar)
+          rhs = parse_grammar_rule_rhs(ts, grammar, lhs)
           grammar.add_rule(lhs: lhs, rhs: rhs, lineno: rhs.first ? rhs.first.line : bar_lineno)
         when T::Semicolon
           # ;
@@ -256,13 +224,13 @@ module Lrama
       end
     end
 
-    def parse_grammar_rule_rhs(ts, grammar)
+    def parse_grammar_rule_rhs(ts, grammar, lhs)
       a = []
       prec_seen = false
       code_after_prec = false
 
       while true do
-        # TODO: Srting can be here
+        # TODO: String can be here
         case ts.current_type
         when T::Ident
           # keyword_class
@@ -295,8 +263,12 @@ module Lrama
           end
 
           code = ts.current_token
+          code.numberize_references(lhs, a)
           grammar.build_references(code)
           a << code
+          ts.next
+        when T::Named_Ref
+          ts.previous_token.alias = ts.current_token.s_value
           ts.next
         when T::Bar
           # |

@@ -1,4 +1,4 @@
-/* A Bison parser, made by GNU Bison 3.8.2.  */
+/* A Bison parser, made by Lrama 0.5.6.  */
 
 /* Bison interface for Yacc-like parsers in C
 
@@ -35,8 +35,8 @@
    especially those whose name start with YY_ or yy_.  They are
    private implementation details that can be changed or removed.  */
 
-#ifndef YY_YY__Y_TAB_H_INCLUDED
-# define YY_YY__Y_TAB_H_INCLUDED
+#ifndef YY_YY_PARSE_H_INCLUDED
+# define YY_YY_PARSE_H_INCLUDED
 /* Debug traces.  */
 #ifndef YYDEBUG
 # define YYDEBUG 0
@@ -190,6 +190,7 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
+#line 1507 "parse.y"
 
     VALUE val;
     NODE *node;
@@ -200,6 +201,7 @@ union YYSTYPE
     struct rb_strterm_struct *strterm;
     struct lex_context ctxt;
 
+#line 205 "parse.h"
 
 };
 typedef union YYSTYPE YYSTYPE;
@@ -227,4 +229,4 @@ struct YYLTYPE
 int yyparse (struct parser_params *p);
 
 
-#endif /* !YY_YY__Y_TAB_H_INCLUDED  */
+#endif /* !YY_YY_PARSE_H_INCLUDED  */

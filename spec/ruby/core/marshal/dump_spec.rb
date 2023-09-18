@@ -271,6 +271,18 @@ describe "Marshal.dump" do
     end
   end
 
+  describe "with a Rational" do
+    it "dumps a Rational" do
+      Marshal.dump(Rational(2, 3)).should == "\x04\bU:\rRational[\ai\ai\b"
+    end
+  end
+
+  describe "with a Complex" do
+    it "dumps a Complex" do
+      Marshal.dump(Complex(2, 3)).should == "\x04\bU:\fComplex[\ai\ai\b"
+    end
+  end
+
   describe "with a String" do
     it "dumps a blank String" do
       Marshal.dump("".force_encoding("binary")).should == "\004\b\"\000"
@@ -626,17 +638,6 @@ describe "Marshal.dump" do
       load.should == (1...2)
     end
 
-    ruby_version_is ""..."3.0" do
-      it "dumps a Range with extra instance variables" do
-        range = (1...3)
-        range.instance_variable_set :@foo, 42
-        dump = Marshal.dump(range)
-        load = Marshal.load(dump)
-        load.should == range
-        load.instance_variable_get(:@foo).should == 42
-      end
-    end
-
     it "raises TypeError with an anonymous Range subclass" do
       -> { Marshal.dump(Class.new(Range).new(1, 2)) }.should raise_error(TypeError, /can't dump anonymous class/)
     end
@@ -780,7 +781,6 @@ describe "Marshal.dump" do
   end
 
   describe "when passed an IO" do
-
     it "writes the serialized data to the IO-Object" do
       (obj = mock('test')).should_receive(:write).at_least(1)
       Marshal.dump("test", obj)
@@ -803,8 +803,6 @@ describe "Marshal.dump" do
       obj.should_receive(:binmode).at_least(1)
       Marshal.dump("test", obj)
     end
-
-
   end
 
   describe "when passed a StringIO" do

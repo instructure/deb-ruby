@@ -43,7 +43,6 @@ module Bundler
       setup_makes_kernel_gem_public
       silence_deprecations
       silence_root_warning
-      suppress_install_using_messages
       update_requires_all_flag
     ].freeze
 
@@ -75,6 +74,7 @@ module Bundler
       shebang
       system_bindir
       trust-policy
+      version
     ].freeze
 
     DEFAULT_CONFIG = {
@@ -84,19 +84,30 @@ module Bundler
       "BUNDLE_REDIRECT" => 5,
       "BUNDLE_RETRY" => 3,
       "BUNDLE_TIMEOUT" => 10,
+      "BUNDLE_VERSION" => "lockfile",
     }.freeze
 
     def initialize(root = nil)
       @root            = root
       @local_config    = load_config(local_config_file)
-      @env_config      = ENV.to_h.select {|key, _value| key =~ /\ABUNDLE_.+/ }
+
+      @env_config      = ENV.to_h
+      @env_config.select! {|key, _value| key.start_with?("BUNDLE_") }
+      @env_config.delete("BUNDLE_")
+
       @global_config   = load_config(global_config_file)
       @temporary       = {}
     end
 
     def [](name)
       key = key_for(name)
-      value = configs.values.map {|config| config[key] }.compact.first
+
+      value = nil
+      configs.each do |_, config|
+        value = config[key]
+        next if value.nil?
+        break
+      end
 
       converted_value(value, name)
     end
@@ -139,17 +150,22 @@ module Bundler
     end
 
     def all
-      keys = @temporary.keys | @global_config.keys | @local_config.keys | @env_config.keys
+      keys = @temporary.keys.union(@global_config.keys, @local_config.keys, @env_config.keys)
 
-      keys.map do |key|
-        key.sub(/^BUNDLE_/, "").gsub(/___/, "-").gsub(/__/, ".").downcase
-      end.sort
+      keys.map! do |key|
+        key = key.delete_prefix("BUNDLE_")
+        key.gsub!("___", "-")
+        key.gsub!("__", ".")
+        key.downcase!
+        key
+      end.sort!
+      keys
     end
 
     def local_overrides
       repos = {}
       all.each do |k|
-        repos[$'] = self[k] if k =~ /^local\./
+        repos[k.delete_prefix("local.")] = self[k] if k.start_with?("local.")
       end
       repos
     end
@@ -219,7 +235,6 @@ module Bundler
     def path
       configs.each do |_level, settings|
         path = value_for("path", settings)
-        path = "vendor/bundle" if value_for("deployment", settings) && path.nil?
         path_system = value_for("path.system", settings)
         disabled_shared_gems = value_for("disable_shared_gems", settings)
         next if path.nil? && path_system.nil? && disabled_shared_gems.nil?
@@ -227,7 +242,9 @@ module Bundler
         return Path.new(path, system_path)
       end
 
-      Path.new(nil, false)
+      path = "vendor/bundle" if self[:deployment]
+
+      Path.new(path, false)
     end
 
     Path = Struct.new(:explicit_path, :system_path) do
@@ -301,7 +318,7 @@ module Bundler
     private
 
     def configs
-      {
+      @configs ||= {
         :temporary => @temporary,
         :local => @local_config,
         :env => @env_config,
@@ -327,16 +344,20 @@ module Bundler
     end
 
     def is_bool(name)
-      BOOL_KEYS.include?(name.to_s) || BOOL_KEYS.include?(parent_setting_for(name.to_s))
+      name = name.to_s
+      BOOL_KEYS.include?(name) || BOOL_KEYS.include?(parent_setting_for(name))
     end
 
     def is_string(name)
-      STRING_KEYS.include?(name.to_s) || name.to_s.start_with?("local.") || name.to_s.start_with?("mirror.") || name.to_s.start_with?("build.")
+      name = name.to_s
+      STRING_KEYS.include?(name) || name.start_with?("local.") || name.start_with?("mirror.") || name.start_with?("build.")
     end
 
     def to_bool(value)
       case value
-      when nil, /\A(false|f|no|n|0|)\z/i, false
+      when String
+        value.match?(/\A(false|f|no|n|0|)\z/i) ? false : true
+      when nil, false
         false
       else
         true
@@ -391,6 +412,8 @@ module Bundler
     end
 
     def converted_value(value, key)
+      key = key.to_s
+
       if is_array(key)
         to_array(value)
       elsif value.nil?
@@ -489,8 +512,11 @@ module Bundler
 
     def self.key_for(key)
       key = normalize_uri(key).to_s if key.is_a?(String) && key.start_with?("http", "mirror.http")
-      key = key.to_s.gsub(".", "__").gsub("-", "___").upcase
-      "BUNDLE_#{key}"
+      key = key.to_s.gsub(".", "__")
+      key.gsub!("-", "___")
+      key.upcase!
+
+      key.prepend("BUNDLE_")
     end
 
     # TODO: duplicates Rubygems#normalize_uri

@@ -48,8 +48,8 @@ class Reline::LineEditor
     PERFECT_MATCH = :perfect_match
   end
 
-  CompletionJourneyData = Struct.new('CompletionJourneyData', :preposing, :postposing, :list, :pointer)
-  MenuInfo = Struct.new('MenuInfo', :target, :list)
+  CompletionJourneyData = Struct.new(:preposing, :postposing, :list, :pointer)
+  MenuInfo = Struct.new(:target, :list)
 
   PROMPT_LIST_CACHE_TIMEOUT = 0.5
   MINIMUM_SCROLLBAR_HEIGHT = 1
@@ -58,6 +58,10 @@ class Reline::LineEditor
     @config = config
     @completion_append_character = ''
     reset_variables(encoding: encoding)
+  end
+
+  def io_gate
+    Reline::IOGate
   end
 
   def set_pasting_state(in_pasting)
@@ -562,6 +566,16 @@ class Reline::LineEditor
       @line_editor.instance_variable_get(:@screen_size).last
     end
 
+    def screen_height
+      @line_editor.instance_variable_get(:@screen_size).first
+    end
+
+    def preferred_dialog_height
+      rest_height = @line_editor.instance_variable_get(:@rest_height)
+      scroll_partial_screen = @line_editor.instance_variable_get(:@scroll_partial_screen) || 0
+      [cursor_pos.y - scroll_partial_screen, rest_height, (screen_height + 6) / 5].max
+    end
+
     def completion_journey_data
       @line_editor.instance_variable_get(:@completion_journey_data)
     end
@@ -714,7 +728,7 @@ class Reline::LineEditor
     ymax = ymax.clamp(screen_y_range.begin, screen_y_range.end)
     dialog_y = @first_line_started_from + @started_from
     cursor_y = dialog_y
-    if @highest_in_all < ymax
+    if @highest_in_all <= ymax
       scroll_down(ymax - cursor_y)
       move_cursor_up(ymax - cursor_y)
     end
@@ -1500,11 +1514,13 @@ class Reline::LineEditor
       return if key.char >= 128 # maybe, first byte of multi byte
       method_symbol = @config.editing_mode.get_method(key.combined_char)
       if key.with_meta and method_symbol == :ed_unassigned
-        # split ESC + key
-        method_symbol = @config.editing_mode.get_method("\e".ord)
-        process_key("\e".ord, method_symbol)
-        method_symbol = @config.editing_mode.get_method(key.char)
-        process_key(key.char, method_symbol)
+        if @config.editing_mode_is?(:vi_command, :vi_insert)
+          # split ESC + key in vi mode
+          method_symbol = @config.editing_mode.get_method("\e".ord)
+          process_key("\e".ord, method_symbol)
+          method_symbol = @config.editing_mode.get_method(key.char)
+          process_key(key.char, method_symbol)
+        end
       else
         process_key(key.combined_char, method_symbol)
       end
@@ -1589,7 +1605,7 @@ class Reline::LineEditor
     else
       @just_cursor_moving = false
     end
-    if @is_multiline and @auto_indent_proc and not simplified_rendering?
+    if @is_multiline and @auto_indent_proc and not simplified_rendering? and @line
       process_auto_indent
     end
   end
@@ -1635,7 +1651,7 @@ class Reline::LineEditor
       @line = ' ' * new_indent + @line.lstrip
 
       new_indent = nil
-      result = @auto_indent_proc.(new_lines[0..-2], @line_index - 1, (new_lines[-2].size + 1), false)
+      result = @auto_indent_proc.(new_lines[0..-2], @line_index - 1, (new_lines[@line_index - 1].bytesize + 1), false)
       if result
         new_indent = result
       end
@@ -2680,6 +2696,7 @@ class Reline::LineEditor
       @cursor_max -= width
     end
   end
+  alias_method :kill_word, :em_delete_next_word
 
   private def ed_delete_prev_word(key)
     if @byte_pointer > 0
@@ -2691,6 +2708,7 @@ class Reline::LineEditor
       @cursor_max -= width
     end
   end
+  alias_method :backward_kill_word, :ed_delete_prev_word
 
   private def ed_transpose_chars(key)
     if @byte_pointer > 0
@@ -3276,4 +3294,7 @@ class Reline::LineEditor
     @mark_pointer = new_pointer
   end
   alias_method :exchange_point_and_mark, :em_exchange_mark
+
+  private def em_meta_next(key)
+  end
 end

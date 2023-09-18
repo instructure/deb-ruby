@@ -192,13 +192,12 @@ pub type ruby_value_type = u32;
 pub const RUBY_FL_USHIFT: ruby_fl_ushift = 12;
 pub type ruby_fl_ushift = u32;
 pub const RUBY_FL_WB_PROTECTED: ruby_fl_type = 32;
-pub const RUBY_FL_PROMOTED0: ruby_fl_type = 32;
-pub const RUBY_FL_PROMOTED1: ruby_fl_type = 64;
-pub const RUBY_FL_PROMOTED: ruby_fl_type = 96;
+pub const RUBY_FL_PROMOTED: ruby_fl_type = 32;
+pub const RUBY_FL_UNUSED6: ruby_fl_type = 64;
 pub const RUBY_FL_FINALIZE: ruby_fl_type = 128;
-pub const RUBY_FL_TAINT: ruby_fl_type = 256;
+pub const RUBY_FL_TAINT: ruby_fl_type = 0;
 pub const RUBY_FL_SHAREABLE: ruby_fl_type = 256;
-pub const RUBY_FL_UNTRUSTED: ruby_fl_type = 256;
+pub const RUBY_FL_UNTRUSTED: ruby_fl_type = 0;
 pub const RUBY_FL_SEEN_OBJ_ID: ruby_fl_type = 512;
 pub const RUBY_FL_EXIVAR: ruby_fl_type = 1024;
 pub const RUBY_FL_FREEZE: ruby_fl_type = 2048;
@@ -245,7 +244,6 @@ pub type st_foreach_callback_func = ::std::option::Option<
 >;
 pub const RARRAY_EMBED_FLAG: ruby_rarray_flags = 8192;
 pub const RARRAY_EMBED_LEN_MASK: ruby_rarray_flags = 4161536;
-pub const RARRAY_TRANSIENT_FLAG: ruby_rarray_flags = 33554432;
 pub type ruby_rarray_flags = u32;
 pub const RARRAY_EMBED_LEN_SHIFT: ruby_rarray_consts = 15;
 pub type ruby_rarray_consts = u32;
@@ -253,9 +251,6 @@ pub const RMODULE_IS_REFINEMENT: ruby_rmodule_flags = 32768;
 pub type ruby_rmodule_flags = u32;
 pub const ROBJECT_EMBED: ruby_robject_flags = 8192;
 pub type ruby_robject_flags = u32;
-pub const ROBJECT_OFFSET_AS_HEAP_IVPTR: i32 = 16;
-pub const ROBJECT_OFFSET_AS_HEAP_IV_INDEX_TBL: i32 = 24;
-pub const ROBJECT_OFFSET_AS_ARY: i32 = 16;
 pub type rb_block_call_func = ::std::option::Option<
     unsafe extern "C" fn(
         yielded_arg: VALUE,
@@ -626,6 +621,20 @@ pub struct rb_id_table {
     _unused: [u8; 0],
 }
 pub type rb_num_t = ::std::os::raw::c_ulong;
+pub const RUBY_TAG_NONE: ruby_tag_type = 0;
+pub const RUBY_TAG_RETURN: ruby_tag_type = 1;
+pub const RUBY_TAG_BREAK: ruby_tag_type = 2;
+pub const RUBY_TAG_NEXT: ruby_tag_type = 3;
+pub const RUBY_TAG_RETRY: ruby_tag_type = 4;
+pub const RUBY_TAG_REDO: ruby_tag_type = 5;
+pub const RUBY_TAG_RAISE: ruby_tag_type = 6;
+pub const RUBY_TAG_THROW: ruby_tag_type = 7;
+pub const RUBY_TAG_FATAL: ruby_tag_type = 8;
+pub const RUBY_TAG_MASK: ruby_tag_type = 15;
+pub type ruby_tag_type = u32;
+pub const VM_THROW_NO_ESCAPE_FLAG: ruby_vm_throw_flags = 32768;
+pub const VM_THROW_STATE_MASK: ruby_vm_throw_flags = 255;
+pub type ruby_vm_throw_flags = u32;
 #[repr(C)]
 pub struct iseq_inline_constant_cache_entry {
     pub flags: VALUE,
@@ -759,6 +768,10 @@ impl rb_proc_t {
         __bindgen_bitfield_unit
     }
 }
+pub const VM_CHECKMATCH_TYPE_WHEN: vm_check_match_type = 1;
+pub const VM_CHECKMATCH_TYPE_CASE: vm_check_match_type = 2;
+pub const VM_CHECKMATCH_TYPE_RESCUE: vm_check_match_type = 3;
+pub type vm_check_match_type = u32;
 pub const VM_SPECIAL_OBJECT_VMCORE: vm_special_object_type = 1;
 pub const VM_SPECIAL_OBJECT_CBASE: vm_special_object_type = 2;
 pub const VM_SPECIAL_OBJECT_CONST_BASE: vm_special_object_type = 3;
@@ -806,6 +819,7 @@ pub type rb_shape_t = rb_shape;
 pub struct rb_cvar_class_tbl_entry {
     pub index: u32,
     pub global_cvar_state: rb_serial_t,
+    pub cref: *const rb_cref_t,
     pub class_value: VALUE,
 }
 pub const VM_CALL_ARGS_SPLAT_bit: vm_call_flag_bits = 0;
@@ -843,7 +857,6 @@ pub const RHASH_AR_TABLE_SIZE_MASK: ruby_rhash_flags = 983040;
 pub const RHASH_AR_TABLE_SIZE_SHIFT: ruby_rhash_flags = 16;
 pub const RHASH_AR_TABLE_BOUND_MASK: ruby_rhash_flags = 15728640;
 pub const RHASH_AR_TABLE_BOUND_SHIFT: ruby_rhash_flags = 20;
-pub const RHASH_TRANSIENT_FLAG: ruby_rhash_flags = 16777216;
 pub const RHASH_LEV_SHIFT: ruby_rhash_flags = 25;
 pub const RHASH_LEV_MAX: ruby_rhash_flags = 127;
 pub type ruby_rhash_flags = u32;
@@ -1062,8 +1075,11 @@ pub type ruby_vminsn_type = u32;
 pub type rb_iseq_callback = ::std::option::Option<
     unsafe extern "C" fn(arg1: *const rb_iseq_t, arg2: *mut ::std::os::raw::c_void),
 >;
-pub const RUBY_OFFSET_RSTRING_AS_HEAP_LEN: rstring_offsets = 16;
-pub const RUBY_OFFSET_RSTRING_EMBED_LEN: rstring_offsets = 16;
+pub const ROBJECT_OFFSET_AS_HEAP_IVPTR: robject_offsets = 16;
+pub const ROBJECT_OFFSET_AS_HEAP_IV_INDEX_TBL: robject_offsets = 24;
+pub const ROBJECT_OFFSET_AS_ARY: robject_offsets = 16;
+pub type robject_offsets = u32;
+pub const RUBY_OFFSET_RSTRING_LEN: rstring_offsets = 16;
 pub type rstring_offsets = u32;
 pub type rb_seq_param_keyword_struct = rb_iseq_constant_body__bindgen_ty_1_rb_iseq_param_keyword;
 extern "C" {
@@ -1083,6 +1099,7 @@ extern "C" {
     pub static mut rb_cFalseClass: VALUE;
     pub static mut rb_cFloat: VALUE;
     pub static mut rb_cHash: VALUE;
+    pub static mut rb_cIO: VALUE;
     pub static mut rb_cInteger: VALUE;
     pub static mut rb_cModule: VALUE;
     pub static mut rb_cNilClass: VALUE;
@@ -1101,6 +1118,7 @@ extern "C" {
     pub fn rb_hash_aref(hash: VALUE, key: VALUE) -> VALUE;
     pub fn rb_hash_aset(hash: VALUE, key: VALUE, val: VALUE) -> VALUE;
     pub fn rb_hash_bulk_insert(argc: ::std::os::raw::c_long, argv: *const VALUE, hash: VALUE);
+    pub fn rb_obj_is_proc(recv: VALUE) -> VALUE;
     pub fn rb_sym2id(obj: VALUE) -> ID;
     pub fn rb_id2sym(id: ID) -> VALUE;
     pub fn rb_intern(name: *const ::std::os::raw::c_char) -> ID;
@@ -1137,6 +1155,7 @@ extern "C" {
         n: ::std::os::raw::c_long,
         elts: *const VALUE,
     ) -> VALUE;
+    pub static mut rb_vm_insns_count: u64;
     pub fn rb_method_entry_at(obj: VALUE, id: ID) -> *const rb_method_entry_t;
     pub fn rb_callable_method_entry(klass: VALUE, id: ID) -> *const rb_callable_method_entry_t;
     pub fn rb_callable_method_entry_or_negative(
@@ -1147,6 +1166,7 @@ extern "C" {
     pub static mut rb_block_param_proxy: VALUE;
     pub fn rb_vm_ep_local_ep(ep: *const VALUE) -> *const VALUE;
     pub fn rb_iseq_path(iseq: *const rb_iseq_t) -> VALUE;
+    pub fn rb_vm_env_write(ep: *const VALUE, index: ::std::os::raw::c_int, v: VALUE);
     pub fn rb_vm_bh_to_procval(ec: *const rb_execution_context_t, block_handler: VALUE) -> VALUE;
     pub fn rb_vm_frame_method_entry(
         cfp: *const rb_control_frame_t,
@@ -1295,6 +1315,7 @@ extern "C" {
     pub fn rb_get_cfp_self(cfp: *mut rb_control_frame_struct) -> VALUE;
     pub fn rb_get_cfp_ep(cfp: *mut rb_control_frame_struct) -> *mut VALUE;
     pub fn rb_get_cfp_ep_level(cfp: *mut rb_control_frame_struct, lv: u32) -> *const VALUE;
+    pub fn rb_vm_base_ptr(cfp: *mut rb_control_frame_struct) -> *mut VALUE;
     pub fn rb_yarv_class_of(obj: VALUE) -> VALUE;
     pub fn rb_yarv_str_eql_internal(str1: VALUE, str2: VALUE) -> VALUE;
     pub fn rb_str_neq_internal(str1: VALUE, str2: VALUE) -> VALUE;
@@ -1336,4 +1357,11 @@ extern "C" {
         line: ::std::os::raw::c_int,
     );
     pub fn rb_yjit_assert_holding_vm_lock();
+    pub fn rb_yjit_sendish_sp_pops(ci: *const rb_callinfo) -> usize;
+    pub fn rb_yjit_invokeblock_sp_pops(ci: *const rb_callinfo) -> usize;
+    pub fn rb_yjit_set_exception_return(
+        cfp: *mut rb_control_frame_t,
+        leave_exit: *mut ::std::os::raw::c_void,
+        leave_exception: *mut ::std::os::raw::c_void,
+    );
 }

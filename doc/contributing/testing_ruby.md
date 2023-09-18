@@ -70,13 +70,19 @@ We can run any of the make scripts [in parallel](building_ruby.md#label-Running+
     first the file name, and then the test name, prefixed with `--name`. For example:
 
     ```
-    make test-all TESTS="../test/ruby/test_alias.rb --name=/test_alias_with_zsuper_method/"
+    make test-all TESTS="../test/ruby/test_alias.rb --name=TestAlias#test_alias_with_zsuper_method"
     ```
 
     To run these specs with logs, we can use:
 
     ```
     make test-all TESTS=-v
+    ```
+
+    We can display the help of the `TESTS` option:
+
+    ```
+    $ make test-all TESTS=--help
     ```
 
     If we would like to run both the `test/` and `bootstraptest/` test suites, we can run
@@ -93,28 +99,28 @@ We can run any of the make scripts [in parallel](building_ruby.md#label-Running+
     make test-spec
     ```
 
-    To run a specific directory, we can use `MSPECOPT` to specify the directory:
+    To run a specific directory, we can use `SPECOPTS` to specify the directory:
 
     ```
-    make test-spec MSPECOPT=spec/ruby/core/array
+    make test-spec SPECOPTS=spec/ruby/core/array
     ```
 
-    To run a specific file, we can also use `MSPECOPT` to specify the file:
+    To run a specific file, we can also use `SPECOPTS` to specify the file:
 
     ```
-    make test-spec MSPECOPT=spec/ruby/core/array/any_spec.rb
+    make test-spec SPECOPTS=spec/ruby/core/array/any_spec.rb
     ```
 
     To run a specific test, we can use the `--example` flag to match against the test name:
 
     ```
-    make test-spec MSPECOPT="../spec/ruby/core/array/any_spec.rb --example='is false if the array is empty'"
+    make test-spec SPECOPTS="../spec/ruby/core/array/any_spec.rb --example='is false if the array is empty'"
     ```
 
     To run these specs with logs, we can use:
 
     ```
-    make test-spec MSPECOPT=-Vfs
+    make test-spec SPECOPTS=-Vfs
     ```
 
     To run a ruby-spec file or directory with GNU make, we can use
