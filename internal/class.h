@@ -17,6 +17,9 @@
 #include "ruby/intern.h"        /* for rb_alloc_func_t */
 #include "ruby/ruby.h"          /* for struct RBasic */
 #include "shape.h"
+#include "ruby_assert.h"
+#include "vm_core.h"
+#include "method.h"             /* for rb_cref_t */
 
 #ifdef RCLASS_SUPER
 # undef RCLASS_SUPER
@@ -32,6 +35,7 @@ typedef struct rb_subclass_entry rb_subclass_entry_t;
 struct rb_cvar_class_tbl_entry {
     uint32_t index;
     rb_serial_t global_cvar_state;
+    const rb_cref_t * cref;
     VALUE class_value;
 };
 
@@ -115,6 +119,7 @@ VALUE rb_module_s_alloc(VALUE klass);
 void rb_module_set_initialized(VALUE module);
 void rb_module_check_initializable(VALUE module);
 VALUE rb_make_metaclass(VALUE, VALUE);
+VALUE rb_iclass_alloc(VALUE klass);
 VALUE rb_include_class_new(VALUE, VALUE);
 void rb_class_foreach_subclass(VALUE klass, void (*f)(VALUE, VALUE), VALUE);
 void rb_class_detach_subclasses(VALUE);
@@ -143,7 +148,7 @@ static inline rb_alloc_func_t
 RCLASS_ALLOCATOR(VALUE klass)
 {
     if (FL_TEST_RAW(klass, FL_SINGLETON)) {
-        return NULL;
+        return 0;
     }
     return RCLASS_EXT(klass)->as.class.allocator;
 }
@@ -201,7 +206,7 @@ RCLASS_SET_SUPER(VALUE klass, VALUE super)
 static inline void
 RCLASS_SET_CLASSPATH(VALUE klass, VALUE classpath, bool permanent)
 {
-    assert(BUILTIN_TYPE(klass) == T_CLASS || BUILTIN_TYPE(klass) == T_MODULE);
+    assert(BUILTIN_TYPE(klass) == T_CLASS || BUILTIN_TYPE(klass) == T_MODULE || klass == rb_mRubyVMFrozenCore);
     assert(classpath == 0 || BUILTIN_TYPE(classpath) == T_STRING);
 
     RB_OBJ_WRITE(klass, &(RCLASS_EXT(klass)->classpath), classpath);

@@ -18,7 +18,7 @@ use std::cmp::min;
 use std::collections::HashMap;
 use std::ffi::CStr;
 use std::mem;
-use std::os::raw::{c_int};
+use std::os::raw::c_int;
 use std::ptr;
 use std::rc::Rc;
 use std::slice;
@@ -241,12 +241,17 @@ pub enum JCCKinds {
     JCC_JNZ,
     JCC_JZ,
     JCC_JE,
+    JCC_JB,
     JCC_JBE,
     JCC_JNA,
+    JCC_JNAE,
 }
 
 #[inline(always)]
 fn gen_counter_incr(asm: &mut Assembler, counter: Counter) {
+    // Assert that default counters are not incremented by generated code as this would impact performance
+    assert!(!DEFAULT_COUNTERS.contains(&counter), "gen_counter_incr incremented {:?}", counter);
+
     if get_option!(gen_stats) {
         asm.comment(&format!("increment counter {}", counter.get_name()));
         let ptr = get_counter_ptr(&counter.get_name());
@@ -340,12 +345,14 @@ fn verify_ctx(jit: &JITState, ctx: &Context) {
     // Verify stack operand types
     let top_idx = cmp::min(ctx.get_stack_size(), MAX_TEMP_TYPES as u8);
     for i in 0..top_idx {
-        let (learned_mapping, learned_type) = ctx.get_opnd_mapping(StackOpnd(i));
+        let learned_mapping = ctx.get_opnd_mapping(StackOpnd(i));
+        let learned_type = ctx.get_opnd_type(StackOpnd(i));
+
         let stack_val = jit.peek_at_stack(ctx, i as isize);
         let val_type = Type::from(stack_val);
 
-        match learned_mapping {
-            TempMapping::MapToSelf => {
+        match learned_mapping.get_kind() {
+            TempMappingKind::MapToSelf => {
                 if self_val != stack_val {
                     panic!(
                         "verify_ctx: stack value was mapped to self, but values did not match!\n  stack: {}\n  self: {}",
@@ -354,8 +361,8 @@ fn verify_ctx(jit: &JITState, ctx: &Context) {
                     );
                 }
             }
-            TempMapping::MapToLocal(local_idx) => {
-                let local_idx: u8 = local_idx.into();
+            TempMappingKind::MapToLocal => {
+                let local_idx: u8 = learned_mapping.get_local_idx().into();
                 let local_val = jit.peek_at_local(local_idx.into());
                 if local_val != stack_val {
                     panic!(
@@ -366,7 +373,7 @@ fn verify_ctx(jit: &JITState, ctx: &Context) {
                     );
                 }
             }
-            TempMapping::MapToStack => {}
+            TempMappingKind::MapToStack => {}
         }
 
         // If the actual type differs from the learned type
@@ -403,7 +410,7 @@ fn verify_ctx(jit: &JITState, ctx: &Context) {
 // to the interpreter when it cannot service a stub by generating new code.
 // Before coming here, branch_stub_hit() takes care of fully reconstructing
 // interpreter state.
-fn gen_code_for_exit_from_stub(ocb: &mut OutlinedCb) -> CodePtr {
+fn gen_stub_exit(ocb: &mut OutlinedCb) -> CodePtr {
     let ocb = ocb.unwrap();
     let code_ptr = ocb.get_write_ptr();
     let mut asm = Assembler::new();
@@ -546,7 +553,7 @@ pub fn jit_ensure_block_entry_exit(jit: &mut JITState, asm: &mut Assembler, ocb:
     // If we're compiling the first instruction in the block.
     if jit.insn_idx == jit.starting_insn_idx {
         // Generate the exit with the cache in Assembler.
-        let side_exit_context = SideExitContext { pc: jit.pc, ctx: block_starting_context.clone() };
+        let side_exit_context = SideExitContext::new(jit.pc, block_starting_context.clone());
         let entry_exit = asm.get_side_exit(&side_exit_context, None, ocb);
         jit.block_entry_exit = Some(entry_exit);
     } else {
@@ -615,6 +622,38 @@ fn gen_leave_exit(ocb: &mut OutlinedCb) -> CodePtr {
     return code_ptr;
 }
 
+// Increment SP and transfer the execution to the interpreter after jit_exec_exception().
+// On jit_exec_exception(), you need to return Qundef to keep executing caller non-FINISH
+// frames on the interpreter. You also need to increment SP to push the return value to
+// the caller's stack, which is different from gen_stub_exit().
+fn gen_leave_exception(ocb: &mut OutlinedCb) -> CodePtr {
+    let ocb = ocb.unwrap();
+    let code_ptr = ocb.get_write_ptr();
+    let mut asm = Assembler::new();
+
+    // Every exit to the interpreter should be counted
+    gen_counter_incr(&mut asm, Counter::leave_interp_return);
+
+    asm.comment("increment SP of the caller");
+    let sp = Opnd::mem(64, CFP, RUBY_OFFSET_CFP_SP);
+    let new_sp = asm.add(sp, SIZEOF_VALUE.into());
+    asm.mov(sp, new_sp);
+
+    asm.comment("exit from exception");
+    asm.cpop_into(SP);
+    asm.cpop_into(EC);
+    asm.cpop_into(CFP);
+
+    asm.frame_teardown();
+
+    // Execute vm_exec_core
+    asm.cret(Qundef.into());
+
+    asm.compile(ocb, None);
+
+    return code_ptr;
+}
+
 // Generate a runtime guard that ensures the PC is at the expected
 // instruction index in the iseq, otherwise takes an entry stub
 // that generates another check and entry.
@@ -645,7 +684,15 @@ pub fn gen_entry_chain_guard(
 
 /// Compile an interpreter entry block to be inserted into an iseq
 /// Returns None if compilation fails.
-pub fn gen_entry_prologue(cb: &mut CodeBlock, ocb: &mut OutlinedCb, iseq: IseqPtr, insn_idx: u16) -> Option<CodePtr> {
+/// If jit_exception is true, compile JIT code for handling exceptions.
+/// See [jit_compile_exception] for details.
+pub fn gen_entry_prologue(
+    cb: &mut CodeBlock,
+    ocb: &mut OutlinedCb,
+    iseq: IseqPtr,
+    insn_idx: u16,
+    jit_exception: bool,
+) -> Option<CodePtr> {
     let code_ptr = cb.get_write_ptr();
 
     let mut asm = Assembler::new();
@@ -670,19 +717,36 @@ pub fn gen_entry_prologue(cb: &mut CodeBlock, ocb: &mut OutlinedCb, iseq: IseqPt
     asm.mov(SP, Opnd::mem(64, CFP, RUBY_OFFSET_CFP_SP));
 
     // Setup cfp->jit_return
-    asm.mov(
-        Opnd::mem(64, CFP, RUBY_OFFSET_CFP_JIT_RETURN),
-        Opnd::const_ptr(CodegenGlobals::get_leave_exit_code().raw_ptr()),
-    );
+    // If this is an exception handler entry point
+    if jit_exception {
+        // On jit_exec_exception(), it's NOT safe to return a non-Qundef value
+        // from a non-FINISH frame. This function fixes that problem.
+        // See [jit_compile_exception] for details.
+        asm.ccall(
+            rb_yjit_set_exception_return as *mut u8,
+            vec![
+                CFP,
+                Opnd::const_ptr(CodegenGlobals::get_leave_exit_code().raw_ptr()),
+                Opnd::const_ptr(CodegenGlobals::get_leave_exception_code().raw_ptr()),
+            ],
+        );
+    } else {
+        // On jit_exec() or JIT_EXEC(), it's safe to return a non-Qundef value
+        // on the entry frame. See [jit_compile] for details.
+        asm.mov(
+            Opnd::mem(64, CFP, RUBY_OFFSET_CFP_JIT_RETURN),
+            Opnd::const_ptr(CodegenGlobals::get_leave_exit_code().raw_ptr()),
+        );
+    }
 
-    // We're compiling iseqs that we *expect* to start at `insn_idx`. But in
-    // the case of optional parameters, the interpreter can set the pc to a
-    // different location depending on the optional parameters.  If an iseq
-    // has optional parameters, we'll add a runtime check that the PC we've
+    // We're compiling iseqs that we *expect* to start at `insn_idx`.
+    // But in the case of optional parameters or when handling exceptions,
+    // the interpreter can set the pc to a different location. For
+    // such scenarios, we'll add a runtime check that the PC we've
     // compiled for is the same PC that the interpreter wants us to run with.
     // If they don't match, then we'll jump to an entry stub and generate
     // another PC check and entry there.
-    let pending_entry = if unsafe { get_iseq_flags_has_opt(iseq) } {
+    let pending_entry = if unsafe { get_iseq_flags_has_opt(iseq) } || jit_exception {
         Some(gen_entry_chain_guard(&mut asm, ocb, iseq, insn_idx)?)
     } else {
         None
@@ -800,7 +864,7 @@ pub fn gen_single_block(
         let blockid_idx = blockid.idx;
         let chain_depth = if asm.ctx.get_chain_depth() > 0 { format!("(chain_depth: {})", asm.ctx.get_chain_depth()) } else { "".to_string() };
         asm.comment(&format!("Block: {} {}", iseq_get_location(blockid.iseq, blockid_idx), chain_depth));
-        asm.comment(&format!("reg_temps: {:08b}", ctx.get_reg_temps().as_u8()));
+        asm.comment(&format!("reg_temps: {:08b}", asm.ctx.get_reg_temps().as_u8()));
     }
 
     // For each instruction to compile
@@ -847,14 +911,14 @@ pub fn gen_single_block(
             verify_ctx(&jit, &asm.ctx);
         }
 
+        // :count-placement:
+        // Count bytecode instructions that execute in generated code.
+        // Note that the increment happens even when the output takes side exit.
+        gen_counter_incr(&mut asm, Counter::yjit_insns_count);
+
         // Lookup the codegen function for this instruction
         let mut status = None;
         if let Some(gen_fn) = get_gen_fn(VALUE(opcode)) {
-            // :count-placement:
-            // Count bytecode instructions that execute in generated code.
-            // Note that the increment happens even when the output takes side exit.
-            gen_counter_incr(&mut asm, Counter::exec_instruction);
-
             // Add a comment for the name of the YARV instruction
             asm.comment(&format!("Insn: {:04} {} (stack_size: {})", insn_idx, insn_name(opcode), asm.ctx.get_stack_size()));
 
@@ -950,9 +1014,9 @@ fn gen_dup(
     _ocb: &mut OutlinedCb,
 ) -> Option<CodegenStatus> {
     let dup_val = asm.stack_opnd(0);
-    let (mapping, tmp_type) = asm.ctx.get_opnd_mapping(dup_val.into());
+    let mapping = asm.ctx.get_opnd_mapping(dup_val.into());
 
-    let loc0 = asm.stack_push_mapping((mapping, tmp_type));
+    let loc0 = asm.stack_push_mapping(mapping);
     asm.mov(loc0, dup_val);
 
     Some(KeepCompiling)
@@ -1213,7 +1277,7 @@ fn gen_newarray(
     );
 
     asm.stack_pop(n.as_usize());
-    let stack_ret = asm.stack_push(Type::CArray);
+    let stack_ret = asm.stack_push(Type::TArray);
     asm.mov(stack_ret, new_ary);
 
     Some(KeepCompiling)
@@ -1236,7 +1300,7 @@ fn gen_duparray(
         vec![ary.into()],
     );
 
-    let stack_ret = asm.stack_push(Type::CArray);
+    let stack_ret = asm.stack_push(Type::TArray);
     asm.mov(stack_ret, new_ary);
 
     Some(KeepCompiling)
@@ -1358,7 +1422,7 @@ fn guard_object_is_heap(
     asm.cmp(object, Qfalse.into());
     asm.je(Target::side_exit(counter));
 
-    if object_type.diff(Type::UnknownHeap) != TypeDiff::Incompatible {
+    if Type::UnknownHeap.diff(object_type) != TypeDiff::Incompatible {
         asm.ctx.upgrade_opnd_type(object_opnd, Type::UnknownHeap);
     }
 }
@@ -1375,7 +1439,7 @@ fn guard_object_is_array(
     }
 
     let object_reg = match object {
-        Opnd::Reg(_) => object,
+        Opnd::InsnOut { .. } => object,
         _ => asm.load(object),
     };
     guard_object_is_heap(asm, object_reg, object_opnd, counter);
@@ -1390,7 +1454,7 @@ fn guard_object_is_array(
     asm.cmp(flags_opnd, (RUBY_T_ARRAY as u64).into());
     asm.jne(Target::side_exit(counter));
 
-    if object_type.diff(Type::TArray) != TypeDiff::Incompatible {
+    if Type::UnknownHeap.diff(object_type) != TypeDiff::Incompatible {
         asm.ctx.upgrade_opnd_type(object_opnd, Type::TArray);
     }
 }
@@ -1407,7 +1471,7 @@ fn guard_object_is_string(
     }
 
     let object_reg = match object {
-        Opnd::Reg(_) => object,
+        Opnd::InsnOut { .. } => object,
         _ => asm.load(object),
     };
     guard_object_is_heap(asm, object_reg, object_opnd, counter);
@@ -1422,7 +1486,7 @@ fn guard_object_is_string(
     asm.cmp(flags_reg, Opnd::UImm(RUBY_T_STRING as u64));
     asm.jne(Target::side_exit(counter));
 
-    if object_type.diff(Type::TString) != TypeDiff::Incompatible {
+    if Type::UnknownHeap.diff(object_type) != TypeDiff::Incompatible {
         asm.ctx.upgrade_opnd_type(object_opnd, Type::TString);
     }
 }
@@ -1467,10 +1531,10 @@ fn guard_object_is_not_ruby2_keyword_hash(
 fn gen_expandarray(
     jit: &mut JITState,
     asm: &mut Assembler,
-    _ocb: &mut OutlinedCb,
+    ocb: &mut OutlinedCb,
 ) -> Option<CodegenStatus> {
     // Both arguments are rb_num_t which is unsigned
-    let num = jit.get_arg(0).as_usize();
+    let num = jit.get_arg(0).as_u32();
     let flag = jit.get_arg(1).as_usize();
 
     // If this instruction has the splat flag, then bail out.
@@ -1487,8 +1551,7 @@ fn gen_expandarray(
 
     let array_opnd = asm.stack_opnd(0);
 
-    // num is the number of requested values. If there aren't enough in the
-    // array then we're going to push on nils.
+    // If the array operand is nil, just push on nils
     if asm.ctx.get_opnd_type(array_opnd.into()) == Type::Nil {
         asm.stack_pop(1); // pop after using the type info
         // special case for a, b = nil pattern
@@ -1500,6 +1563,23 @@ fn gen_expandarray(
         return Some(KeepCompiling);
     }
 
+    // Defer compilation so we can specialize on a runtime `self`
+    if !jit.at_current_insn() {
+        defer_compilation(jit, asm, ocb);
+        return Some(EndBlock);
+    }
+
+    let comptime_recv = jit.peek_at_stack(&asm.ctx, 0);
+
+    // If the comptime receiver is not an array, bail
+    if comptime_recv.class_of() != unsafe { rb_cArray } {
+        gen_counter_incr(asm, Counter::expandarray_comptime_not_array);
+        return None;
+    }
+
+    // Get the compile-time array length
+    let comptime_len = unsafe { rb_yjit_array_len(comptime_recv) as u32 };
+
     // Move the array from the stack and check that it's an array.
     guard_object_is_array(
         asm,
@@ -1507,42 +1587,62 @@ fn gen_expandarray(
         array_opnd.into(),
         Counter::expandarray_not_array,
     );
-    let array_opnd = asm.stack_pop(1); // pop after using the type info
 
     // If we don't actually want any values, then just return.
     if num == 0 {
+        asm.stack_pop(1); // pop the array
         return Some(KeepCompiling);
     }
 
+    let array_opnd = asm.stack_opnd(0);
     let array_reg = asm.load(array_opnd);
     let array_len_opnd = get_array_len(asm, array_reg);
 
-    // Only handle the case where the number of values in the array is greater
-    // than or equal to the number of values requested.
-    asm.cmp(array_len_opnd, num.into());
-    asm.jl(Target::side_exit(Counter::expandarray_rhs_too_small));
+    // Guard on the comptime/expected array length
+    if comptime_len >= num {
+        asm.comment(&format!("guard array length >= {}", num));
+        asm.cmp(array_len_opnd, num.into());
+        jit_chain_guard(
+            JCC_JB,
+            jit,
+            asm,
+            ocb,
+            EXPANDARRAY_MAX_CHAIN_DEPTH,
+            Counter::expandarray_chain_max_depth,
+        );
 
-    // Load the address of the embedded array into REG1.
-    // (struct RArray *)(obj)->as.ary
-    let array_reg = asm.load(array_opnd);
-    let ary_opnd = asm.lea(Opnd::mem(VALUE_BITS, array_reg, RUBY_OFFSET_RARRAY_AS_ARY));
+    } else {
+        asm.comment(&format!("guard array length == {}", comptime_len));
+        asm.cmp(array_len_opnd, comptime_len.into());
+        jit_chain_guard(
+            JCC_JNE,
+            jit,
+            asm,
+            ocb,
+            EXPANDARRAY_MAX_CHAIN_DEPTH,
+            Counter::expandarray_chain_max_depth,
+        );
+    }
 
-    // Conditionally load the address of the heap array into REG1.
-    // (struct RArray *)(obj)->as.heap.ptr
-    let flags_opnd = Opnd::mem(VALUE_BITS, array_reg, RUBY_OFFSET_RBASIC_FLAGS);
-    asm.test(flags_opnd, Opnd::UImm(RARRAY_EMBED_FLAG as u64));
-    let heap_ptr_opnd = Opnd::mem(
-        usize::BITS as u8,
-        asm.load(array_opnd),
-        RUBY_OFFSET_RARRAY_AS_HEAP_PTR,
-    );
-    let ary_opnd = asm.csel_nz(ary_opnd, heap_ptr_opnd);
+    let array_opnd = asm.stack_pop(1); // pop after using the type info
+
+    // Load the pointer to the embedded or heap array
+    let ary_opnd = if comptime_len > 0 {
+        let array_reg = asm.load(array_opnd);
+        Some(get_array_ptr(asm, array_reg))
+    } else {
+        None
+    };
 
     // Loop backward through the array and push each element onto the stack.
     for i in (0..num).rev() {
-        let top = asm.stack_push(Type::Unknown);
-        let offset = i32::try_from(i * SIZEOF_VALUE).unwrap();
-        asm.mov(top, Opnd::mem(64, ary_opnd, offset));
+        let top = asm.stack_push(if i < comptime_len { Type::Unknown } else { Type::Nil });
+        let offset = i32::try_from(i * (SIZEOF_VALUE as u32)).unwrap();
+
+        // Missing elements are Qnil
+        asm.comment(&format!("load array[{}]", i));
+        let elem_opnd = if i < comptime_len { Opnd::mem(64, ary_opnd.unwrap(), offset) } else { Qnil.into() };
+        asm.mov(top, elem_opnd);
     }
 
     Some(KeepCompiling)
@@ -1666,6 +1766,7 @@ fn gen_getlocal_wc1(
 fn gen_setlocal_generic(
     jit: &mut JITState,
     asm: &mut Assembler,
+    ocb: &mut OutlinedCb,
     ep_offset: u32,
     level: u32,
 ) -> Option<CodegenStatus> {
@@ -1673,6 +1774,29 @@ fn gen_setlocal_generic(
 
     // Load environment pointer EP at level
     let ep_opnd = gen_get_ep(asm, level);
+
+    // Fallback because of write barrier
+    if asm.ctx.get_chain_depth() > 0
+    {
+        // Save the PC and SP because it runs GC
+        jit_prepare_routine_call(jit, asm);
+
+        // Pop the value to write from the stack
+        let value_opnd = asm.stack_pop(1);
+
+        // void rb_vm_env_write(const VALUE *ep, int index, VALUE v)
+        let index = -(ep_offset as i64);
+        asm.ccall(
+            rb_vm_env_write as *const u8,
+            vec![
+                ep_opnd,
+                index.into(),
+                value_opnd,
+            ]
+        );
+
+        return Some(KeepCompiling);
+    }
 
     // Write barriers may be required when VM_ENV_FLAG_WB_REQUIRED is set, however write barriers
     // only affect heap objects being written. If we know an immediate value is being written we
@@ -1687,7 +1811,15 @@ fn gen_setlocal_generic(
         asm.test(flags_opnd, VM_ENV_FLAG_WB_REQUIRED.into());
 
         // if (flags & VM_ENV_FLAG_WB_REQUIRED) != 0
-        asm.jnz(Target::side_exit(Counter::setlocal_wb_required));
+        assert!(asm.ctx.get_chain_depth() == 0);
+        jit_chain_guard(
+            JCC_JNZ,
+            jit,
+            asm,
+            ocb,
+            1,
+            Counter::setlocal_wb_required,
+        );
     }
 
     if level == 0 {
@@ -1708,29 +1840,29 @@ fn gen_setlocal_generic(
 fn gen_setlocal(
     jit: &mut JITState,
     asm: &mut Assembler,
-    _ocb: &mut OutlinedCb,
+    ocb: &mut OutlinedCb,
 ) -> Option<CodegenStatus> {
     let idx = jit.get_arg(0).as_u32();
     let level = jit.get_arg(1).as_u32();
-    gen_setlocal_generic(jit, asm, idx, level)
+    gen_setlocal_generic(jit, asm, ocb, idx, level)
 }
 
 fn gen_setlocal_wc0(
     jit: &mut JITState,
     asm: &mut Assembler,
-    _ocb: &mut OutlinedCb,
+    ocb: &mut OutlinedCb,
 ) -> Option<CodegenStatus> {
     let idx = jit.get_arg(0).as_u32();
-    gen_setlocal_generic(jit, asm, idx, 0)
+    gen_setlocal_generic(jit, asm, ocb, idx, 0)
 }
 
 fn gen_setlocal_wc1(
     jit: &mut JITState,
     asm: &mut Assembler,
-    _ocb: &mut OutlinedCb,
+    ocb: &mut OutlinedCb,
 ) -> Option<CodegenStatus> {
     let idx = jit.get_arg(0).as_u32();
-    gen_setlocal_generic(jit, asm, idx, 1)
+    gen_setlocal_generic(jit, asm, ocb, idx, 1)
 }
 
 // new hash initialized from top N values
@@ -1799,8 +1931,35 @@ fn gen_putstring(
         vec![EC, put_val.into()]
     );
 
-    let stack_top = asm.stack_push(Type::CString);
+    let stack_top = asm.stack_push(Type::TString);
     asm.mov(stack_top, str_opnd);
+
+    Some(KeepCompiling)
+}
+
+fn gen_checkmatch(
+    jit: &mut JITState,
+    asm: &mut Assembler,
+    _ocb: &mut OutlinedCb,
+) -> Option<CodegenStatus> {
+    let flag = jit.get_arg(0).as_u32();
+
+    // rb_vm_check_match is not leaf unless flag is VM_CHECKMATCH_TYPE_WHEN.
+    // See also: leafness_of_checkmatch() and check_match()
+    if flag != VM_CHECKMATCH_TYPE_WHEN {
+        jit_prepare_routine_call(jit, asm);
+    }
+
+    let pattern = asm.stack_pop(1);
+    let target = asm.stack_pop(1);
+
+    extern "C" {
+        fn rb_vm_check_match(ec: EcPtr, target: VALUE, pattern: VALUE, num: u32) -> VALUE;
+    }
+    let result = asm.ccall(rb_vm_check_match as *const u8, vec![EC, target, pattern, flag.into()]);
+
+    let stack_ret = asm.stack_push(Type::Unknown);
+    asm.mov(stack_ret, result);
 
     Some(KeepCompiling)
 }
@@ -1858,10 +2017,12 @@ fn jit_chain_guard(
         JCC_JNE | JCC_JNZ => BranchGenFn::JNZToTarget0,
         JCC_JZ | JCC_JE => BranchGenFn::JZToTarget0,
         JCC_JBE | JCC_JNA => BranchGenFn::JBEToTarget0,
+        JCC_JB | JCC_JNAE => BranchGenFn::JBToTarget0,
     };
 
     if (asm.ctx.get_chain_depth() as i32) < depth_limit {
-        let mut deeper = asm.ctx.clone();
+        // Rewind Context to use the stack_size at the beginning of this instruction.
+        let mut deeper = asm.ctx.with_stack_size(jit.stack_size_for_pc);
         deeper.increment_chain_depth();
         let bid = BlockId {
             iseq: jit.iseq,
@@ -1874,20 +2035,20 @@ fn jit_chain_guard(
     }
 }
 
-// up to 5 different classes, and embedded or not for each
-pub const GET_IVAR_MAX_DEPTH: i32 = 10;
+// up to 8 different shapes for each
+pub const GET_IVAR_MAX_DEPTH: i32 = 8;
 
-// up to 5 different classes, and embedded or not for each
-pub const SET_IVAR_MAX_DEPTH: i32 = 10;
+// up to 8 different shapes for each
+pub const SET_IVAR_MAX_DEPTH: i32 = 8;
 
 // hashes and arrays
 pub const OPT_AREF_MAX_CHAIN_DEPTH: i32 = 2;
 
-// up to 10 different classes
-pub const SEND_MAX_DEPTH: i32 = 20;
+// expandarray
+pub const EXPANDARRAY_MAX_CHAIN_DEPTH: i32 = 4;
 
-// up to 20 different methods for send
-pub const SEND_MAX_CHAIN_DEPTH: i32 = 20;
+// up to 5 different methods for send
+pub const SEND_MAX_DEPTH: i32 = 5;
 
 // up to 20 different offsets for case-when
 pub const CASE_WHEN_MAX_DEPTH: i32 = 20;
@@ -1954,7 +2115,7 @@ fn gen_get_ivar(
 
     // If recv isn't already a register, load it.
     let recv = match recv {
-        Opnd::Reg(_) => recv,
+        Opnd::InsnOut { .. } => recv,
         _ => asm.load(recv),
     };
 
@@ -1971,9 +2132,9 @@ fn gen_get_ivar(
     // Check if the comptime receiver is a T_OBJECT
     let receiver_t_object = unsafe { RB_TYPE_P(comptime_receiver, RUBY_T_OBJECT) };
     // Use a general C call at the last chain to avoid exits on megamorphic shapes
-    let last_chain = asm.ctx.get_chain_depth() as i32 == max_chain_depth - 1;
-    if last_chain {
-        gen_counter_incr(asm, Counter::get_ivar_max_depth);
+    let megamorphic = asm.ctx.get_chain_depth() as i32 >= max_chain_depth;
+    if megamorphic {
+        gen_counter_incr(asm, Counter::num_getivar_megamorphic);
     }
 
     // If the class uses the default allocator, instances should all be T_OBJECT
@@ -1981,7 +2142,7 @@ fn gen_get_ivar(
     //       Eventually, we can encode whether an object is T_OBJECT or not
     //       inside object shapes.
     // too-complex shapes can't use index access, so we use rb_ivar_get for them too.
-    if !receiver_t_object || uses_custom_allocator || comptime_receiver.shape_too_complex() || last_chain {
+    if !receiver_t_object || uses_custom_allocator || comptime_receiver.shape_too_complex() || megamorphic {
         // General case. Call rb_ivar_get().
         // VALUE rb_ivar_get(VALUE obj, ID id)
         asm.comment("call rb_ivar_get()");
@@ -2054,7 +2215,7 @@ fn gen_get_ivar(
                 // See ROBJECT_IVPTR() from include/ruby/internal/core/robject.h
 
                 // Load the variable
-                let offs = ROBJECT_OFFSET_AS_ARY + (ivar_index * SIZEOF_VALUE) as i32;
+                let offs = ROBJECT_OFFSET_AS_ARY as i32 + (ivar_index * SIZEOF_VALUE) as i32;
                 let ivar_opnd = Opnd::mem(64, recv, offs);
 
                 // Push the ivar on the stack
@@ -2064,7 +2225,7 @@ fn gen_get_ivar(
                 // Compile time value is *not* embedded.
 
                 // Get a pointer to the extended table
-                let tbl_opnd = asm.load(Opnd::mem(64, recv, ROBJECT_OFFSET_AS_HEAP_IVPTR));
+                let tbl_opnd = asm.load(Opnd::mem(64, recv, ROBJECT_OFFSET_AS_HEAP_IVPTR as i32));
 
                 // Read the ivar from the extended table
                 let ivar_opnd = Opnd::mem(64, tbl_opnd, (SIZEOF_VALUE * ivar_index) as i32);
@@ -2126,7 +2287,7 @@ fn gen_write_iv(
 
     if embed_test_result {
         // Find the IV offset
-        let offs = ROBJECT_OFFSET_AS_ARY + (ivar_index * SIZEOF_VALUE) as i32;
+        let offs = ROBJECT_OFFSET_AS_ARY as i32 + (ivar_index * SIZEOF_VALUE) as i32;
         let ivar_opnd = Opnd::mem(64, recv, offs);
 
         // Write the IV
@@ -2136,7 +2297,7 @@ fn gen_write_iv(
         // Compile time value is *not* embedded.
 
         // Get a pointer to the extended table
-        let tbl_opnd = asm.load(Opnd::mem(64, recv, ROBJECT_OFFSET_AS_HEAP_IVPTR));
+        let tbl_opnd = asm.load(Opnd::mem(64, recv, ROBJECT_OFFSET_AS_HEAP_IVPTR as i32));
 
         // Write the ivar in to the extended table
         let ivar_opnd = Opnd::mem(64, tbl_opnd, (SIZEOF_VALUE * ivar_index) as i32);
@@ -2168,7 +2329,7 @@ fn gen_setinstancevariable(
         return None;
     }
 
-    let (_, stack_type) = asm.ctx.get_opnd_mapping(StackOpnd(0));
+    let stack_type = asm.ctx.get_opnd_type(StackOpnd(0));
 
     // Check if the comptime class uses a custom allocator
     let custom_allocator = unsafe { rb_get_alloc_func(comptime_val_klass) };
@@ -2182,11 +2343,72 @@ fn gen_setinstancevariable(
 
     // Check if the comptime receiver is a T_OBJECT
     let receiver_t_object = unsafe { RB_TYPE_P(comptime_receiver, RUBY_T_OBJECT) };
+    // Use a general C call at the last chain to avoid exits on megamorphic shapes
+    let megamorphic = asm.ctx.get_chain_depth() as i32 >= SET_IVAR_MAX_DEPTH;
+    if megamorphic {
+        gen_counter_incr(asm, Counter::num_setivar_megamorphic);
+    }
+
+    // Get the iv index
+    let shape_too_complex = comptime_receiver.shape_too_complex();
+    let ivar_index = if !shape_too_complex {
+        let shape_id = comptime_receiver.shape_id_of();
+        let shape = unsafe { rb_shape_get_shape_by_id(shape_id) };
+        let mut ivar_index: u32 = 0;
+        if unsafe { rb_shape_get_iv_index(shape, ivar_name, &mut ivar_index) } {
+            Some(ivar_index as usize)
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    // Get the next shape information if it needs transition
+    let new_shape = if !shape_too_complex && receiver_t_object && ivar_index.is_none() {
+        let shape = comptime_receiver.shape_of();
+
+        let current_capacity = unsafe { (*shape).capacity };
+        let new_capacity = current_capacity * 2;
+
+        // If the object doesn't have the capacity to store the IV,
+        // then we'll need to allocate it.
+        let needs_extension = unsafe { (*shape).next_iv_index >= current_capacity };
+
+        // We can write to the object, but we need to transition the shape
+        let ivar_index = unsafe { (*shape).next_iv_index } as usize;
+
+        let capa_shape = if needs_extension {
+            // We need to add an extended table to the object
+            // First, create an outgoing transition that increases the
+            // capacity
+            Some(unsafe { rb_shape_transition_shape_capa(shape, new_capacity) })
+        } else {
+            None
+        };
+
+        let dest_shape = if let Some(capa_shape) = capa_shape {
+            unsafe { rb_shape_get_next(capa_shape, comptime_receiver, ivar_name) }
+        } else {
+            unsafe { rb_shape_get_next(shape, comptime_receiver, ivar_name) }
+        };
+
+        let new_shape_id = unsafe { rb_shape_id(dest_shape) };
+        let needs_extension = if needs_extension {
+            Some((current_capacity, new_capacity))
+        } else {
+            None
+        };
+        Some((new_shape_id, needs_extension, ivar_index))
+    } else {
+        None
+    };
+    let new_shape_too_complex = matches!(new_shape, Some((OBJ_TOO_COMPLEX_SHAPE_ID, _, _)));
 
     // If the receiver isn't a T_OBJECT, or uses a custom allocator,
     // then just write out the IV write as a function call.
     // too-complex shapes can't use index access, so we use rb_ivar_get for them too.
-    if !receiver_t_object || uses_custom_allocator || comptime_receiver.shape_too_complex() || (asm.ctx.get_chain_depth() as i32) >= SET_IVAR_MAX_DEPTH {
+    if !receiver_t_object || uses_custom_allocator || shape_too_complex || new_shape_too_complex || megamorphic {
         asm.comment("call rb_vm_setinstancevariable()");
 
         let ic = jit.get_arg(1).as_u64(); // type IVC
@@ -2210,18 +2432,6 @@ fn gen_setinstancevariable(
             ]
         );
     } else {
-        // Get the iv index
-        let ivar_index = unsafe {
-            let shape_id = comptime_receiver.shape_id_of();
-            let shape = rb_shape_get_shape_by_id(shape_id);
-            let mut ivar_index: u32 = 0;
-            if rb_shape_get_iv_index(shape, ivar_name, &mut ivar_index) {
-                Some(ivar_index as usize)
-            } else {
-                None
-            }
-        };
-
         // Get the receiver
         let mut recv = asm.load(Opnd::mem(64, CFP, RUBY_OFFSET_CFP_SELF));
 
@@ -2252,40 +2462,8 @@ fn gen_setinstancevariable(
             // If we don't have an instance variable index, then we need to
             // transition out of the current shape.
             None => {
-                let shape = comptime_receiver.shape_of();
-
-                let current_capacity = unsafe { (*shape).capacity };
-                let new_capacity = current_capacity * 2;
-
-                // If the object doesn't have the capacity to store the IV,
-                // then we'll need to allocate it.
-                let needs_extension = unsafe { (*shape).next_iv_index >= current_capacity };
-
-                // We can write to the object, but we need to transition the shape
-                let ivar_index = unsafe { (*shape).next_iv_index } as usize;
-
-                let capa_shape = if needs_extension {
-                    // We need to add an extended table to the object
-                    // First, create an outgoing transition that increases the
-                    // capacity
-                    Some(unsafe { rb_shape_transition_shape_capa(shape, new_capacity) })
-                } else {
-                    None
-                };
-
-                let dest_shape = if let Some(capa_shape) = capa_shape {
-                    unsafe { rb_shape_get_next(capa_shape, comptime_receiver, ivar_name) }
-                } else {
-                    unsafe { rb_shape_get_next(shape, comptime_receiver, ivar_name) }
-                };
-
-                let new_shape_id = unsafe { rb_shape_id(dest_shape) };
-
-                if new_shape_id == OBJ_TOO_COMPLEX_SHAPE_ID {
-                    return None;
-                }
-
-                if needs_extension {
+                let (new_shape_id, needs_extension, ivar_index) = new_shape.unwrap();
+                if let Some((current_capacity, new_capacity)) = needs_extension {
                     // Generate the C call so that runtime code will increase
                     // the capacity and set the buffer.
                     asm.comment("call rb_ensure_iv_list_size");
@@ -2306,7 +2484,7 @@ fn gen_setinstancevariable(
                 }
 
                 write_val = asm.stack_pop(1);
-                gen_write_iv(asm, comptime_receiver, recv, ivar_index, write_val, needs_extension);
+                gen_write_iv(asm, comptime_receiver, recv, ivar_index, write_val, needs_extension.is_some());
 
                 asm.comment("write shape");
 
@@ -2546,7 +2724,7 @@ fn gen_concatstrings(
     );
 
     asm.stack_pop(n);
-    let stack_ret = asm.stack_push(Type::CString);
+    let stack_ret = asm.stack_push(Type::TString);
     asm.mov(stack_ret, return_value);
 
     Some(KeepCompiling)
@@ -2557,7 +2735,7 @@ fn guard_two_fixnums(
     asm: &mut Assembler,
     ocb: &mut OutlinedCb,
 ) {
-    let counter = Counter::send_not_fixnums;
+    let counter = Counter::guard_send_not_fixnums;
 
     // Get stack operands without popping them
     let arg1 = asm.stack_opnd(0);
@@ -2762,7 +2940,7 @@ fn gen_equality_specialized(
             a_opnd.into(),
             comptime_a,
             SEND_MAX_DEPTH,
-            Counter::send_not_string,
+            Counter::guard_send_not_string,
         );
 
         let equal = asm.new_label("equal");
@@ -2789,7 +2967,7 @@ fn gen_equality_specialized(
                 b_opnd.into(),
                 comptime_b,
                 SEND_MAX_DEPTH,
-                Counter::send_not_string,
+                Counter::guard_send_not_string,
             );
         }
 
@@ -2904,12 +3082,11 @@ fn gen_opt_aref(
         // Call VALUE rb_ary_entry_internal(VALUE ary, long offset).
         // It never raises or allocates, so we don't need to write to cfp->pc.
         {
-            asm.spill_temps(); // for ccall
-            let idx_reg = asm.rshift(idx_reg, Opnd::UImm(1)); // Convert fixnum to int
-            let val = asm.ccall(rb_ary_entry_internal as *const u8, vec![recv_opnd, idx_reg]);
-
             // Pop the argument and the receiver
             asm.stack_pop(2);
+
+            let idx_reg = asm.rshift(idx_reg, Opnd::UImm(1)); // Convert fixnum to int
+            let val = asm.ccall(rb_ary_entry_internal as *const u8, vec![recv_opnd, idx_reg]);
 
             // Push the return value onto the stack
             let stack_ret = asm.stack_push(Type::Unknown);
@@ -3065,6 +3242,37 @@ fn gen_opt_aset(
     }
 }
 
+fn gen_opt_aref_with(
+    jit: &mut JITState,
+    asm: &mut Assembler,
+    _ocb: &mut OutlinedCb,
+) -> Option<CodegenStatus>{
+    jit_prepare_routine_call(jit, asm);
+
+    let key_opnd = Opnd::Value(jit.get_arg(0));
+    let recv_opnd = asm.stack_pop(1);
+
+    extern "C" {
+        fn rb_vm_opt_aref_with(recv: VALUE, key: VALUE) -> VALUE;
+    }
+
+    let val_opnd = asm.ccall(
+        rb_vm_opt_aref_with as *const u8,
+        vec![
+            recv_opnd,
+            key_opnd
+        ],
+    );
+
+    asm.cmp(val_opnd, Qundef.into());
+    asm.je(Target::side_exit(Counter::opt_aref_with_qundef));
+
+    let top = asm.stack_push(Type::Unknown);
+    asm.mov(top, val_opnd);
+
+    return Some(KeepCompiling);
+}
+
 fn gen_opt_and(
     jit: &mut JITState,
     asm: &mut Assembler,
@@ -3192,8 +3400,42 @@ fn gen_opt_mult(
     asm: &mut Assembler,
     ocb: &mut OutlinedCb,
 ) -> Option<CodegenStatus> {
-    // Delegate to send, call the method on the recv
-    gen_opt_send_without_block(jit, asm, ocb)
+    let two_fixnums = match asm.ctx.two_fixnums_on_stack(jit) {
+        Some(two_fixnums) => two_fixnums,
+        None => {
+            defer_compilation(jit, asm, ocb);
+            return Some(EndBlock);
+        }
+    };
+
+    if two_fixnums {
+        if !assume_bop_not_redefined(jit, asm, ocb, INTEGER_REDEFINED_OP_FLAG, BOP_MULT) {
+            return None;
+        }
+
+        // Check that both operands are fixnums
+        guard_two_fixnums(jit, asm, ocb);
+
+        // Get the operands from the stack
+        let arg1 = asm.stack_pop(1);
+        let arg0 = asm.stack_pop(1);
+
+        // Do some bitwise gymnastics to handle tag bits
+        // x * y is translated to (x >> 1) * (y - 1) + 1
+        let arg0_untag = asm.rshift(arg0, Opnd::UImm(1));
+        let arg1_untag = asm.sub(arg1, Opnd::UImm(1));
+        let out_val = asm.mul(arg0_untag, arg1_untag);
+        asm.jo(Target::side_exit(Counter::opt_mult_overflow));
+        let out_val = asm.add(out_val, Opnd::UImm(1));
+
+        // Push the output on the stack
+        let dst = asm.stack_push(Type::Fixnum);
+        asm.mov(dst, out_val);
+
+        Some(KeepCompiling)
+    } else {
+        gen_opt_send_without_block(jit, asm, ocb)
+    }
 }
 
 fn gen_opt_div(
@@ -3228,7 +3470,6 @@ fn gen_opt_mod(
         guard_two_fixnums(jit, asm, ocb);
 
         // Get the operands and destination from the stack
-        asm.spill_temps(); // for ccall (must be done before stack_pop)
         let arg1 = asm.stack_pop(1);
         let arg0 = asm.stack_pop(1);
 
@@ -3732,6 +3973,15 @@ fn gen_throw(
     let throwobj = asm.stack_pop(1);
     let throwobj = asm.load(throwobj);
 
+    // Gather some statistics about throw
+    gen_counter_incr(asm, Counter::num_throw);
+    match (throw_state & VM_THROW_STATE_MASK as u64) as u32 {
+        RUBY_TAG_BREAK => gen_counter_incr(asm, Counter::num_throw_break),
+        RUBY_TAG_RETRY => gen_counter_incr(asm, Counter::num_throw_retry),
+        RUBY_TAG_RETURN => gen_counter_incr(asm, Counter::num_throw_return),
+        _ => {},
+    }
+
     // THROW_DATA_NEW allocates. Save SP for GC and PC for allocation tracing as
     // well as handling the catch table. However, not using jit_prepare_routine_call
     // since we don't need a patch point for this implementation.
@@ -3871,6 +4121,7 @@ fn jit_guard_known_klass(
     } else if unsafe {
         FL_TEST(known_klass, VALUE(RUBY_FL_SINGLETON as usize)) != VALUE(0)
             && sample_instance == rb_class_attached_object(known_klass)
+            && !rb_obj_is_kind_of(sample_instance, rb_cIO).test()
     } {
         // Singleton classes are attached to one specific object, so we can
         // avoid one memory access (and potentially the is_heap check) by
@@ -3882,6 +4133,8 @@ fn jit_guard_known_klass(
         // that its singleton class is empty, so we can't avoid the memory
         // access. As an example, `Object.new.singleton_class` is an object in
         // this situation.
+        // Also, guarding by identity is incorrect for IO objects because
+        // IO#reopen can be used to change the class and singleton class of IO objects!
         asm.comment("guard known object with singleton class");
         asm.cmp(obj_opnd, sample_instance.into());
         jit_chain_guard(JCC_JNE, jit, asm, ocb, max_chain_depth, counter);
@@ -3907,7 +4160,7 @@ fn jit_guard_known_klass(
 
         // If obj_opnd isn't already a register, load it.
         let obj_opnd = match obj_opnd {
-            Opnd::Reg(_) => obj_opnd,
+            Opnd::InsnOut { .. } => obj_opnd,
             _ => asm.load(obj_opnd),
         };
         let klass_opnd = Opnd::mem(64, obj_opnd, RUBY_OFFSET_RBASIC_KLASS);
@@ -3919,9 +4172,14 @@ fn jit_guard_known_klass(
         jit_chain_guard(JCC_JNE, jit, asm, ocb, max_chain_depth, counter);
 
         if known_klass == unsafe { rb_cString } {
-            asm.ctx.upgrade_opnd_type(insn_opnd, Type::CString);
+            // Upgrading to Type::CString here is incorrect.
+            // The guard we put only checks RBASIC_CLASS(obj),
+            // which adding a singleton class can change. We
+            // additionally need to know the string is frozen
+            // to claim Type::CString.
+            asm.ctx.upgrade_opnd_type(insn_opnd, Type::TString);
         } else if known_klass == unsafe { rb_cArray } {
-            asm.ctx.upgrade_opnd_type(insn_opnd, Type::CArray);
+            asm.ctx.upgrade_opnd_type(insn_opnd, Type::TArray);
         }
     }
 }
@@ -3937,7 +4195,6 @@ fn jit_protected_callee_ancestry_guard(
     // Note: PC isn't written to current control frame as rb_is_kind_of() shouldn't raise.
     // VALUE rb_obj_is_kind_of(VALUE obj, VALUE klass);
 
-    asm.spill_temps(); // for ccall
     let val = asm.ccall(
         rb_obj_is_kind_of as *mut u8,
         vec![
@@ -3946,7 +4203,7 @@ fn jit_protected_callee_ancestry_guard(
         ],
     );
     asm.test(val, val);
-    asm.jz(Target::side_exit(Counter::send_se_protected_check_failed))
+    asm.jz(Target::side_exit(Counter::guard_send_se_protected_check_failed))
 }
 
 // Codegen for rb_obj_not().
@@ -3958,7 +4215,7 @@ fn jit_rb_obj_not(
     _ocb: &mut OutlinedCb,
     _ci: *const rb_callinfo,
     _cme: *const rb_callable_method_entry_t,
-    _block: Option<IseqPtr>,
+    _block: Option<BlockHandler>,
     _argc: i32,
     _known_recv_class: *const VALUE,
 ) -> bool {
@@ -3993,7 +4250,7 @@ fn jit_rb_true(
     _ocb: &mut OutlinedCb,
     _ci: *const rb_callinfo,
     _cme: *const rb_callable_method_entry_t,
-    _block: Option<IseqPtr>,
+    _block: Option<BlockHandler>,
     _argc: i32,
     _known_recv_class: *const VALUE,
 ) -> bool {
@@ -4011,7 +4268,7 @@ fn jit_rb_false(
     _ocb: &mut OutlinedCb,
     _ci: *const rb_callinfo,
     _cme: *const rb_callable_method_entry_t,
-    _block: Option<IseqPtr>,
+    _block: Option<BlockHandler>,
     _argc: i32,
     _known_recv_class: *const VALUE,
 ) -> bool {
@@ -4029,7 +4286,7 @@ fn jit_rb_kernel_is_a(
     _ocb: &mut OutlinedCb,
     _ci: *const rb_callinfo,
     _cme: *const rb_callable_method_entry_t,
-    _block: Option<IseqPtr>,
+    _block: Option<BlockHandler>,
     argc: i32,
     known_recv_class: *const VALUE,
 ) -> bool {
@@ -4061,7 +4318,7 @@ fn jit_rb_kernel_is_a(
 
     asm.comment("Kernel#is_a?");
     asm.cmp(asm.stack_opnd(0), sample_rhs.into());
-    asm.jne(Target::side_exit(Counter::send_is_a_class_mismatch));
+    asm.jne(Target::side_exit(Counter::guard_send_is_a_class_mismatch));
 
     asm.stack_pop(2);
 
@@ -4079,10 +4336,10 @@ fn jit_rb_kernel_is_a(
 fn jit_rb_kernel_instance_of(
     jit: &mut JITState,
     asm: &mut Assembler,
-    _ocb: &mut OutlinedCb,
+    ocb: &mut OutlinedCb,
     _ci: *const rb_callinfo,
     _cme: *const rb_callable_method_entry_t,
-    _block: Option<IseqPtr>,
+    _block: Option<BlockHandler>,
     argc: i32,
     known_recv_class: *const VALUE,
 ) -> bool {
@@ -4120,7 +4377,14 @@ fn jit_rb_kernel_instance_of(
 
     asm.comment("Kernel#instance_of?");
     asm.cmp(asm.stack_opnd(0), sample_rhs.into());
-    asm.jne(Target::side_exit(Counter::send_instance_of_class_mismatch));
+    jit_chain_guard(
+        JCC_JNE,
+        jit,
+        asm,
+        ocb,
+        SEND_MAX_DEPTH,
+        Counter::guard_send_instance_of_class_mismatch,
+    );
 
     asm.stack_pop(2);
 
@@ -4140,7 +4404,7 @@ fn jit_rb_mod_eqq(
     _ocb: &mut OutlinedCb,
     _ci: *const rb_callinfo,
     _cme: *const rb_callable_method_entry_t,
-    _block: Option<IseqPtr>,
+    _block: Option<BlockHandler>,
     argc: i32,
     _known_recv_class: *const VALUE,
 ) -> bool {
@@ -4149,19 +4413,17 @@ fn jit_rb_mod_eqq(
     }
 
     asm.comment("Module#===");
-    asm.spill_temps(); // for ccall
     // By being here, we know that the receiver is a T_MODULE or a T_CLASS, because Module#=== can
     // only live on these objects. With that, we can call rb_obj_is_kind_of() without
     // jit_prepare_routine_call() or a control frame push because it can't raise, allocate, or call
     // Ruby methods with these inputs.
     // Note the difference in approach from Kernel#is_a? because we don't get a free guard for the
     // right hand side.
-    let lhs = asm.stack_opnd(1); // the module
-    let rhs = asm.stack_opnd(0);
+    let rhs = asm.stack_pop(1);
+    let lhs = asm.stack_pop(1); // the module
     let ret = asm.ccall(rb_obj_is_kind_of as *const u8, vec![rhs, lhs]);
 
     // Return the result
-    asm.stack_pop(2);
     let stack_ret = asm.stack_push(Type::UnknownImm);
     asm.mov(stack_ret, ret);
 
@@ -4176,7 +4438,7 @@ fn jit_rb_obj_equal(
     _ocb: &mut OutlinedCb,
     _ci: *const rb_callinfo,
     _cme: *const rb_callable_method_entry_t,
-    _block: Option<IseqPtr>,
+    _block: Option<BlockHandler>,
     _argc: i32,
     _known_recv_class: *const VALUE,
 ) -> bool {
@@ -4200,7 +4462,7 @@ fn jit_rb_obj_not_equal(
     ocb: &mut OutlinedCb,
     _ci: *const rb_callinfo,
     _cme: *const rb_callable_method_entry_t,
-    _block: Option<IseqPtr>,
+    _block: Option<BlockHandler>,
     _argc: i32,
     _known_recv_class: *const VALUE,
 ) -> bool {
@@ -4214,7 +4476,7 @@ fn jit_rb_int_equal(
     ocb: &mut OutlinedCb,
     _ci: *const rb_callinfo,
     _cme: *const rb_callable_method_entry_t,
-    _block: Option<IseqPtr>,
+    _block: Option<BlockHandler>,
     _argc: i32,
     _known_recv_class: *const VALUE,
 ) -> bool {
@@ -4239,7 +4501,7 @@ fn jit_rb_int_mul(
     ocb: &mut OutlinedCb,
     _ci: *const rb_callinfo,
     _cme: *const rb_callable_method_entry_t,
-    _block: Option<IseqPtr>,
+    _block: Option<BlockHandler>,
     _argc: i32,
     _known_recv_class: *const VALUE,
 ) -> bool {
@@ -4267,7 +4529,7 @@ fn jit_rb_int_div(
     ocb: &mut OutlinedCb,
     _ci: *const rb_callinfo,
     _cme: *const rb_callable_method_entry_t,
-    _block: Option<IseqPtr>,
+    _block: Option<BlockHandler>,
     _argc: i32,
     _known_recv_class: *const VALUE,
 ) -> bool {
@@ -4276,8 +4538,10 @@ fn jit_rb_int_div(
     }
     guard_two_fixnums(jit, asm, ocb);
 
+    // rb_fix_div_fix may GC-allocate for Bignum
+    jit_prepare_routine_call(jit, asm);
+
     asm.comment("Integer#/");
-    asm.spill_temps(); // for ccall (must be done before stack_pop)
     let obj = asm.stack_pop(1);
     let recv = asm.stack_pop(1);
 
@@ -4287,8 +4551,60 @@ fn jit_rb_int_div(
 
     let ret = asm.ccall(rb_fix_div_fix as *const u8, vec![recv, obj]);
 
-    let ret_opnd = asm.stack_push(Type::Fixnum);
+    let ret_opnd = asm.stack_push(Type::Unknown);
     asm.mov(ret_opnd, ret);
+    true
+}
+
+fn jit_rb_int_lshift(
+    jit: &mut JITState,
+    asm: &mut Assembler,
+    ocb: &mut OutlinedCb,
+    _ci: *const rb_callinfo,
+    _cme: *const rb_callable_method_entry_t,
+    _block: Option<BlockHandler>,
+    _argc: i32,
+    _known_recv_class: *const VALUE,
+) -> bool {
+    if asm.ctx.two_fixnums_on_stack(jit) != Some(true) {
+        return false;
+    }
+    guard_two_fixnums(jit, asm, ocb);
+
+    let comptime_shift = jit.peek_at_stack(&asm.ctx, 0);
+
+    if !comptime_shift.fixnum_p() {
+        return false;
+    }
+
+    // Untag the fixnum shift amount
+    let shift_amt = comptime_shift.as_isize() >> 1;
+
+    if shift_amt > 63 || shift_amt < 0 {
+        return false;
+    }
+
+    let rhs = asm.stack_pop(1);
+    let lhs = asm.stack_pop(1);
+
+    // Guard on the shift value we speculated on
+    asm.cmp(rhs, comptime_shift.into());
+    asm.jne(Target::side_exit(Counter::lshift_amt_changed));
+
+    let in_val = asm.sub(lhs, 1.into());
+    let shift_opnd = Opnd::UImm(shift_amt as u64);
+    let out_val = asm.lshift(in_val, shift_opnd);
+    let unshifted = asm.rshift(out_val, shift_opnd);
+
+    // Guard that we did not overflow
+    asm.cmp(unshifted, in_val);
+    asm.jne(Target::side_exit(Counter::lshift_overflow));
+
+    // Re-tag the output value
+    let out_val = asm.add(out_val, 1.into());
+
+    let ret_opnd = asm.stack_push(Type::Fixnum);
+    asm.mov(ret_opnd, out_val);
     true
 }
 
@@ -4298,7 +4614,7 @@ fn jit_rb_int_aref(
     ocb: &mut OutlinedCb,
     _ci: *const rb_callinfo,
     _cme: *const rb_callable_method_entry_t,
-    _block: Option<IseqPtr>,
+    _block: Option<BlockHandler>,
     argc: i32,
     _known_recv_class: *const VALUE,
 ) -> bool {
@@ -4311,7 +4627,6 @@ fn jit_rb_int_aref(
     guard_two_fixnums(jit, asm, ocb);
 
     asm.comment("Integer#[]");
-    asm.spill_temps(); // for ccall (must be done before stack_pop)
     let obj = asm.stack_pop(1);
     let recv = asm.stack_pop(1);
 
@@ -4329,7 +4644,7 @@ fn jit_rb_str_uplus(
     _ocb: &mut OutlinedCb,
     _ci: *const rb_callinfo,
     _cme: *const rb_callable_method_entry_t,
-    _block: Option<IseqPtr>,
+    _block: Option<BlockHandler>,
     argc: i32,
     _known_recv_class: *const VALUE,
 ) -> bool
@@ -4372,17 +4687,55 @@ fn jit_rb_str_bytesize(
     _ocb: &mut OutlinedCb,
     _ci: *const rb_callinfo,
     _cme: *const rb_callable_method_entry_t,
-    _block: Option<IseqPtr>,
+    _block: Option<BlockHandler>,
     _argc: i32,
     _known_recv_class: *const VALUE,
 ) -> bool {
     asm.comment("String#bytesize");
 
-    asm.spill_temps(); // for ccall (must be done before stack_pop)
     let recv = asm.stack_pop(1);
-    let ret_opnd = asm.ccall(rb_str_bytesize as *const u8, vec![recv]);
+
+    asm.comment("get string length");
+    let str_len_opnd = Opnd::mem(
+        std::os::raw::c_long::BITS as u8,
+        asm.load(recv),
+        RUBY_OFFSET_RSTRING_LEN as i32,
+    );
+
+    let len = asm.load(str_len_opnd);
+    let shifted_val = asm.lshift(len, Opnd::UImm(1));
+    let out_val = asm.or(shifted_val, Opnd::UImm(RUBY_FIXNUM_FLAG as u64));
 
     let out_opnd = asm.stack_push(Type::Fixnum);
+
+    asm.mov(out_opnd, out_val);
+
+    true
+}
+
+fn jit_rb_str_getbyte(
+    jit: &mut JITState,
+    asm: &mut Assembler,
+    _ocb: &mut OutlinedCb,
+    _ci: *const rb_callinfo,
+    _cme: *const rb_callable_method_entry_t,
+    _block: Option<BlockHandler>,
+    _argc: i32,
+    _known_recv_class: *const VALUE,
+) -> bool {
+    asm.comment("String#getbyte");
+    extern "C" {
+        fn rb_str_getbyte(str: VALUE, index: VALUE) -> VALUE;
+    }
+    // Raises when non-integers are passed in
+    jit_prepare_routine_call(jit, asm);
+
+    let index = asm.stack_pop(1);
+    let recv = asm.stack_pop(1);
+    let ret_opnd = asm.ccall(rb_str_getbyte as *const u8, vec![recv, index]);
+
+    // Can either return a FIXNUM or nil
+    let out_opnd = asm.stack_push(Type::UnknownImm);
     asm.mov(out_opnd, ret_opnd);
 
     true
@@ -4398,7 +4751,7 @@ fn jit_rb_str_to_s(
     _ocb: &mut OutlinedCb,
     _ci: *const rb_callinfo,
     _cme: *const rb_callable_method_entry_t,
-    _block: Option<IseqPtr>,
+    _block: Option<BlockHandler>,
     _argc: i32,
     known_recv_class: *const VALUE,
 ) -> bool {
@@ -4418,22 +4771,17 @@ fn jit_rb_str_empty_p(
     _ocb: &mut OutlinedCb,
     _ci: *const rb_callinfo,
     _cme: *const rb_callable_method_entry_t,
-    _block: Option<IseqPtr>,
+    _block: Option<BlockHandler>,
     _argc: i32,
     _known_recv_class: *const VALUE,
 ) -> bool {
-    const _: () = assert!(
-        RUBY_OFFSET_RSTRING_AS_HEAP_LEN == RUBY_OFFSET_RSTRING_EMBED_LEN,
-        "same offset to len embedded or not so we can use one code path to read the length",
-    );
-
     let recv_opnd = asm.stack_pop(1);
 
     asm.comment("get string length");
     let str_len_opnd = Opnd::mem(
         std::os::raw::c_long::BITS as u8,
         asm.load(recv_opnd),
-        RUBY_OFFSET_RSTRING_AS_HEAP_LEN as i32,
+        RUBY_OFFSET_RSTRING_LEN as i32,
     );
 
     asm.cmp(str_len_opnd, Opnd::UImm(0));
@@ -4453,7 +4801,7 @@ fn jit_rb_str_concat(
     _ocb: &mut OutlinedCb,
     _ci: *const rb_callinfo,
     _cme: *const rb_callable_method_entry_t,
-    _block: Option<IseqPtr>,
+    _block: Option<BlockHandler>,
     _argc: i32,
     _known_recv_class: *const VALUE,
 ) -> bool {
@@ -4467,7 +4815,7 @@ fn jit_rb_str_concat(
     }
 
     // Guard that the concat argument is a string
-    guard_object_is_string(asm, asm.stack_opnd(0), StackOpnd(0), Counter::send_not_string);
+    guard_object_is_string(asm, asm.stack_opnd(0), StackOpnd(0), Counter::guard_send_not_string);
 
     // Guard buffers from GC since rb_str_buf_append may allocate. During the VM lock on GC,
     // other Ractors may trigger global invalidation, so we need ctx.clear_local_types().
@@ -4499,7 +4847,7 @@ fn jit_rb_str_concat(
     asm.spill_temps(); // for ccall
     let ret_opnd = asm.ccall(rb_yjit_str_simple_append as *const u8, vec![recv, concat_arg]);
     let ret_label = asm.new_label("func_return");
-    let stack_ret = asm.stack_push(Type::CString);
+    let stack_ret = asm.stack_push(Type::TString);
     asm.mov(stack_ret, ret_opnd);
     asm.stack_pop(1); // forget stack_ret to re-push after ccall
     asm.jmp(ret_label);
@@ -4508,7 +4856,7 @@ fn jit_rb_str_concat(
     asm.write_label(enc_mismatch);
     asm.spill_temps(); // for ccall
     let ret_opnd = asm.ccall(rb_str_buf_append as *const u8, vec![recv, concat_arg]);
-    let stack_ret = asm.stack_push(Type::CString);
+    let stack_ret = asm.stack_push(Type::TString);
     asm.mov(stack_ret, ret_opnd);
     // Drop through to return
 
@@ -4524,7 +4872,7 @@ fn jit_rb_ary_empty_p(
     _ocb: &mut OutlinedCb,
     _ci: *const rb_callinfo,
     _cme: *const rb_callable_method_entry_t,
-    _block: Option<IseqPtr>,
+    _block: Option<BlockHandler>,
     _argc: i32,
     _known_recv_class: *const VALUE,
 ) -> bool {
@@ -4547,7 +4895,7 @@ fn jit_rb_ary_push(
     _ocb: &mut OutlinedCb,
     _ci: *const rb_callinfo,
     _cme: *const rb_callable_method_entry_t,
-    _block: Option<IseqPtr>,
+    _block: Option<BlockHandler>,
     _argc: i32,
     _known_recv_class: *const VALUE,
 ) -> bool {
@@ -4571,7 +4919,7 @@ fn jit_obj_respond_to(
     ocb: &mut OutlinedCb,
     _ci: *const rb_callinfo,
     _cme: *const rb_callable_method_entry_t,
-    _block: Option<IseqPtr>,
+    _block: Option<BlockHandler>,
     argc: i32,
     known_recv_class: *const VALUE,
 ) -> bool {
@@ -4620,19 +4968,27 @@ fn jit_obj_respond_to(
     };
 
     let result = match (visibility, allow_priv) {
-        (METHOD_VISI_UNDEF, _) => Qfalse, // No method => false
-        (METHOD_VISI_PUBLIC, _) => Qtrue, // Public method => true regardless of include_all
-        (_, Some(true)) => Qtrue, // include_all => always true
+        (METHOD_VISI_UNDEF, _) => {
+            // No method, we can return false given respond_to_missing? hasn't been overridden.
+            // In the future, we might want to jit the call to respond_to_missing?
+            if !assume_method_basic_definition(jit, asm, ocb, recv_class, idRespond_to_missing.into()) {
+                return false;
+            }
+            Qfalse
+        }
+        (METHOD_VISI_PUBLIC, _) | // Public method => fine regardless of include_all
+        (_, Some(true)) => { // include_all => all visibility are acceptable
+            // Method exists and has acceptable visibility
+            if cme_def_type == VM_METHOD_TYPE_NOTIMPLEMENTED {
+                // C method with rb_f_notimplement(). `respond_to?` returns false
+                // without consulting `respond_to_missing?`. See also: rb_add_method_cfunc()
+                Qfalse
+            } else {
+                Qtrue
+            }
+        }
         (_, _) => return false // not public and include_all not known, can't compile
     };
-
-    if result != Qtrue {
-        // Only if respond_to_missing? hasn't been overridden
-        // In the future, we might want to jit the call to respond_to_missing?
-        if !assume_method_basic_definition(jit, asm, ocb, recv_class, idRespond_to_missing.into()) {
-            return false;
-        }
-    }
 
     // Invalidate this block if method lookup changes for the method being queried. This works
     // both for the case where a method does or does not exist, as for the latter we asked for a
@@ -4650,7 +5006,14 @@ fn jit_obj_respond_to(
     // This is necessary because we have no guarantee that sym_opnd is a constant
     asm.comment("guard known mid");
     asm.cmp(sym_opnd, mid_sym.into());
-    asm.jne(Target::side_exit(Counter::send_mid_mismatch));
+    jit_chain_guard(
+        JCC_JNE,
+        jit,
+        asm,
+        ocb,
+        SEND_MAX_DEPTH,
+        Counter::guard_send_respond_to_mid_mismatch,
+    );
 
     jit_putobject(asm, result);
 
@@ -4663,7 +5026,7 @@ fn jit_rb_f_block_given_p(
     _ocb: &mut OutlinedCb,
     _ci: *const rb_callinfo,
     _cme: *const rb_callable_method_entry_t,
-    _block: Option<IseqPtr>,
+    _block: Option<BlockHandler>,
     _argc: i32,
     _known_recv_class: *const VALUE,
 ) -> bool {
@@ -4692,7 +5055,7 @@ fn jit_thread_s_current(
     _ocb: &mut OutlinedCb,
     _ci: *const rb_callinfo,
     _cme: *const rb_callable_method_entry_t,
-    _block: Option<IseqPtr>,
+    _block: Option<BlockHandler>,
     _argc: i32,
     _known_recv_class: *const VALUE,
 ) -> bool {
@@ -4746,11 +5109,23 @@ unsafe extern "C" fn build_kwhash(ci: *const rb_callinfo, sp: *const VALUE) -> V
 // at sp[-2]. Depending on the frame type, it can serve different purposes,
 // which are covered here by enum variants.
 enum SpecVal {
-    None,
-    BlockISeq(IseqPtr),
-    BlockParamProxy,
+    BlockHandler(Option<BlockHandler>),
     PrevEP(*const VALUE),
     PrevEPOpnd(Opnd),
+}
+
+// Each variant represents a branch in vm_caller_setup_arg_block.
+#[derive(Clone, Copy)]
+pub enum BlockHandler {
+    // send, invokesuper: blockiseq operand
+    BlockISeq(IseqPtr),
+    // invokesuper: GET_BLOCK_HANDLER() (GET_LEP()[VM_ENV_DATA_INDEX_SPECVAL])
+    LEPSpecVal,
+    // part of the allocate-free block forwarding scheme
+    BlockParamProxy,
+    // To avoid holding the block arg (e.g. proc and symbol) across C calls,
+    // we might need to set the block handler early in the call sequence
+    AlreadySet,
 }
 
 struct ControlFrame {
@@ -4761,7 +5136,6 @@ struct ControlFrame {
     frame_type: u32,
     specval: SpecVal,
     cme: *const rb_callable_method_entry_t,
-    local_size: i32
 }
 
 // Codegen performing a similar (but not identical) function to vm_push_frame
@@ -4784,10 +5158,7 @@ fn gen_push_frame(
     asm: &mut Assembler,
     set_sp_cfp: bool, // if true CFP and SP will be switched to the callee
     frame: ControlFrame,
-    rest_arg: Option<(i32, Opnd)>,
 ) {
-    assert!(frame.local_size >= 0);
-
     let sp = frame.sp;
 
     asm.comment("push cme, specval, frame type");
@@ -4802,27 +5173,31 @@ fn gen_push_frame(
     // the outer environment depending on the frame type.
     // sp[-2] = specval;
     let specval: Opnd = match frame.specval {
-        SpecVal::None => {
-            VM_BLOCK_HANDLER_NONE.into()
-        }
-        SpecVal::BlockISeq(block_iseq) => {
-            // Change cfp->block_code in the current frame. See vm_caller_setup_arg_block().
-            // VM_CFP_TO_CAPTURED_BLOCK does &cfp->self, rb_captured_block->code.iseq aliases
-            // with cfp->block_code.
-            asm.store(Opnd::mem(64, CFP, RUBY_OFFSET_CFP_BLOCK_CODE), VALUE::from(block_iseq).into());
+        SpecVal::BlockHandler(None) => VM_BLOCK_HANDLER_NONE.into(),
+        SpecVal::BlockHandler(Some(block_handler)) => {
+            match block_handler {
+                BlockHandler::BlockISeq(block_iseq) => {
+                    // Change cfp->block_code in the current frame. See vm_caller_setup_arg_block().
+                    // VM_CFP_TO_CAPTURED_BLOCK does &cfp->self, rb_captured_block->code.iseq aliases
+                    // with cfp->block_code.
+                    asm.store(Opnd::mem(64, CFP, RUBY_OFFSET_CFP_BLOCK_CODE), VALUE::from(block_iseq).into());
 
-            let cfp_self = asm.lea(Opnd::mem(64, CFP, RUBY_OFFSET_CFP_SELF));
-            asm.or(cfp_self, Opnd::Imm(1))
-        }
-        SpecVal::BlockParamProxy => {
-            let ep_opnd = gen_get_lep(jit, asm);
-            let block_handler = asm.load(
-                Opnd::mem(64, ep_opnd, SIZEOF_VALUE_I32 * VM_ENV_DATA_INDEX_SPECVAL)
-            );
-
-            asm.store(Opnd::mem(64, CFP, RUBY_OFFSET_CFP_BLOCK_CODE), block_handler);
-
-            block_handler
+                    let cfp_self = asm.lea(Opnd::mem(64, CFP, RUBY_OFFSET_CFP_SELF));
+                    asm.or(cfp_self, Opnd::Imm(1))
+                }
+                BlockHandler::LEPSpecVal => {
+                    let lep_opnd = gen_get_lep(jit, asm);
+                    asm.load(Opnd::mem(64, lep_opnd, SIZEOF_VALUE_I32 * VM_ENV_DATA_INDEX_SPECVAL))
+                }
+                BlockHandler::BlockParamProxy => {
+                    let ep_opnd = gen_get_lep(jit, asm);
+                    let block_handler = asm.load(
+                        Opnd::mem(64, ep_opnd, SIZEOF_VALUE_I32 * VM_ENV_DATA_INDEX_SPECVAL)
+                    );
+                    block_handler
+                }
+                BlockHandler::AlreadySet => 0.into(), // unused
+            }
         }
         SpecVal::PrevEP(prev_ep) => {
             let tagged_prev_ep = (prev_ep as usize) | 1;
@@ -4830,9 +5205,13 @@ fn gen_push_frame(
         }
         SpecVal::PrevEPOpnd(ep_opnd) => {
             asm.or(ep_opnd, 1.into())
-        },
+        }
     };
-    asm.store(Opnd::mem(64, sp, SIZEOF_VALUE_I32 * -2), specval);
+    if let SpecVal::BlockHandler(Some(BlockHandler::AlreadySet)) = frame.specval {
+        asm.comment("specval should have been set");
+    } else {
+        asm.store(Opnd::mem(64, sp, SIZEOF_VALUE_I32 * -2), specval);
+    }
 
     // Write env flags at sp[-1]
     // sp[-1] = frame_type;
@@ -4851,7 +5230,6 @@ fn gen_push_frame(
     //    .self       = recv,
     //    .ep         = <sp - 1>,
     //    .block_code = 0,
-    //    .__bp__     = sp,
     // };
     asm.comment("push callee control frame");
 
@@ -4860,7 +5238,6 @@ fn gen_push_frame(
     if let Some(pc) = frame.pc {
         asm.mov(cfp_opnd(RUBY_OFFSET_CFP_PC), pc.into());
     };
-    asm.mov(cfp_opnd(RUBY_OFFSET_CFP_BP), sp);
     asm.mov(cfp_opnd(RUBY_OFFSET_CFP_SP), sp);
     let iseq: Opnd = if let Some(iseq) = frame.iseq {
         VALUE::from(iseq).into()
@@ -4870,27 +5247,6 @@ fn gen_push_frame(
     asm.mov(cfp_opnd(RUBY_OFFSET_CFP_ISEQ), iseq);
     asm.mov(cfp_opnd(RUBY_OFFSET_CFP_SELF), frame.recv);
     asm.mov(cfp_opnd(RUBY_OFFSET_CFP_BLOCK_CODE), 0.into());
-
-    // This Qnil fill snippet potentially requires 2 more registers on Arm, one for Qnil and
-    // another for calculating the address in case there are a lot of local variables. So doing
-    // this after releasing the register for specval and the receiver to avoid register spill.
-    let num_locals = frame.local_size;
-    if num_locals > 0 {
-        asm.comment("initialize locals");
-
-        // Initialize local variables to Qnil
-        for i in 0..num_locals {
-            let offs = SIZEOF_VALUE_I32 * (i - num_locals - 3);
-            asm.store(Opnd::mem(64, sp, offs), Qnil.into());
-        }
-    }
-
-    if let Some((opts_missing, rest_arg)) = rest_arg {
-        // We want to set the rest_param just after the optional arguments
-        let index = opts_missing - num_locals - 3;
-        let offset = SIZEOF_VALUE_I32 * index;
-        asm.store(Opnd::mem(64, sp, offset), rest_arg);
-    }
 
     // Spill stack temps to let the callee use them (must be done before changing SP)
     asm.spill_temps();
@@ -4903,12 +5259,13 @@ fn gen_push_frame(
     let ep = asm.sub(sp, SIZEOF_VALUE.into());
     asm.mov(cfp_opnd(RUBY_OFFSET_CFP_EP), ep);
 
-    asm.comment("switch to new CFP");
     let new_cfp = asm.lea(cfp_opnd(0));
     if set_sp_cfp {
+        asm.comment("switch to new CFP");
         asm.mov(CFP, new_cfp);
         asm.store(Opnd::mem(64, EC, RUBY_OFFSET_EC_CFP), CFP);
     } else {
+        asm.comment("set ec->cfp");
         asm.store(Opnd::mem(64, EC, RUBY_OFFSET_EC_CFP), new_cfp);
     }
 }
@@ -4919,7 +5276,7 @@ fn gen_send_cfunc(
     ocb: &mut OutlinedCb,
     ci: *const rb_callinfo,
     cme: *const rb_callable_method_entry_t,
-    block: Option<IseqPtr>,
+    block: Option<BlockHandler>,
     recv_known_klass: *const VALUE,
     flags: u32,
     argc: i32,
@@ -4995,7 +5352,7 @@ fn gen_send_cfunc(
     }
 
     // Check for interrupts
-    gen_check_ints(asm, Counter::send_interrupted);
+    gen_check_ints(asm, Counter::guard_send_interrupted);
 
     // Stack overflow check
     // #define CHECK_VM_STACK_OVERFLOW0(cfp, sp, margin)
@@ -5003,7 +5360,7 @@ fn gen_send_cfunc(
     asm.comment("stack overflow check");
     let stack_limit = asm.lea(asm.ctx.sp_opnd((SIZEOF_VALUE * 4 + 2 * RUBY_SIZEOF_CONTROL_FRAME) as isize));
     asm.cmp(CFP, stack_limit);
-    asm.jbe(Target::side_exit(Counter::send_se_cf_overflow));
+    asm.jbe(Target::side_exit(Counter::guard_send_se_cf_overflow));
 
     // Number of args which will be passed through to the callee
     // This is adjusted by the kwargs being combined into a hash.
@@ -5099,11 +5456,9 @@ fn gen_send_cfunc(
     let sp = asm.lea(asm.ctx.sp_opnd((SIZEOF_VALUE as isize) * 3));
 
     let specval = if block_arg_type == Some(Type::BlockParamProxy) {
-        SpecVal::BlockParamProxy
-    } else if let Some(block_iseq) = block {
-        SpecVal::BlockISeq(block_iseq)
+        SpecVal::BlockHandler(Some(BlockHandler::BlockParamProxy))
     } else {
-        SpecVal::None
+        SpecVal::BlockHandler(block)
     };
 
     let mut frame_type = VM_FRAME_MAGIC_CFUNC | VM_FRAME_FLAG_CFRAME | VM_ENV_FLAG_LOCAL;
@@ -5123,8 +5478,7 @@ fn gen_send_cfunc(
             None     // Leave PC uninitialized as cfuncs shouldn't read it
         },
         iseq: None,
-        local_size: 0,
-    }, None);
+    });
 
     if !kw_arg.is_null() {
         // Build a hash from all kwargs passed
@@ -5211,7 +5565,7 @@ fn get_array_len(asm: &mut Assembler, array_opnd: Opnd) -> Opnd {
 
     // Pull out the embed flag to check if it's an embedded array.
     let array_reg = match array_opnd {
-        Opnd::Reg(_) => array_opnd,
+        Opnd::InsnOut { .. } => array_opnd,
         _ => asm.load(array_opnd),
     };
     let flags_opnd = Opnd::mem(VALUE_BITS, array_reg, RUBY_OFFSET_RBASIC_FLAGS);
@@ -5225,7 +5579,7 @@ fn get_array_len(asm: &mut Assembler, array_opnd: Opnd) -> Opnd {
     asm.test(flags_opnd, (RARRAY_EMBED_FLAG as u64).into());
 
     let array_reg = match array_opnd {
-        Opnd::Reg(_) => array_opnd,
+        Opnd::InsnOut { .. } => array_opnd,
         _ => asm.load(array_opnd),
     };
     let array_len_opnd = Opnd::mem(
@@ -5238,7 +5592,7 @@ fn get_array_len(asm: &mut Assembler, array_opnd: Opnd) -> Opnd {
     asm.csel_nz(emb_len_opnd, array_len_opnd)
 }
 
-// Generate RARRAY_CONST_PTR_TRANSIENT (part of RARRAY_AREF)
+// Generate RARRAY_CONST_PTR (part of RARRAY_AREF)
 fn get_array_ptr(asm: &mut Assembler, array_reg: Opnd) -> Opnd {
     asm.comment("get array pointer for embedded or heap");
 
@@ -5249,6 +5603,7 @@ fn get_array_ptr(asm: &mut Assembler, array_reg: Opnd) -> Opnd {
         array_reg,
         RUBY_OFFSET_RARRAY_AS_HEAP_PTR,
     );
+
     // Load the address of the embedded array
     // (struct RArray *)(obj)->as.ary
     let ary_opnd = asm.lea(Opnd::mem(VALUE_BITS, array_reg, RUBY_OFFSET_RARRAY_AS_ARY));
@@ -5264,7 +5619,12 @@ fn move_rest_args_to_stack(array: Opnd, num_args: u32, asm: &mut Assembler) {
 
     asm.comment("Side exit if length is less than required");
     asm.cmp(array_len_opnd, num_args.into());
-    asm.jl(Target::side_exit(Counter::send_iseq_has_rest_and_splat_not_equal));
+    asm.jl(Target::side_exit(Counter::guard_send_iseq_has_rest_and_splat_not_equal));
+
+    // Unused operands cause the backend to panic
+    if num_args == 0 {
+        return;
+    }
 
     asm.comment("Push arguments from array");
 
@@ -5305,7 +5665,7 @@ fn push_splat_args(required_args: u32, asm: &mut Assembler) {
         asm,
         array_reg,
         array_opnd.into(),
-        Counter::send_splat_not_array,
+        Counter::guard_send_splat_not_array,
     );
 
     asm.comment("Get array length for embedded or heap");
@@ -5332,9 +5692,9 @@ fn push_splat_args(required_args: u32, asm: &mut Assembler) {
     );
     let array_len_opnd = asm.csel_nz(emb_len_opnd, array_len_opnd);
 
-    asm.comment("Side exit if length doesn't not equal remaining args");
+    asm.comment("Guard for expected splat length");
     asm.cmp(array_len_opnd, required_args.into());
-    asm.jne(Target::side_exit(Counter::send_splatarray_length_not_equal));
+    asm.jne(Target::side_exit(Counter::guard_send_splatarray_length_not_equal));
 
     asm.comment("Check last argument is not ruby2keyword hash");
 
@@ -5348,7 +5708,7 @@ fn push_splat_args(required_args: u32, asm: &mut Assembler) {
     guard_object_is_not_ruby2_keyword_hash(
         asm,
         last_array_value,
-        Counter::send_splatarray_last_ruby_2_keywords,
+        Counter::guard_send_splatarray_last_ruby_2_keywords,
     );
 
     asm.comment("Push arguments from array");
@@ -5388,7 +5748,7 @@ fn gen_send_bmethod(
     ocb: &mut OutlinedCb,
     ci: *const rb_callinfo,
     cme: *const rb_callable_method_entry_t,
-    block: Option<IseqPtr>,
+    block: Option<BlockHandler>,
     flags: u32,
     argc: i32,
 ) -> Option<CodegenStatus> {
@@ -5431,24 +5791,33 @@ fn gen_send_iseq(
     frame_type: u32,
     prev_ep: Option<*const VALUE>,
     cme: *const rb_callable_method_entry_t,
-    block: Option<IseqPtr>,
+    block: Option<BlockHandler>,
     flags: u32,
     argc: i32,
     captured_opnd: Option<Opnd>,
 ) -> Option<CodegenStatus> {
+    // Argument count. We will change this as we gather values from
+    // sources to satisfy the callee's parameters. To help make sense
+    // of changes, note that:
+    //   - Parameters syntactically on the left have lower addresses.
+    //     For example, all the lead (required) and optional parameters
+    //     have lower addresses than the rest parameter array.
+    //   - The larger the index one passes to Assembler::stack_opnd(),
+    //     the *lower* the address.
     let mut argc = argc;
 
-    // When you have keyword arguments, there is an extra object that gets
-    // placed on the stack the represents a bitmap of the keywords that were not
-    // specified at the call site. We need to keep track of the fact that this
-    // value is present on the stack in order to properly set up the callee's
-    // stack pointer.
+    // Iseqs with keyword parameters have a hidden, unnamed parameter local
+    // that the callee could use to know which keywords are unspecified
+    // (see the `checkkeyword` instruction and check `ruby --dump=insn -e 'def foo(k:itself)=k'`).
+    // We always need to set up this local if the call goes through.
     let doing_kw_call = unsafe { get_iseq_flags_has_kw(iseq) };
     let supplying_kws = unsafe { vm_ci_flag(ci) & VM_CALL_KWARG } != 0;
     let iseq_has_rest = unsafe { get_iseq_flags_has_rest(iseq) };
+    let iseq_has_block_param = unsafe { get_iseq_flags_has_block(iseq) };
 
-    // For computing number of locals to set up for the callee
-    let mut num_params = unsafe { get_iseq_body_param_size(iseq) };
+    // For computing offsets to callee locals
+    let num_params = unsafe { get_iseq_body_param_size(iseq) };
+    let num_locals = unsafe { get_iseq_body_local_table_size(iseq) as i32 };
 
     let mut start_pc_offset: u16 = 0;
     let required_num = unsafe { get_iseq_body_param_lead_num(iseq) };
@@ -5465,7 +5834,7 @@ fn gen_send_iseq(
     // Arity handling and optional parameter setup
     let mut opts_filled = argc - required_num - kw_arg_num;
     let opt_num = unsafe { get_iseq_body_param_opt_num(iseq) };
-    // We have a rest argument so there could be more args
+    // We have a rest parameter so there could be more args
     // than are required + optional. Those will go in rest.
     // So we cap ops_filled at opt_num.
     if iseq_has_rest {
@@ -5473,13 +5842,7 @@ fn gen_send_iseq(
     }
     let mut opts_missing: i32 = opt_num - opts_filled;
 
-
     let block_arg = flags & VM_CALL_ARGS_BLOCKARG != 0;
-    let block_arg_type = if block_arg {
-        Some(asm.ctx.get_opnd_type(StackOpnd(0)))
-    } else {
-        None
-    };
 
     exit_if_stack_too_large(iseq)?;
     exit_if_tail_call(asm, ci)?;
@@ -5487,7 +5850,6 @@ fn gen_send_iseq(
     exit_if_has_kwrest(asm, iseq)?;
     exit_if_splat_and_ruby2_keywords(asm, jit, flags)?;
     exit_if_has_rest_and_captured(asm, iseq_has_rest, captured_opnd)?;
-    exit_if_has_rest_and_send(asm, iseq_has_rest, flags)?;
     exit_if_has_rest_and_supplying_kws(asm, iseq_has_rest, iseq, supplying_kws)?;
     exit_if_supplying_kw_and_has_no_kw(asm, supplying_kws, iseq)?;
     exit_if_supplying_kws_and_accept_no_kwargs(asm, supplying_kws, iseq)?;
@@ -5496,27 +5858,18 @@ fn gen_send_iseq(
     exit_if_wrong_number_arguments(asm, opts_filled, flags, opt_num, iseq_has_rest)?;
     exit_if_doing_kw_and_opts_missing(asm, doing_kw_call, opts_missing)?;
     exit_if_has_rest_and_optional_and_block(asm, iseq_has_rest, opt_num, iseq, block_arg)?;
-    exit_if_unsupported_block_arg_type(asm, block_arg_type)?;
+    let block_arg_type = exit_if_unsupported_block_arg_type(jit, asm, block_arg)?;
 
     // Block parameter handling. This mirrors setup_parameters_complex().
-    if unsafe { get_iseq_flags_has_block(iseq) } {
+    if iseq_has_block_param {
         if unsafe { get_iseq_body_local_iseq(iseq) == iseq } {
-            num_params -= 1;
+            // Do nothing
         } else {
             // In this case (param.flags.has_block && local_iseq != iseq),
             // the block argument is setup as a local variable and requires
             // materialization (allocation). Bail.
             gen_counter_incr(asm, Counter::send_iseq_materialized_block);
             return None;
-        }
-    }
-
-    // We will handle splat case later
-    if opt_num > 0 && flags & VM_CALL_ARGS_SPLAT == 0 {
-        num_params -= opts_missing as u32;
-        unsafe {
-            let opt_table = get_iseq_body_param_opt_table(iseq);
-            start_pc_offset = (*opt_table.offset(opts_filled as isize)).try_into().unwrap();
         }
     }
 
@@ -5592,10 +5945,12 @@ fn gen_send_iseq(
         }
     }
 
-    // Check if we need the arg0 splat handling of vm_callee_setup_block_arg
+    // Check if we need the arg0 splat handling of vm_callee_setup_block_arg()
+    // Also known as "autosplat" inside setup_parameters_complex()
     let arg_setup_block = captured_opnd.is_some(); // arg_setup_type: arg_setup_block (invokeblock)
     let block_arg0_splat = arg_setup_block && argc == 1 && unsafe {
-         get_iseq_flags_has_lead(iseq) && !get_iseq_flags_ambiguous_param0(iseq)
+         (get_iseq_flags_has_lead(iseq) || opt_num > 1)
+             && !get_iseq_flags_ambiguous_param0(iseq)
     };
     if block_arg0_splat {
         // If block_arg0_splat, we still need side exits after splat, but
@@ -5608,6 +5963,13 @@ fn gen_send_iseq(
         // but doing_kw_call means it's not a simple ISEQ.
         if doing_kw_call {
             gen_counter_incr(asm, Counter::invokeblock_iseq_arg0_has_kw);
+            return None;
+        }
+        // The block_arg0_splat implementation cannot deal with optional parameters.
+        // This is a setup_parameters_complex() situation and interacts with the
+        // starting position of the callee.
+        if opt_num > 1 {
+            gen_counter_incr(asm, Counter::invokeblock_iseq_arg0_optional);
             return None;
         }
     }
@@ -5636,7 +5998,7 @@ fn gen_send_iseq(
             asm.comment("Side exit if length doesn't not equal compile time length");
             let array_len_opnd = get_array_len(asm, asm.stack_opnd(if block_arg { 1 } else { 0 }));
             asm.cmp(array_len_opnd, array_length.into());
-            asm.jne(Target::side_exit(Counter::send_splatarray_length_not_equal));
+            asm.jne(Target::side_exit(Counter::guard_send_splatarray_length_not_equal));
         }
 
         Some(array_length)
@@ -5644,40 +6006,32 @@ fn gen_send_iseq(
         None
     };
 
-    // If we have a rest, optional arguments, and a splat
-    // some of those splatted args will end up filling the
-    // optional arguments and some will potentially end up
-    // in the rest. This calculates how many are filled
-    // by the splat.
-    let opts_filled_with_splat: Option<i32> = {
-        if iseq_has_rest && opt_num > 0 {
-            splat_array_length.map(|len| {
-                let num_args = (argc - 1) + len as i32;
-                if num_args >= required_num {
-                    min(num_args - required_num, opt_num)
-                } else {
-                    0
-                }
-            })
+    // Adjust `opts_filled` and `opts_missing` taking
+    // into account the size of the splat expansion.
+    if let Some(len) = splat_array_length {
+        assert_eq!(kw_arg_num, 0); // Due to exit_if_doing_kw_and_splat().
+                                   // Simplifies calculation below.
+        let num_args = (argc - 1) + len as i32;
+
+        opts_filled = if num_args >= required_num {
+            min(num_args - required_num, opt_num)
         } else {
-            None
-        }
-    };
+            0
+        };
+        opts_missing = opt_num - opts_filled;
+    }
 
-    // If we have optional arguments filled by the splat (see comment above)
-    // we need to set a few variables concerning optional arguments
-    // to their correct values, as well as set the pc_offset.
-    if let Some(filled) = opts_filled_with_splat {
-        opts_missing = opt_num - filled;
-        opts_filled = filled;
-        num_params -= opts_missing as u32;
+    assert_eq!(opts_missing + opts_filled, opt_num);
+    assert!(opts_filled >= 0);
 
-        // We are going to jump to the correct offset based on how many optional
-        // params are remaining.
+    // ISeq with optional paramters start at different
+    // locations depending on the number of optionals given.
+    if opt_num > 0 {
+        assert!(opts_filled >= 0);
         unsafe {
             let opt_table = get_iseq_body_param_opt_table(iseq);
-            start_pc_offset = (*opt_table.offset(filled as isize)).try_into().unwrap();
-        };
+            start_pc_offset = opt_table.offset(opts_filled as isize).read().try_into().unwrap();
+        }
     }
 
     // We will not have None from here. You can use stack_pop / stack_pop.
@@ -5691,12 +6045,35 @@ fn gen_send_iseq(
             // We don't need the actual stack value
             asm.stack_pop(1);
         }
+        Some(Type::TProc) => {
+            // Place the proc as the block handler. We do this early because
+            // the block arg being at the top of the stack gets in the way of
+            // rest param handling later. Also, since there are C calls that
+            // come later, we can't hold this value in a register and place it
+            // near the end when we push a new control frame.
+            asm.comment("guard block arg is a proc");
+            // Simple predicate, no need for jit_prepare_routine_call().
+            let is_proc = asm.ccall(rb_obj_is_proc as _, vec![asm.stack_opnd(0)]);
+            asm.cmp(is_proc, Qfalse.into());
+            jit_chain_guard(
+                JCC_JE,
+                jit,
+                asm,
+                ocb,
+                SEND_MAX_DEPTH,
+                Counter::guard_send_block_arg_type,
+            );
+
+            let proc = asm.stack_pop(1);
+            let callee_ep = -argc + num_locals + VM_ENV_DATA_SIZE as i32 - 1;
+            let callee_specval = callee_ep + VM_ENV_DATA_INDEX_SPECVAL;
+            let callee_specval = asm.ctx.sp_opnd(callee_specval as isize * SIZEOF_VALUE as isize);
+            asm.store(callee_specval, proc);
+        }
         None => {
             // Nothing to do
         }
-        _ => {
-            assert!(false);
-        }
+        _ => unreachable!(),
     }
 
     let builtin_attrs = unsafe { rb_yjit_iseq_builtin_attrs(iseq) };
@@ -5738,9 +6115,6 @@ fn gen_send_iseq(
         }
     }
 
-    // Number of locals that are not parameters
-    let num_locals = unsafe { get_iseq_body_local_table_size(iseq) as i32 } - (num_params as i32) + if iseq_has_rest && opt_num != 0 { 1 } else { 0 };
-
     // Stack overflow check
     // Note that vm_push_frame checks it against a decremented cfp, hence the multiply by 2.
     // #define CHECK_VM_STACK_OVERFLOW0(cfp, sp, margin)
@@ -5750,42 +6124,25 @@ fn gen_send_iseq(
         SIZEOF_VALUE_I32 * (num_locals + stack_max) + 2 * (RUBY_SIZEOF_CONTROL_FRAME as i32);
     let stack_limit = asm.lea(asm.ctx.sp_opnd(locals_offs as isize));
     asm.cmp(CFP, stack_limit);
-    asm.jbe(Target::side_exit(Counter::send_se_cf_overflow));
+    asm.jbe(Target::side_exit(Counter::guard_send_se_cf_overflow));
 
     // push_splat_args does stack manipulation so we can no longer side exit
     if let Some(array_length) = splat_array_length {
-        let remaining_opt = (opt_num as u32 + required_num as u32).saturating_sub(array_length + (argc as u32 - 1));
-
         if !iseq_has_rest {
-            if opt_num > 0 {
-                // We are going to jump to the correct offset based on how many optional
-                // params are remaining.
-                unsafe {
-                    let opt_table = get_iseq_body_param_opt_table(iseq);
-                    let offset = (opt_num - remaining_opt as i32) as isize;
-                    start_pc_offset = (*opt_table.offset(offset)).try_into().unwrap();
-                };
-            }
-
-            // We are going to assume that the splat fills
-            // all the remaining arguments. In the generated code
-            // we test if this is true and if not side exit.
-            argc = argc - 1 + array_length as i32 + remaining_opt as i32;
+            // Speculate that future splats will be done with
+            // an array that has the same length. We will insert guards.
+            argc = argc - 1 + array_length as i32;
             if argc + asm.ctx.get_stack_size() as i32 > MAX_SPLAT_LENGTH {
                 gen_counter_incr(asm, Counter::send_splat_too_long);
                 return None;
             }
             push_splat_args(array_length, asm);
-
-            for _ in 0..remaining_opt {
-                // We need to push nil for the optional arguments
-                let stack_ret = asm.stack_push(Type::Unknown);
-                asm.mov(stack_ret, Qnil.into());
-            }
         }
     }
 
     // This is a .send call and we need to adjust the stack
+    // TODO: This can be more efficient if we do it before
+    //       extracting from the splat array above.
     if flags & VM_CALL_OPT_SEND != 0 {
         handle_opt_send_shift_stack(asm, argc);
     }
@@ -5795,20 +6152,24 @@ fn gen_send_iseq(
         jit_save_pc(jit, asm);
         gen_save_sp(asm);
 
-        if flags & VM_CALL_ARGS_SPLAT != 0 {
+        let rest_param_array = if flags & VM_CALL_ARGS_SPLAT != 0 {
             let non_rest_arg_count = argc - 1;
             // We start by dupping the array because someone else might have
-            // a reference to it.
+            // a reference to it. This also normalizes to an ::Array instance.
             let array = asm.stack_pop(1);
             let array = asm.ccall(
                 rb_ary_dup as *const u8,
                 vec![array],
             );
-            if non_rest_arg_count > required_num + opt_num {
 
+            // This is the end stack state of all `non_rest_arg_count` situations below
+            argc = required_num + opts_filled;
+
+            if non_rest_arg_count > required_num + opt_num {
                 // If we have more arguments than required, we need to prepend
                 // the items from the stack onto the array.
-                let diff = (non_rest_arg_count - (required_num + opts_filled_with_splat.unwrap_or(0))) as u32;
+                let diff: u32 = (non_rest_arg_count - (required_num + opt_num))
+                    .try_into().unwrap();
 
                 // diff is >0 so no need to worry about null pointer
                 asm.comment("load pointer to array elements");
@@ -5823,38 +6184,35 @@ fn gen_send_iseq(
                 );
                 asm.stack_pop(diff as usize);
 
-                let stack_ret = asm.stack_push(Type::TArray);
-                asm.mov(stack_ret, array);
-                // We now should have the required arguments
-                // and an array of all the rest arguments
-                argc = required_num + opts_filled_with_splat.unwrap_or(0) + 1;
+                array
             } else if non_rest_arg_count < required_num + opt_num {
                 // If we have fewer arguments than required, we need to take some
                 // from the array and move them to the stack.
+                asm.comment("take items from splat array");
 
-                let diff = (required_num - non_rest_arg_count + opts_filled_with_splat.unwrap_or(0)) as u32;
+                let diff: u32 = (required_num - non_rest_arg_count + opts_filled)
+                    .try_into().unwrap();
+
                 // This moves the arguments onto the stack. But it doesn't modify the array.
                 move_rest_args_to_stack(array, diff, asm);
 
                 // We will now slice the array to give us a new array of the correct size
-                asm.spill_temps(); // for ccall
-                let ret = asm.ccall(rb_yjit_rb_ary_subseq_length as *const u8, vec![array, Opnd::UImm(diff as u64)]);
-                let stack_ret = asm.stack_push(Type::TArray);
-                asm.mov(stack_ret, ret);
+                let sliced = asm.ccall(rb_yjit_rb_ary_subseq_length as *const u8, vec![array, Opnd::UImm(diff as u64)]);
 
-                // We now should have the required arguments
-                // and an array of all the rest arguments
-                argc = required_num + opts_filled_with_splat.unwrap_or(0) + 1;
+                sliced
             } else {
                 // The arguments are equal so we can just push to the stack
+                asm.comment("same length for splat array and rest param");
                 assert!(non_rest_arg_count == required_num + opt_num);
-                let stack_ret = asm.stack_push(Type::TArray);
-                asm.mov(stack_ret, array);
+
+                array
             }
         } else {
+            asm.comment("rest parameter without splat");
+
             assert!(argc >= required_num);
             let n = (argc - required_num - opts_filled) as u32;
-            argc = required_num + opts_filled + 1;
+            argc = required_num + opts_filled;
             // If n is 0, then elts is never going to be read, so we can just pass null
             let values_ptr = if n == 0 {
                 Opnd::UImm(0)
@@ -5874,9 +6232,31 @@ fn gen_send_iseq(
                 ]
             );
             asm.stack_pop(n.as_usize());
-            let stack_ret = asm.stack_push(Type::CArray);
-            asm.mov(stack_ret, new_ary);
-        }
+
+            new_ary
+        };
+
+        // Find where to put the rest parameter array
+        let rest_param = if opts_missing == 0 {
+            // All optionals are filled, the rest param goes at the top of the stack
+            argc += 1;
+            asm.stack_push(Type::TArray)
+        } else {
+            // The top of the stack will be a missing optional, but the rest
+            // parameter needs to be placed after all the missing optionals.
+            // Place it using a stack operand with a negative stack index.
+            // (Higher magnitude negative stack index have higher address.)
+            assert!(opts_missing > 0);
+            // The argument deepest in the stack will be the 0th local in the callee.
+            let callee_locals_base = argc - 1;
+            let rest_param_stack_idx = callee_locals_base - required_num - opt_num;
+            assert!(rest_param_stack_idx < 0);
+            asm.stack_opnd(rest_param_stack_idx)
+        };
+        // Store rest param to memory to avoid register shuffle as
+        // we won't be reading it for the remainder of the block.
+        asm.ctx.dealloc_temp_reg(rest_param.stack_idx());
+        asm.store(rest_param, rest_param_array);
     }
 
     if doing_kw_call {
@@ -6046,16 +6426,47 @@ fn gen_send_iseq(
         argc = lead_num;
     }
 
-    // If we have a rest param and optional parameters,
-    // we don't actually pass the rest parameter as an argument,
-    // instead we set its value in the callee's locals
-    let rest_param = if iseq_has_rest && opt_num != 0 {
-        argc -= 1;
-        let top = asm.stack_pop(1);
-        Some((opts_missing as i32, asm.load(top)))
-    } else {
-        None
-    };
+    fn nil_fill(comment: &'static str, fill_range: std::ops::Range<isize>, asm: &mut Assembler) {
+        if fill_range.is_empty() {
+            return;
+        }
+
+        asm.comment(comment);
+        for i in fill_range {
+            let value_slot = asm.ctx.sp_opnd(i * SIZEOF_VALUE as isize);
+            asm.store(value_slot, Qnil.into());
+        }
+    }
+
+    // Nil-initialize missing optional parameters
+    nil_fill(
+        "nil-initialize missing optionals",
+        {
+            let begin = -(argc as isize) + required_num as isize + opts_filled as isize;
+            let end   = -(argc as isize) + required_num as isize + opt_num as isize;
+
+            begin..end
+        },
+        asm
+    );
+    // Nil-initialize the block parameter. It's the last parameter local
+    if iseq_has_block_param {
+        let block_param = asm.ctx.sp_opnd(
+            SIZEOF_VALUE as isize * (-(argc as isize) + num_params as isize - 1)
+        );
+        asm.store(block_param, Qnil.into());
+    }
+    // Nil-initialize non-parameter locals
+    nil_fill(
+        "nil-initialize locals",
+        {
+            let begin = -(argc as isize) + num_params as isize;
+            let end   = -(argc as isize) + num_locals as isize;
+
+            begin..end
+        },
+        asm
+    );
 
     // Points to the receiver operand on the stack unless a captured environment is used
     let recv = match captured_opnd {
@@ -6074,8 +6485,9 @@ fn gen_send_iseq(
     jit_save_pc(jit, asm);
 
     // Adjust the callee's stack pointer
-    let offs =
-        (SIZEOF_VALUE as isize) * (3 + (num_locals as isize) + if doing_kw_call { 1 } else { 0 });
+    let offs = (SIZEOF_VALUE as isize) * (
+        -(argc as isize) + num_locals as isize + VM_ENV_DATA_SIZE as isize
+    );
     let callee_sp = asm.lea(asm.ctx.sp_opnd(offs));
 
     let specval = if let Some(prev_ep) = prev_ep {
@@ -6085,12 +6497,12 @@ fn gen_send_iseq(
     } else if let Some(captured_opnd) = captured_opnd {
         let ep_opnd = asm.load(Opnd::mem(64, captured_opnd, SIZEOF_VALUE_I32)); // captured->ep
         SpecVal::PrevEPOpnd(ep_opnd)
-    } else if block_arg_type == Some(Type::BlockParamProxy) {
-        SpecVal::BlockParamProxy
-    } else if let Some(block_val) = block {
-        SpecVal::BlockISeq(block_val)
+    } else if let Some(Type::TProc) = block_arg_type {
+        SpecVal::BlockHandler(Some(BlockHandler::AlreadySet))
+    } else if let Some(Type::BlockParamProxy) = block_arg_type {
+        SpecVal::BlockHandler(Some(BlockHandler::BlockParamProxy))
     } else {
-        SpecVal::None
+        SpecVal::BlockHandler(block)
     };
 
     // Setup the new frame
@@ -6102,8 +6514,7 @@ fn gen_send_iseq(
         sp: callee_sp,
         iseq: Some(iseq),
         pc: None, // We are calling into jitted code, which will set the PC as necessary
-        local_size: num_locals
-    }, rest_param);
+    });
 
     // No need to set cfp->pc since the callee sets it whenever calling into routines
     // that could look at it through jit_save_pc().
@@ -6223,11 +6634,6 @@ fn exit_if_has_rest_and_captured(asm: &mut Assembler, iseq_has_rest: bool, captu
 }
 
 #[must_use]
-fn exit_if_has_rest_and_send( asm: &mut Assembler, iseq_has_rest: bool, flags: u32) -> Option<()> {
-    exit_if(asm, iseq_has_rest && flags & VM_CALL_ARGS_SPLAT != 0, Counter::send_iseq_has_rest_and_send)
-}
-
-#[must_use]
 fn exit_if_has_rest_and_supplying_kws(asm: &mut Assembler, iseq_has_rest: bool, iseq: *const rb_iseq_t, supplying_kws: bool) -> Option<()> {
     exit_if(
         asm,
@@ -6301,20 +6707,35 @@ fn exit_if_has_rest_and_optional_and_block(asm: &mut Assembler, iseq_has_rest: b
 }
 
 #[must_use]
-fn exit_if_unsupported_block_arg_type(asm: &mut Assembler, block_arg_type: Option<Type>) -> Option<()> {
+fn exit_if_unsupported_block_arg_type(
+    jit: &mut JITState,
+    asm: &mut Assembler,
+    supplying_block_arg: bool
+) -> Option<Option<Type>> {
+    let block_arg_type = if supplying_block_arg {
+        asm.ctx.get_opnd_type(StackOpnd(0))
+    } else {
+        // Passing no block argument
+        return Some(None);
+    };
+
     match block_arg_type {
-        Some(Type::Nil | Type::BlockParamProxy) => {
+        Type::Nil | Type::BlockParamProxy => {
             // We'll handle this later
+            Some(Some(block_arg_type))
         }
-        None => {
-            // Nothing to do
+        _ if {
+            let sample_block_arg = jit.peek_at_stack(&asm.ctx, 0);
+            unsafe { rb_obj_is_proc(sample_block_arg) }.test()
+        } => {
+            // Speculate that we'll have a proc as the block arg
+            Some(Some(Type::TProc))
         }
         _ => {
             gen_counter_incr(asm, Counter::send_block_arg);
-            return None
+            None
         }
     }
-    Some(())
 }
 
 #[must_use]
@@ -6420,7 +6841,6 @@ fn gen_struct_aset(
 
     asm.comment("struct aset");
 
-    asm.spill_temps(); // for ccall (must be done before stack_pop)
     let val = asm.stack_pop(1);
     let recv = asm.stack_pop(1);
 
@@ -6433,12 +6853,45 @@ fn gen_struct_aset(
     Some(EndBlock)
 }
 
+// Generate code that calls a method with dynamic dispatch
+fn gen_send_dynamic<F: Fn(&mut Assembler) -> Opnd>(
+    jit: &mut JITState,
+    asm: &mut Assembler,
+    cd: *const rb_call_data,
+    sp_pops: usize,
+    vm_sendish: F,
+) -> Option<CodegenStatus> {
+    // Our frame handling is not compatible with tailcall
+    if unsafe { vm_ci_flag((*cd).ci) } & VM_CALL_TAILCALL != 0 {
+        return None;
+    }
+
+    // Save PC and SP to prepare for dynamic dispatch
+    jit_prepare_routine_call(jit, asm);
+
+    // Pop arguments and a receiver
+    asm.stack_pop(sp_pops);
+
+    // Dispatch a method
+    let ret = vm_sendish(asm);
+
+    // Push the return value
+    let stack_ret = asm.stack_push(Type::Unknown);
+    asm.mov(stack_ret, ret);
+
+    // Fix the interpreter SP deviated by vm_sendish
+    asm.mov(Opnd::mem(64, CFP, RUBY_OFFSET_CFP_SP), SP);
+
+    gen_counter_incr(asm, Counter::num_send_dynamic);
+    Some(KeepCompiling)
+}
+
 fn gen_send_general(
     jit: &mut JITState,
     asm: &mut Assembler,
     ocb: &mut OutlinedCb,
     cd: *const rb_call_data,
-    block: Option<IseqPtr>,
+    block: Option<BlockHandler>,
 ) -> Option<CodegenStatus> {
     // Relevant definitions:
     // rb_execution_context_t       : vm_core.h
@@ -6496,6 +6949,11 @@ fn gen_send_general(
     if asm.ctx.get_chain_depth() > 1 {
         gen_counter_incr(asm, Counter::num_send_polymorphic);
     }
+    // If megamorphic, let the caller fallback to dynamic dispatch
+    if asm.ctx.get_chain_depth() as i32 >= SEND_MAX_DEPTH {
+        gen_counter_incr(asm, Counter::num_send_megamorphic);
+        return None;
+    }
 
     jit_guard_known_klass(
         jit,
@@ -6506,7 +6964,7 @@ fn gen_send_general(
         recv_opnd,
         comptime_recv,
         SEND_MAX_DEPTH,
-        Counter::send_klass_megamorphic,
+        Counter::guard_send_klass_megamorphic,
     );
 
     // Do method lookup
@@ -6714,12 +7172,12 @@ fn gen_send_general(
                             if compile_time_name.string_p() {
                                 (
                                     unsafe { rb_cString },
-                                    Counter::send_send_chain_not_string,
+                                    Counter::guard_send_send_chain_not_string,
                                 )
                             } else {
                                 (
                                     unsafe { rb_cSymbol },
-                                    Counter::send_send_chain_not_sym,
+                                    Counter::guard_send_send_chain_not_sym,
                                 )
                             }
                         };
@@ -6741,7 +7199,6 @@ fn gen_send_general(
                         // values for the register allocator.
                         let name_opnd = asm.load(name_opnd);
 
-                        asm.spill_temps(); // for ccall
                         let symbol_id_opnd = asm.ccall(rb_get_symbol_id as *const u8, vec![name_opnd]);
 
                         asm.comment("chain_guard_send");
@@ -6751,8 +7208,8 @@ fn gen_send_general(
                             jit,
                             asm,
                             ocb,
-                            SEND_MAX_CHAIN_DEPTH,
-                            Counter::send_send_chain,
+                            SEND_MAX_DEPTH,
+                            Counter::guard_send_send_chain,
                         );
 
                         // We have changed the argc, flags, mid, and cme, so we need to re-enter the match
@@ -6915,9 +7372,22 @@ fn gen_opt_send_without_block(
     asm: &mut Assembler,
     ocb: &mut OutlinedCb,
 ) -> Option<CodegenStatus> {
+    // Generate specialized code if possible
     let cd = jit.get_arg(0).as_ptr();
+    if let Some(status) = gen_send_general(jit, asm, ocb, cd, None) {
+        return Some(status);
+    }
 
-    gen_send_general(jit, asm, ocb, cd, None)
+    // Otherwise, fallback to dynamic dispatch using the interpreter's implementation of send
+    gen_send_dynamic(jit, asm, cd, unsafe { rb_yjit_sendish_sp_pops((*cd).ci) }, |asm| {
+        extern "C" {
+            fn rb_vm_opt_send_without_block(ec: EcPtr, cfp: CfpPtr, cd: VALUE) -> VALUE;
+        }
+        asm.ccall(
+            rb_vm_opt_send_without_block as *const u8,
+            vec![EC, CFP, (cd as usize).into()],
+        )
+    })
 }
 
 fn gen_send(
@@ -6925,9 +7395,24 @@ fn gen_send(
     asm: &mut Assembler,
     ocb: &mut OutlinedCb,
 ) -> Option<CodegenStatus> {
+    // Generate specialized code if possible
     let cd = jit.get_arg(0).as_ptr();
-    let block = jit.get_arg(1).as_optional_ptr();
-    return gen_send_general(jit, asm, ocb, cd, block);
+    let block = jit.get_arg(1).as_optional_ptr().map(|iseq| BlockHandler::BlockISeq(iseq));
+    if let Some(status) = gen_send_general(jit, asm, ocb, cd, block) {
+        return Some(status);
+    }
+
+    // Otherwise, fallback to dynamic dispatch using the interpreter's implementation of send
+    let blockiseq = jit.get_arg(1).as_iseq();
+    gen_send_dynamic(jit, asm, cd, unsafe { rb_yjit_sendish_sp_pops((*cd).ci) }, |asm| {
+        extern "C" {
+            fn rb_vm_send(ec: EcPtr, cfp: CfpPtr, cd: VALUE, blockiseq: IseqPtr) -> VALUE;
+        }
+        asm.ccall(
+            rb_vm_send as *const u8,
+            vec![EC, CFP, (cd as usize).into(), VALUE(blockiseq as usize).into()],
+        )
+    })
 }
 
 fn gen_invokeblock(
@@ -6935,13 +7420,42 @@ fn gen_invokeblock(
     asm: &mut Assembler,
     ocb: &mut OutlinedCb,
 ) -> Option<CodegenStatus> {
+    // Generate specialized code if possible
+    let cd = jit.get_arg(0).as_ptr();
+    if let Some(status) = gen_invokeblock_specialized(jit, asm, ocb, cd) {
+        return Some(status);
+    }
+
+    // Otherwise, fallback to dynamic dispatch using the interpreter's implementation of send
+    gen_send_dynamic(jit, asm, cd, unsafe { rb_yjit_invokeblock_sp_pops((*cd).ci) }, |asm| {
+        extern "C" {
+            fn rb_vm_invokeblock(ec: EcPtr, cfp: CfpPtr, cd: VALUE) -> VALUE;
+        }
+        asm.ccall(
+            rb_vm_invokeblock as *const u8,
+            vec![EC, CFP, (cd as usize).into()],
+        )
+    })
+}
+
+fn gen_invokeblock_specialized(
+    jit: &mut JITState,
+    asm: &mut Assembler,
+    ocb: &mut OutlinedCb,
+    cd: *const rb_call_data,
+) -> Option<CodegenStatus> {
     if !jit.at_current_insn() {
         defer_compilation(jit, asm, ocb);
         return Some(EndBlock);
     }
 
+    // Fallback to dynamic dispatch if this callsite is megamorphic
+    if asm.ctx.get_chain_depth() as i32 >= SEND_MAX_DEPTH {
+        gen_counter_incr(asm, Counter::invokeblock_megamorphic);
+        return None;
+    }
+
     // Get call info
-    let cd = jit.get_arg(0).as_ptr();
     let ci = unsafe { get_call_data_ci(cd) };
     let argc: i32 = unsafe { vm_ci_argc(ci) }.try_into().unwrap();
     let flags = unsafe { vm_ci_flag(ci) };
@@ -6970,8 +7484,8 @@ fn gen_invokeblock(
             jit,
             asm,
             ocb,
-            SEND_MAX_CHAIN_DEPTH,
-            Counter::invokeblock_tag_changed,
+            SEND_MAX_DEPTH,
+            Counter::guard_invokeblock_tag_changed,
         );
 
         let comptime_captured = unsafe { ((comptime_handler.0 & !0x3) as *const rb_captured_block).as_ref().unwrap() };
@@ -6986,8 +7500,8 @@ fn gen_invokeblock(
             jit,
             asm,
             ocb,
-            SEND_MAX_CHAIN_DEPTH,
-            Counter::invokeblock_iseq_block_changed,
+            SEND_MAX_DEPTH,
+            Counter::guard_invokeblock_iseq_block_changed,
         );
 
         gen_send_iseq(
@@ -7029,8 +7543,8 @@ fn gen_invokeblock(
             jit,
             asm,
             ocb,
-            SEND_MAX_CHAIN_DEPTH,
-            Counter::invokeblock_tag_changed,
+            SEND_MAX_DEPTH,
+            Counter::guard_invokeblock_tag_changed,
         );
 
         // The cfunc may not be leaf
@@ -7071,17 +7585,53 @@ fn gen_invokesuper(
     asm: &mut Assembler,
     ocb: &mut OutlinedCb,
 ) -> Option<CodegenStatus> {
-    let cd: *const rb_call_data = jit.get_arg(0).as_ptr();
-    let block: Option<IseqPtr> = jit.get_arg(1).as_optional_ptr();
+    // Generate specialized code if possible
+    let cd = jit.get_arg(0).as_ptr();
+    if let Some(status) = gen_invokesuper_specialized(jit, asm, ocb, cd) {
+        return Some(status);
+    }
 
+    // Otherwise, fallback to dynamic dispatch using the interpreter's implementation of send
+    let blockiseq = jit.get_arg(1).as_iseq();
+    gen_send_dynamic(jit, asm, cd, unsafe { rb_yjit_sendish_sp_pops((*cd).ci) }, |asm| {
+        extern "C" {
+            fn rb_vm_invokesuper(ec: EcPtr, cfp: CfpPtr, cd: VALUE, blockiseq: IseqPtr) -> VALUE;
+        }
+        asm.ccall(
+            rb_vm_invokesuper as *const u8,
+            vec![EC, CFP, (cd as usize).into(), VALUE(blockiseq as usize).into()],
+        )
+    })
+}
+
+fn gen_invokesuper_specialized(
+    jit: &mut JITState,
+    asm: &mut Assembler,
+    ocb: &mut OutlinedCb,
+    cd: *const rb_call_data,
+) -> Option<CodegenStatus> {
     // Defer compilation so we can specialize on class of receiver
     if !jit.at_current_insn() {
         defer_compilation(jit, asm, ocb);
         return Some(EndBlock);
     }
 
+    // Handle the last two branches of vm_caller_setup_arg_block
+    let block = if let Some(iseq) = jit.get_arg(1).as_optional_ptr() {
+        BlockHandler::BlockISeq(iseq)
+    } else {
+        BlockHandler::LEPSpecVal
+    };
+
+    // Fallback to dynamic dispatch if this callsite is megamorphic
+    if asm.ctx.get_chain_depth() as i32 >= SEND_MAX_DEPTH {
+        gen_counter_incr(asm, Counter::invokesuper_megamorphic);
+        return None;
+    }
+
     let me = unsafe { rb_vm_frame_method_entry(jit.get_cfp()) };
     if me.is_null() {
+        gen_counter_incr(asm, Counter::invokesuper_no_me);
         return None;
     }
 
@@ -7094,6 +7644,7 @@ fn gen_invokesuper(
     if current_defined_class.builtin_type() == RUBY_T_ICLASS
         && unsafe { RB_TYPE_P((*rbasic_ptr).klass, RUBY_T_MODULE) && FL_TEST_RAW((*rbasic_ptr).klass, VALUE(RMODULE_IS_REFINEMENT.as_usize())) != VALUE(0) }
     {
+        gen_counter_incr(asm, Counter::invokesuper_refinement);
         return None;
     }
     let comptime_superclass =
@@ -7108,15 +7659,11 @@ fn gen_invokesuper(
     // Note, not using VM_CALL_ARGS_SIMPLE because sometimes we pass a block.
 
     if ci_flags & VM_CALL_KWARG != 0 {
-        gen_counter_incr(asm, Counter::send_keywords);
+        gen_counter_incr(asm, Counter::invokesuper_kwarg);
         return None;
     }
     if ci_flags & VM_CALL_KW_SPLAT != 0 {
-        gen_counter_incr(asm, Counter::send_kw_splat);
-        return None;
-    }
-    if ci_flags & VM_CALL_ARGS_BLOCKARG != 0 {
-        gen_counter_incr(asm, Counter::send_block_arg);
+        gen_counter_incr(asm, Counter::invokesuper_kw_splat);
         return None;
     }
 
@@ -7127,13 +7674,14 @@ fn gen_invokesuper(
     // check and side exit.
     let comptime_recv = jit.peek_at_stack(&asm.ctx, argc as isize);
     if unsafe { rb_obj_is_kind_of(comptime_recv, current_defined_class) } == VALUE(0) {
+        gen_counter_incr(asm, Counter::invokesuper_defined_class_mismatch);
         return None;
     }
 
     // Do method lookup
     let cme = unsafe { rb_callable_method_entry(comptime_superclass, mid) };
-
     if cme.is_null() {
+        gen_counter_incr(asm, Counter::invokesuper_no_cme);
         return None;
     }
 
@@ -7141,6 +7689,7 @@ fn gen_invokesuper(
     let cme_def_type = unsafe { get_cme_def_type(cme) };
     if cme_def_type != VM_METHOD_TYPE_ISEQ && cme_def_type != VM_METHOD_TYPE_CFUNC {
         // others unimplemented
+        gen_counter_incr(asm, Counter::invokesuper_not_iseq_or_cfunc);
         return None;
     }
 
@@ -7154,24 +7703,14 @@ fn gen_invokesuper(
 
     let me_as_value = VALUE(me as usize);
     asm.cmp(ep_me_opnd, me_as_value.into());
-    asm.jne(Target::side_exit(Counter::invokesuper_me_changed));
-
-    if block.is_none() {
-        // Guard no block passed
-        // rb_vm_frame_block_handler(GET_EC()->cfp) == VM_BLOCK_HANDLER_NONE
-        // note, we assume VM_ASSERT(VM_ENV_LOCAL_P(ep))
-        //
-        // TODO: this could properly forward the current block handler, but
-        // would require changes to gen_send_*
-        asm.comment("guard no block given");
-        let ep_specval_opnd = Opnd::mem(
-            64,
-            lep_opnd,
-            SIZEOF_VALUE_I32 * VM_ENV_DATA_INDEX_SPECVAL,
-        );
-        asm.cmp(ep_specval_opnd, VM_BLOCK_HANDLER_NONE.into());
-        asm.jne(Target::side_exit(Counter::invokesuper_block));
-    }
+    jit_chain_guard(
+        JCC_JNE,
+        jit,
+        asm,
+        ocb,
+        SEND_MAX_DEPTH,
+        Counter::guard_invokesuper_me_changed,
+    );
 
     // We need to assume that both our current method entry and the super
     // method entry we invoke remain stable
@@ -7185,10 +7724,10 @@ fn gen_invokesuper(
         VM_METHOD_TYPE_ISEQ => {
             let iseq = unsafe { get_def_iseq_ptr((*cme).def) };
             let frame_type = VM_FRAME_MAGIC_METHOD | VM_ENV_FLAG_LOCAL;
-            gen_send_iseq(jit, asm, ocb, iseq, ci, frame_type, None, cme, block, ci_flags, argc, None)
+            gen_send_iseq(jit, asm, ocb, iseq, ci, frame_type, None, cme, Some(block), ci_flags, argc, None)
         }
         VM_METHOD_TYPE_CFUNC => {
-            gen_send_cfunc(jit, asm, ocb, ci, cme, block, ptr::null(), ci_flags, argc)
+            gen_send_cfunc(jit, asm, ocb, ci, cme, Some(block), ptr::null(), ci_flags, argc)
         }
         _ => unreachable!(),
     }
@@ -7200,7 +7739,7 @@ fn gen_leave(
     ocb: &mut OutlinedCb,
 ) -> Option<CodegenStatus> {
     // Only the return value should be on the stack
-    assert_eq!(1, asm.ctx.get_stack_size());
+    assert_eq!(1, asm.ctx.get_stack_size(), "leave instruction expects stack size 1, but was: {}", asm.ctx.get_stack_size());
 
     let ocb_asm = Assembler::new();
 
@@ -7396,7 +7935,6 @@ fn gen_toregexp(
     asm.mov(stack_ret, val);
 
     // Clear the temp array.
-    asm.spill_temps(); // for ccall
     asm.ccall(rb_ary_clear as *const u8, vec![ary]);
 
     Some(KeepCompiling)
@@ -7573,6 +8111,7 @@ fn gen_opt_getconstant_path(
     if ice.is_null() {
         // In this case, leave a block that unconditionally side exits
         // for the interpreter to invalidate.
+        gen_counter_incr(asm, Counter::opt_getconstant_path_no_ic_entry);
         return None;
     }
 
@@ -7585,7 +8124,6 @@ fn gen_opt_getconstant_path(
         let inline_cache = asm.load(Opnd::const_ptr(ic as *const u8));
 
         // Call function to verify the cache. It doesn't allocate or call methods.
-        asm.spill_temps(); // for ccall
         let ret_val = asm.ccall(
             rb_vm_ic_hit_p as *const u8,
             vec![inline_cache, Opnd::mem(64, CFP, RUBY_OFFSET_CFP_EP)]
@@ -7594,7 +8132,7 @@ fn gen_opt_getconstant_path(
         // Check the result. SysV only specifies one byte for _Bool return values,
         // so it's important we only check one bit to ignore the higher bits in the register.
         asm.test(ret_val, 1.into());
-        asm.jz(Target::side_exit(Counter::opt_getinlinecache_miss));
+        asm.jz(Target::side_exit(Counter::opt_getconstant_path_ic_miss));
 
         let inline_cache = asm.load(Opnd::const_ptr(ic as *const u8));
 
@@ -7616,6 +8154,7 @@ fn gen_opt_getconstant_path(
     } else {
         // Optimize for single ractor mode.
         if !assume_single_ractor_mode(jit, asm, ocb) {
+            gen_counter_incr(asm, Counter::opt_getconstant_path_multi_ractor);
             return None;
         }
 
@@ -7643,18 +8182,20 @@ fn gen_getblockparamproxy(
         return Some(EndBlock);
     }
 
-    // A mirror of the interpreter code. Checking for the case
-    // where it's pushing rb_block_param_proxy.
-
     // EP level
     let level = jit.get_arg(1).as_u32();
 
     // Peek at the block handler so we can check whether it's nil
     let comptime_handler = jit.peek_at_block_handler(level);
 
-    // When a block handler is present, it should always be a GC-guarded
-    // pointer (VM_BH_ISEQ_BLOCK_P)
-    if comptime_handler.as_u64() != 0 && comptime_handler.as_u64() & 0x3 != 0x1 {
+    // Filter for the 4 cases we currently handle
+    if !(comptime_handler.as_u64() == 0 ||              // no block given
+            comptime_handler.as_u64() & 0x3 == 0x1 ||   // iseq block (no associated GC managed object)
+            comptime_handler.as_u64() & 0x3 == 0x3 ||   // ifunc block (no associated GC managed object)
+            unsafe { rb_obj_is_proc(comptime_handler) }.test() // block is a Proc
+        ) {
+        // Missing the symbol case, where we basically need to call Symbol#to_proc at runtime
+        gen_counter_incr(asm, Counter::gbpp_unsupported_type);
         return None;
     }
 
@@ -7676,7 +8217,12 @@ fn gen_getblockparamproxy(
         Opnd::mem(64, ep_opnd, SIZEOF_VALUE_I32 * VM_ENV_DATA_INDEX_SPECVAL)
     );
 
-    // Specialize compilation for the case where no block handler is present
+    // Use block handler sample to guide specialization...
+    // NOTE: we use jit_chain_guard() in this decision tree, and since
+    // there are only a few cases, it should never reach the depth limit use
+    // the exit counter we pass to it.
+    //
+    // No block given
     if comptime_handler.as_u64() == 0 {
         // Bail if there is a block handler
         asm.cmp(block_handler, Opnd::UImm(0));
@@ -7691,15 +8237,18 @@ fn gen_getblockparamproxy(
         );
 
         jit_putobject(asm, Qnil);
-    } else {
-        // Block handler is a tagged pointer. Look at the tag. 0x03 is from VM_BH_ISEQ_BLOCK_P().
-        let block_handler = asm.and(block_handler, 0x3.into());
+    } else if comptime_handler.as_u64() & 0x1 == 0x1 {
+        // This handles two cases which are nearly identical
+        // Block handler is a tagged pointer. Look at the tag.
+        //   VM_BH_ISEQ_BLOCK_P(): block_handler & 0x03 == 0x01
+        //   VM_BH_IFUNC_P():      block_handler & 0x03 == 0x03
+        // So to check for either of those cases we can use: val & 0x1 == 0x1
+        const _: () = assert!(RUBY_SYMBOL_FLAG & 1 == 0, "guard below rejects symbol block handlers");
+        // Procs are aligned heap pointers so testing the bit rejects them too.
 
-        // Bail unless VM_BH_ISEQ_BLOCK_P(bh). This also checks for null.
-        asm.cmp(block_handler, 0x1.into());
-
+        asm.test(block_handler, 0x1.into());
         jit_chain_guard(
-            JCC_JNZ,
+            JCC_JZ,
             jit,
             asm,
             ocb,
@@ -7712,6 +8261,39 @@ fn gen_getblockparamproxy(
 
         let top = asm.stack_push(Type::BlockParamProxy);
         asm.mov(top, Opnd::const_ptr(unsafe { rb_block_param_proxy }.as_ptr()));
+    } else if unsafe { rb_obj_is_proc(comptime_handler) }.test() {
+        // The block parameter is a Proc
+        c_callable! {
+            // We can't hold values across C calls due to a backend limitation,
+            // so we'll use this thin wrapper around rb_obj_is_proc().
+            fn is_proc(object: VALUE) -> VALUE {
+                if unsafe { rb_obj_is_proc(object) }.test() {
+                    // VM_BH_TO_PROC() is the identify function.
+                    object
+                } else {
+                    Qfalse
+                }
+            }
+        }
+
+        // Simple predicate, no need to jit_prepare_routine_call()
+        let proc_or_false = asm.ccall(is_proc as _, vec![block_handler]);
+
+        // Guard for proc
+        asm.cmp(proc_or_false, Qfalse.into());
+        jit_chain_guard(
+            JCC_JE,
+            jit,
+            asm,
+            ocb,
+            SEND_MAX_DEPTH,
+            Counter::gbpp_block_handler_not_proc,
+        );
+
+        let top = asm.stack_push(Type::Unknown);
+        asm.mov(top, proc_or_false);
+    } else {
+        unreachable!("absurd given initial filtering");
     }
 
     jump_to_next_insn(jit, asm, ocb);
@@ -7931,6 +8513,7 @@ fn get_gen_fn(opcode: VALUE) -> Option<InsnGenFn> {
         YARVINSN_expandarray => Some(gen_expandarray),
         YARVINSN_defined => Some(gen_defined),
         YARVINSN_definedivar => Some(gen_definedivar),
+        YARVINSN_checkmatch => Some(gen_checkmatch),
         YARVINSN_checkkeyword => Some(gen_checkkeyword),
         YARVINSN_concatstrings => Some(gen_concatstrings),
         YARVINSN_getinstancevariable => Some(gen_getinstancevariable),
@@ -7940,6 +8523,7 @@ fn get_gen_fn(opcode: VALUE) -> Option<InsnGenFn> {
         YARVINSN_opt_neq => Some(gen_opt_neq),
         YARVINSN_opt_aref => Some(gen_opt_aref),
         YARVINSN_opt_aset => Some(gen_opt_aset),
+        YARVINSN_opt_aref_with => Some(gen_opt_aref_with),
         YARVINSN_opt_mult => Some(gen_opt_mult),
         YARVINSN_opt_div => Some(gen_opt_div),
         YARVINSN_opt_ltlt => Some(gen_opt_ltlt),
@@ -7994,7 +8578,7 @@ type MethodGenFn = fn(
     ocb: &mut OutlinedCb,
     ci: *const rb_callinfo,
     cme: *const rb_callable_method_entry_t,
-    block: Option<IseqPtr>,
+    block: Option<BlockHandler>,
     argc: i32,
     known_recv_class: *const VALUE,
 ) -> bool;
@@ -8010,8 +8594,11 @@ pub struct CodegenGlobals {
     /// Code for exiting back to the interpreter from the leave instruction
     leave_exit_code: CodePtr,
 
+    /// Code for exiting back to the interpreter after handling an exception
+    leave_exception_code: CodePtr,
+
     // For exiting from YJIT frame from branch_stub_hit().
-    // Filled by gen_code_for_exit_from_stub().
+    // Filled by gen_stub_exit().
     stub_exit_code: CodePtr,
 
     // For servicing branch stubs
@@ -8031,9 +8618,6 @@ pub struct CodegenGlobals {
 
     /// Page indexes for outlined code that are not associated to any ISEQ.
     ocb_pages: Vec<usize>,
-
-    /// How many times code GC has been executed.
-    code_gc_count: usize,
 }
 
 /// For implementing global code invalidation. A position in the inline
@@ -8100,8 +8684,9 @@ impl CodegenGlobals {
 
         let ocb_start_addr = ocb.unwrap().get_write_ptr();
         let leave_exit_code = gen_leave_exit(&mut ocb);
+        let leave_exception_code = gen_leave_exception(&mut ocb);
 
-        let stub_exit_code = gen_code_for_exit_from_stub(&mut ocb);
+        let stub_exit_code = gen_stub_exit(&mut ocb);
 
         let branch_stub_hit_trampoline = gen_branch_stub_hit_trampoline(&mut ocb);
         let entry_stub_hit_trampoline = gen_entry_stub_hit_trampoline(&mut ocb);
@@ -8120,14 +8705,14 @@ impl CodegenGlobals {
             inline_cb: cb,
             outlined_cb: ocb,
             leave_exit_code,
-            stub_exit_code: stub_exit_code,
+            leave_exception_code,
+            stub_exit_code,
             outline_full_cfunc_return_pos: cfunc_exit_code,
             branch_stub_hit_trampoline,
             entry_stub_hit_trampoline,
             global_inval_patches: Vec::new(),
             method_codegen_table: HashMap::new(),
             ocb_pages,
-            code_gc_count: 0,
         };
 
         // Register the method codegen functions
@@ -8190,6 +8775,7 @@ impl CodegenGlobals {
 
             self.yjit_reg_method(rb_cInteger, "*", jit_rb_int_mul);
             self.yjit_reg_method(rb_cInteger, "/", jit_rb_int_div);
+            self.yjit_reg_method(rb_cInteger, "<<", jit_rb_int_lshift);
             self.yjit_reg_method(rb_cInteger, "[]", jit_rb_int_aref);
 
             // rb_str_to_s() methods in string.c
@@ -8197,6 +8783,7 @@ impl CodegenGlobals {
             self.yjit_reg_method(rb_cString, "to_s", jit_rb_str_to_s);
             self.yjit_reg_method(rb_cString, "to_str", jit_rb_str_to_s);
             self.yjit_reg_method(rb_cString, "bytesize", jit_rb_str_bytesize);
+            self.yjit_reg_method(rb_cString, "getbyte", jit_rb_str_getbyte);
             self.yjit_reg_method(rb_cString, "<<", jit_rb_str_concat);
             self.yjit_reg_method(rb_cString, "+@", jit_rb_str_uplus);
 
@@ -8237,6 +8824,10 @@ impl CodegenGlobals {
 
     pub fn get_leave_exit_code() -> CodePtr {
         CodegenGlobals::get_instance().leave_exit_code
+    }
+
+    pub fn get_leave_exception_code() -> CodePtr {
+        CodegenGlobals::get_instance().leave_exception_code
     }
 
     pub fn get_stub_exit_code() -> CodePtr {
@@ -8284,14 +8875,6 @@ impl CodegenGlobals {
     pub fn get_ocb_pages() -> &'static Vec<usize> {
         &CodegenGlobals::get_instance().ocb_pages
     }
-
-    pub fn incr_code_gc_count() {
-        CodegenGlobals::get_instance().code_gc_count += 1;
-    }
-
-    pub fn get_code_gc_count() -> usize {
-        CodegenGlobals::get_instance().code_gc_count
-    }
 }
 
 #[cfg(test)]
@@ -8333,7 +8916,7 @@ mod tests {
     #[test]
     fn test_get_side_exit() {
         let (_jit, ctx, mut asm, _, mut ocb) = setup_codegen();
-        let side_exit_context = SideExitContext { pc: 0 as _, ctx };
+        let side_exit_context = SideExitContext::new(0 as _, ctx);
         asm.get_side_exit(&side_exit_context, None, &mut ocb);
         assert!(ocb.unwrap().get_write_pos() > 0);
     }
@@ -8342,7 +8925,7 @@ mod tests {
     fn test_gen_check_ints() {
         let (_jit, _ctx, mut asm, _cb, _ocb) = setup_codegen();
         asm.set_side_exit_context(0 as _, 0);
-        gen_check_ints(&mut asm, Counter::send_interrupted);
+        gen_check_ints(&mut asm, Counter::guard_send_interrupted);
     }
 
     #[test]
@@ -8417,8 +9000,8 @@ mod tests {
 
         let status = gen_swap(&mut jit, &mut asm, &mut ocb);
 
-        let (_, tmp_type_top) = asm.ctx.get_opnd_mapping(StackOpnd(0));
-        let (_, tmp_type_next) = asm.ctx.get_opnd_mapping(StackOpnd(1));
+        let tmp_type_top = asm.ctx.get_opnd_type(StackOpnd(0));
+        let tmp_type_next = asm.ctx.get_opnd_type(StackOpnd(1));
 
         assert_eq!(status, Some(KeepCompiling));
         assert_eq!(tmp_type_top, Type::Fixnum);
@@ -8430,7 +9013,7 @@ mod tests {
         let (mut jit, _context, mut asm, mut cb, mut ocb) = setup_codegen();
         let status = gen_putnil(&mut jit, &mut asm, &mut ocb);
 
-        let (_, tmp_type_top) = asm.ctx.get_opnd_mapping(StackOpnd(0));
+        let tmp_type_top = asm.ctx.get_opnd_type(StackOpnd(0));
 
         assert_eq!(status, Some(KeepCompiling));
         assert_eq!(tmp_type_top, Type::Nil);
@@ -8449,7 +9032,7 @@ mod tests {
 
         let status = gen_putobject(&mut jit, &mut asm, &mut ocb);
 
-        let (_, tmp_type_top) = asm.ctx.get_opnd_mapping(StackOpnd(0));
+        let tmp_type_top = asm.ctx.get_opnd_type(StackOpnd(0));
 
         assert_eq!(status, Some(KeepCompiling));
         assert_eq!(tmp_type_top, Type::True);
@@ -8469,7 +9052,7 @@ mod tests {
 
         let status = gen_putobject(&mut jit, &mut asm, &mut ocb);
 
-        let (_, tmp_type_top) = asm.ctx.get_opnd_mapping(StackOpnd(0));
+        let tmp_type_top = asm.ctx.get_opnd_type(StackOpnd(0));
 
         assert_eq!(status, Some(KeepCompiling));
         assert_eq!(tmp_type_top, Type::Fixnum);
@@ -8483,7 +9066,7 @@ mod tests {
         jit.opcode = YARVINSN_putobject_INT2FIX_0_.as_usize();
         let status = gen_putobject_int2fix(&mut jit, &mut asm, &mut ocb);
 
-        let (_, tmp_type_top) = asm.ctx.get_opnd_mapping(StackOpnd(0));
+        let tmp_type_top = asm.ctx.get_opnd_type(StackOpnd(0));
 
         // Right now we're not testing the generated machine code to make sure a literal 1 or 0 was pushed. I've checked locally.
         assert_eq!(status, Some(KeepCompiling));

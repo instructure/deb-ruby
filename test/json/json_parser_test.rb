@@ -1,10 +1,13 @@
 # encoding: utf-8
 # frozen_string_literal: false
-require 'test_helper'
+require_relative 'test_helper'
 require 'stringio'
 require 'tempfile'
 require 'ostruct'
-require 'bigdecimal'
+begin
+  require 'bigdecimal'
+rescue LoadError
+end
 
 class JSONParserTest < Test::Unit::TestCase
   include JSON
@@ -113,7 +116,7 @@ class JSONParserTest < Test::Unit::TestCase
   def test_parse_bigdecimals
     assert_equal(BigDecimal,                             JSON.parse('{"foo": 9.01234567890123456789}', decimal_class: BigDecimal)["foo"].class)
     assert_equal(BigDecimal("0.901234567890123456789E1"),JSON.parse('{"foo": 9.01234567890123456789}', decimal_class: BigDecimal)["foo"]      )
-  end
+  end if defined?(::BigDecimal)
 
   def test_parse_string_mixed_unicode
     assert_equal(["éé"], JSON.parse("[\"\\u00e9é\"]"))

@@ -1254,8 +1254,8 @@ class TestGem < Gem::TestCase
       Gem.try_activate "a_file"
     end
 
-    assert_match(/Could not find 'b' /, e.message)
-    assert_match(/at: #{a.spec_file}/, e.message)
+    assert_include(e.message, "Could not find 'b' ")
+    assert_include(e.message, "at: #{a.spec_file}")
   end
 
   def test_self_try_activate_missing_prerelease
@@ -1449,6 +1449,8 @@ class TestGem < Gem::TestCase
   def test_load_plugins
     plugin_path = File.join "lib", "rubygems_plugin.rb"
 
+    foo1_plugin_path = nil
+    foo2_plugin_path = nil
     Dir.chdir @tempdir do
       FileUtils.mkdir_p "lib"
       File.open plugin_path, "w" do |fp|
@@ -1458,17 +1460,22 @@ class TestGem < Gem::TestCase
       foo1 = util_spec "foo", "1" do |s|
         s.files << plugin_path
       end
+      foo1_plugin_path = File.join(foo1.gem_dir, plugin_path)
 
       install_gem foo1
 
       foo2 = util_spec "foo", "2" do |s|
         s.files << plugin_path
       end
+      foo2_plugin_path = File.join(foo2.gem_dir, plugin_path)
 
       install_gem foo2
     end
 
     Gem::Specification.reset
+    PLUGINS_LOADED.clear
+    $LOADED_FEATURES.delete(foo1_plugin_path)
+    $LOADED_FEATURES.delete(foo2_plugin_path)
 
     gem "foo"
 

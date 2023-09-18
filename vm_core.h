@@ -132,18 +132,9 @@ extern int ruby_assert_critical_section_entered;
 #define RUBY_NSIG NSIG
 
 #if defined(SIGCLD)
-#  define RUBY_SIGCHLD    (SIGCLD)
+#  define RUBY_SIGCHLD (SIGCLD)
 #elif defined(SIGCHLD)
-#  define RUBY_SIGCHLD    (SIGCHLD)
-#else
-#  define RUBY_SIGCHLD    (0)
-#endif
-
-/* platforms with broken or non-existent SIGCHLD work by polling */
-#if defined(__APPLE__)
-#  define SIGCHLD_LOSSY (1)
-#else
-#  define SIGCHLD_LOSSY (0)
+#  define RUBY_SIGCHLD (SIGCHLD)
 #endif
 
 #if defined(SIGSEGV) && defined(HAVE_SIGALTSTACK) && defined(SA_SIGINFO) && !defined(__NetBSD__)
@@ -191,9 +182,6 @@ void *rb_register_sigaltstack(void *);
 #if    OPT_DIRECT_THREADED_CODE
 #undef OPT_DIRECT_THREADED_CODE
 #endif /* OPT_DIRECT_THREADED_CODE */
-#if    OPT_STACK_CACHING
-#undef OPT_STACK_CACHING
-#endif /* OPT_STACK_CACHING */
 #endif /* OPT_CALL_THREADED_CODE */
 
 void rb_vm_encoded_insn_data_table_init(void);
@@ -290,7 +278,7 @@ union iseq_inline_storage_entry {
 };
 
 struct rb_calling_info {
-    const struct rb_callinfo *ci;
+    const struct rb_call_data *cd;
     const struct rb_callcache *cc;
     VALUE block_handler;
     VALUE recv;
@@ -515,10 +503,17 @@ struct rb_iseq_constant_body {
     const rb_iseq_t *mandatory_only_iseq;
 
 #if USE_RJIT || USE_YJIT
-    // Function pointer for JIT code
-    rb_jit_func_t jit_func;
-    // Number of total calls with jit_exec()
-    long unsigned total_calls;
+    // Function pointer for JIT code on jit_exec()
+    rb_jit_func_t jit_entry;
+    // Number of calls on jit_exec()
+    long unsigned jit_entry_calls;
+#endif
+
+#if USE_YJIT
+    // Function pointer for JIT code on jit_exec_exception()
+    rb_jit_func_t jit_exception;
+    // Number of calls on jit_exec_exception()
+    long unsigned jit_exception_calls;
 #endif
 
 #if USE_RJIT
@@ -557,22 +552,21 @@ struct rb_iseq_struct {
 
 #define ISEQ_BODY(iseq) ((iseq)->body)
 
-#ifndef USE_LAZY_LOAD
+#if !defined(USE_LAZY_LOAD) || !(USE_LAZY_LOAD+0)
 #define USE_LAZY_LOAD 0
 #endif
 
-#if USE_LAZY_LOAD
-const rb_iseq_t *rb_iseq_complete(const rb_iseq_t *iseq);
+#if !USE_LAZY_LOAD
+static inline const rb_iseq_t *rb_iseq_complete(const rb_iseq_t *iseq) {return 0;}
 #endif
+const rb_iseq_t *rb_iseq_complete(const rb_iseq_t *iseq);
 
 static inline const rb_iseq_t *
 rb_iseq_check(const rb_iseq_t *iseq)
 {
-#if USE_LAZY_LOAD
-    if (ISEQ_BODY(iseq) == NULL) {
+    if (USE_LAZY_LOAD && ISEQ_BODY(iseq) == NULL) {
         rb_iseq_complete((rb_iseq_t *)iseq);
     }
-#endif
     return iseq;
 }
 
@@ -819,19 +813,16 @@ struct rb_block {
 };
 
 typedef struct rb_control_frame_struct {
-    const VALUE *pc;		/* cfp[0] */
-    VALUE *sp;			/* cfp[1] */
-    const rb_iseq_t *iseq;	/* cfp[2] */
-    VALUE self;			/* cfp[3] / block[0] */
-    const VALUE *ep;		/* cfp[4] / block[1] */
-    const void *block_code;     /* cfp[5] / block[2] */ /* iseq or ifunc or forwarded block handler */
-    VALUE *__bp__;              /* cfp[6] */ /* outside vm_push_frame, use vm_base_ptr instead. */
-
+    const VALUE *pc;        // cfp[0]
+    VALUE *sp;              // cfp[1]
+    const rb_iseq_t *iseq;  // cfp[2]
+    VALUE self;             // cfp[3] / block[0]
+    const VALUE *ep;        // cfp[4] / block[1]
+    const void *block_code; // cfp[5] / block[2] -- iseq, ifunc, or forwarded block handler
+    void *jit_return;       // cfp[6] -- return address for JIT code
 #if VM_DEBUG_BP_CHECK
-    VALUE *bp_check;		/* cfp[7] */
+    VALUE *bp_check;        // cfp[7]
 #endif
-    // Return address for YJIT code
-    void *jit_return;
 } rb_control_frame_t;
 
 extern const rb_data_type_t ruby_threadptr_data_type;
@@ -1559,12 +1550,6 @@ vm_block_handler_verify(MAYBE_UNUSED(VALUE block_handler))
               (vm_block_handler_type(block_handler), 1));
 }
 
-static inline int
-vm_cfp_forwarded_bh_p(const rb_control_frame_t *cfp, VALUE block_handler)
-{
-    return ((VALUE) cfp->block_code) == block_handler;
-}
-
 static inline enum rb_block_type
 vm_block_type(const struct rb_block *block)
 {
@@ -1695,11 +1680,7 @@ VALUE rb_proc_dup(VALUE self);
 /* for debug */
 extern void rb_vmdebug_stack_dump_raw(const rb_execution_context_t *ec, const rb_control_frame_t *cfp);
 extern void rb_vmdebug_debug_print_pre(const rb_execution_context_t *ec, const rb_control_frame_t *cfp, const VALUE *_pc);
-extern void rb_vmdebug_debug_print_post(const rb_execution_context_t *ec, const rb_control_frame_t *cfp
-#if OPT_STACK_CACHING
-    , VALUE reg_a, VALUE reg_b
-#endif
-);
+extern void rb_vmdebug_debug_print_post(const rb_execution_context_t *ec, const rb_control_frame_t *cfp);
 
 #define SDR() rb_vmdebug_stack_dump_raw(GET_EC(), GET_EC()->cfp)
 #define SDR2(cfp) rb_vmdebug_stack_dump_raw(GET_EC(), (cfp))
@@ -1771,6 +1752,7 @@ rb_thread_t * ruby_thread_from_native(void);
 int ruby_thread_set_native(rb_thread_t *th);
 int rb_vm_control_frame_id_and_class(const rb_control_frame_t *cfp, ID *idp, ID *called_idp, VALUE *klassp);
 void rb_vm_rewind_cfp(rb_execution_context_t *ec, rb_control_frame_t *cfp);
+void rb_vm_env_write(const VALUE *ep, int index, VALUE v);
 VALUE rb_vm_bh_to_procval(const rb_execution_context_t *ec, VALUE block_handler);
 
 void rb_vm_register_special_exception_str(enum ruby_special_exceptions sp, VALUE exception_class, VALUE mesg);

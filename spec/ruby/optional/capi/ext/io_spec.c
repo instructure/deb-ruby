@@ -28,9 +28,13 @@ static int set_non_blocking(int fd) {
 }
 
 static int io_spec_get_fd(VALUE io) {
+#ifdef RUBY_VERSION_IS_3_1
+  return rb_io_descriptor(io);
+#else
   rb_io_t* fp;
   GetOpenFile(io, fp);
   return fp->fd;
+#endif
 }
 
 VALUE io_spec_GetOpenFile_fd(VALUE self, VALUE io) {
@@ -130,7 +134,7 @@ VALUE io_spec_rb_io_wait_readable(VALUE self, VALUE io, VALUE read_p) {
     rb_sys_fail("set_non_blocking failed");
 
 #ifndef SET_NON_BLOCKING_FAILS_ALWAYS
-  if(RTEST(read_p)) {
+  if (RTEST(read_p)) {
     if (read(fd, buf, RB_IO_WAIT_READABLE_BUF) != -1) {
       return Qnil;
     }
@@ -141,7 +145,7 @@ VALUE io_spec_rb_io_wait_readable(VALUE self, VALUE io, VALUE read_p) {
 
   ret = rb_io_wait_readable(fd);
 
-  if(RTEST(read_p)) {
+  if (RTEST(read_p)) {
     ssize_t r = read(fd, buf, RB_IO_WAIT_READABLE_BUF);
     if (r != RB_IO_WAIT_READABLE_BUF) {
       perror("read");
@@ -181,7 +185,7 @@ VALUE io_spec_rb_io_maybe_wait_readable(VALUE self, VALUE error, VALUE io, VALUE
     rb_sys_fail("set_non_blocking failed");
 
 #ifndef SET_NON_BLOCKING_FAILS_ALWAYS
-  if(RTEST(read_p)) {
+  if (RTEST(read_p)) {
     if (read(fd, buf, RB_IO_WAIT_READABLE_BUF) != -1) {
       return Qnil;
     }
@@ -193,7 +197,7 @@ VALUE io_spec_rb_io_maybe_wait_readable(VALUE self, VALUE error, VALUE io, VALUE
   // main part
   ret = rb_io_maybe_wait_readable(NUM2INT(error), io, timeout);
 
-  if(RTEST(read_p)) {
+  if (RTEST(read_p)) {
     ssize_t r = read(fd, buf, RB_IO_WAIT_READABLE_BUF);
     if (r != RB_IO_WAIT_READABLE_BUF) {
       perror("read");
@@ -303,7 +307,7 @@ VALUE io_spec_rb_io_set_nonblock(VALUE self, VALUE io) {
   GetOpenFile(io, fp);
   rb_io_set_nonblock(fp);
 #ifdef F_GETFL
-  flags = fcntl(fp->fd, F_GETFL, 0);
+  flags = fcntl(io_spec_get_fd(io), F_GETFL, 0);
   return flags & O_NONBLOCK ? Qtrue : Qfalse;
 #else
   return Qfalse;
@@ -322,9 +326,13 @@ static VALUE io_spec_errno_set(VALUE self, VALUE val) {
 }
 
 VALUE io_spec_mode_sync_flag(VALUE self, VALUE io) {
+#ifdef RUBY_VERSION_IS_3_3
+  if (rb_io_mode(io) & FMODE_SYNC) {
+#else
   rb_io_t *fp;
   GetOpenFile(io, fp);
   if (fp->mode & FMODE_SYNC) {
+#endif
     return Qtrue;
   } else {
     return Qfalse;

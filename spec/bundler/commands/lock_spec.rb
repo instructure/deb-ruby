@@ -1,14 +1,6 @@
 # frozen_string_literal: true
 
 RSpec.describe "bundle lock" do
-  def strip_lockfile(lockfile)
-    strip_whitespace(lockfile).sub(/\n\Z/, "")
-  end
-
-  def read_lockfile(file = "Gemfile.lock")
-    strip_lockfile bundled_app(file).read
-  end
-
   let(:repo) { gem_repo1 }
 
   before :each do
@@ -19,7 +11,7 @@ RSpec.describe "bundle lock" do
       gem "foo"
     G
 
-    @lockfile = strip_lockfile(<<-L)
+    @lockfile = <<~L
       GEM
         remote: #{file_uri_for(repo)}/
         specs:
@@ -58,7 +50,7 @@ RSpec.describe "bundle lock" do
   it "prints a lockfile when there is no existing lockfile with --print" do
     bundle "lock --print"
 
-    expect(out).to eq(@lockfile)
+    expect(out).to eq(@lockfile.strip)
   end
 
   it "prints a lockfile when there is an existing lockfile with --print" do
@@ -66,7 +58,7 @@ RSpec.describe "bundle lock" do
 
     bundle "lock --print"
 
-    expect(out).to eq(@lockfile)
+    expect(out).to eq(@lockfile.strip)
   end
 
   it "writes a lockfile when there is no existing lockfile" do
@@ -94,7 +86,7 @@ RSpec.describe "bundle lock" do
       source "#{file_uri_for(repo)}"
       gem "foo"
     G
-    lockfile = strip_lockfile(<<-L)
+    lockfile = <<~L
       GEM
         remote: #{file_uri_for(repo)}/
         specs:
@@ -297,24 +289,27 @@ RSpec.describe "bundle lock" do
     end
   end
 
-  it "updates the bundler version in the lockfile without re-resolving", :rubygems => ">= 3.3.0.dev" do
+  it "updates the bundler version in the lockfile to the latest bundler version" do
     build_repo4 do
-      build_gem "rack", "1.0"
+      build_gem "bundler", "55"
     end
 
-    install_gemfile <<-G
-      source "#{file_uri_for(gem_repo4)}"
-      gem "rack"
+    system_gems "bundler-55", :gem_repo => gem_repo4
+
+    install_gemfile <<-G, :artifice => "compact_index", :env => { "BUNDLER_SPEC_GEM_REPO" => gem_repo4.to_s }
+      source "https://gems.repo4"
     G
     lockfile lockfile.sub(/(^\s*)#{Bundler::VERSION}($)/, '\11.0.0\2')
 
-    FileUtils.rm_r gem_repo4
+    bundle "lock --update --bundler --verbose", :artifice => "compact_index", :env => { "BUNDLER_SPEC_GEM_REPO" => gem_repo4.to_s }
+    expect(lockfile).to end_with("BUNDLED WITH\n   55\n")
 
-    bundle "lock --update --bundler"
-    expect(the_bundle).to include_gem "rack 1.0"
+    update_repo4 do
+      build_gem "bundler", "99"
+    end
 
-    allow(Bundler::SharedHelpers).to receive(:find_gemfile).and_return(bundled_app_gemfile)
-    expect(the_bundle.locked_gems.bundler_version).to eq v(Bundler::VERSION)
+    bundle "lock --update --bundler --verbose", :artifice => "compact_index", :env => { "BUNDLER_SPEC_GEM_REPO" => gem_repo4.to_s }
+    expect(lockfile).to end_with("BUNDLED WITH\n   99\n")
   end
 
   it "supports adding new platforms" do

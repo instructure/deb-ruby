@@ -1,2 +1,2 @@
 #!ruby
-load File.realpath("../gems/typeprof-0.21.7/exe/typeprof", __dir__)
+load File.realpath("../gems/typeprof-0.21.8/exe/typeprof", __dir__)

@@ -22,9 +22,6 @@ rb_call_inits(void)
 {
     CALL(default_shapes);
     CALL(Thread_Mutex);
-#if USE_TRANSIENT_HEAP
-    CALL(TransientHeap);
-#endif
     CALL(vm_postponed_job);
     CALL(Method);
     CALL(RandomSeedCore);
@@ -80,6 +77,7 @@ rb_call_inits(void)
     CALL(ast);
     CALL(gc_stress);
     CALL(shape);
+    CALL(YARP);
 
     // enable builtin loading
     CALL(builtin);

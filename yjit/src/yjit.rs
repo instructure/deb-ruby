@@ -5,6 +5,7 @@ use crate::invariants::*;
 use crate::options::*;
 use crate::stats::YjitExitLocations;
 use crate::stats::incr_counter;
+use crate::stats::with_compile_time;
 
 use std::os::raw;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -45,10 +46,11 @@ pub fn yjit_enabled_p() -> bool {
     YJIT_ENABLED.load(Ordering::Acquire)
 }
 
-/// After how many calls YJIT starts compiling a method
+/// Test whether we are ready to compile an ISEQ or not
 #[no_mangle]
-pub extern "C" fn rb_yjit_call_threshold() -> raw::c_uint {
-    get_option!(call_threshold) as raw::c_uint
+pub extern "C" fn rb_yjit_threshold_hit(_iseq: IseqPtr, total_calls: u64) -> bool {
+    let call_threshold = get_option!(call_threshold) as u64;
+    return total_calls == call_threshold;
 }
 
 /// This function is called from C code
@@ -87,6 +89,7 @@ pub extern "C" fn rb_yjit_init_rust() {
 /// In case we want to start doing fancier exception handling with panic=unwind,
 /// we can revisit this later. For now, this helps to get us good bug reports.
 fn rb_bug_panic_hook() {
+    use std::env;
     use std::panic;
     use std::io::{stderr, Write};
 
@@ -97,6 +100,8 @@ fn rb_bug_panic_hook() {
         // Not using `eprintln` to avoid double panic.
         let _ = stderr().write_all(b"ruby: YJIT has panicked. More info to follow...\n");
 
+        // Always show a Rust backtrace.
+        env::set_var("RUST_BACKTRACE", "1");
         previous_hook(panic_info);
 
         unsafe { rb_bug(b"YJIT panicked\0".as_ref().as_ptr() as *const raw::c_char); }
@@ -105,8 +110,10 @@ fn rb_bug_panic_hook() {
 
 /// Called from C code to begin compiling a function
 /// NOTE: this should be wrapped in RB_VM_LOCK_ENTER(), rb_vm_barrier() on the C side
+/// If jit_exception is true, compile JIT code for handling exceptions.
+/// See [jit_compile_exception] for details.
 #[no_mangle]
-pub extern "C" fn rb_yjit_iseq_gen_entry_point(iseq: IseqPtr, ec: EcPtr) -> *const u8 {
+pub extern "C" fn rb_yjit_iseq_gen_entry_point(iseq: IseqPtr, ec: EcPtr, jit_exception: bool) -> *const u8 {
     // Reject ISEQs with very large temp stacks,
     // this will allow us to use u8/i8 values to track stack_size and sp_offset
     let stack_max = unsafe { rb_get_iseq_body_stack_max(iseq) };
@@ -124,7 +131,7 @@ pub extern "C" fn rb_yjit_iseq_gen_entry_point(iseq: IseqPtr, ec: EcPtr) -> *con
         return std::ptr::null();
     }
 
-    let maybe_code_ptr = gen_entry_point(iseq, ec);
+    let maybe_code_ptr = with_compile_time(|| { gen_entry_point(iseq, ec, jit_exception) });
 
     match maybe_code_ptr {
         Some(ptr) => ptr.raw_ptr(),

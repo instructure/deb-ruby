@@ -87,9 +87,9 @@ impl From<&Opnd> for X86Opnd {
 impl Assembler
 {
     // A special scratch register for intermediate processing.
-    // Note: right now this is only used by LeaLabel because label_ref accepts
-    // a closure and we don't want it to have to capture anything.
-    const SCRATCH0: X86Opnd = X86Opnd::Reg(R11_REG);
+    // This register is caller-saved (so we don't have to save it before using it)
+    pub const SCRATCH_REG: Reg = R11_REG;
+    const SCRATCH0: X86Opnd = X86Opnd::Reg(Assembler::SCRATCH_REG);
 
     /// List of registers that can be used for stack temps.
     pub const TEMP_REGS: [Reg; 5] = [RSI_REG, RDI_REG, R8_REG, R9_REG, R10_REG];
@@ -172,6 +172,7 @@ impl Assembler
             match &mut insn {
                 Insn::Add { left, right, out } |
                 Insn::Sub { left, right, out } |
+                Insn::Mul { left, right, out } |
                 Insn::And { left, right, out } |
                 Insn::Or { left, right, out } |
                 Insn::Xor { left, right, out } => {
@@ -290,7 +291,7 @@ impl Assembler
                     *out = asm.next_opnd_out(Opnd::match_num_bits(&[*truthy, *falsy]));
                     asm.push_insn(insn);
                 },
-                Insn::Mov { dest, src } => {
+                Insn::Mov { dest, src } | Insn::Store { dest, src } => {
                     match (&dest, &src) {
                         (Opnd::Mem(_), Opnd::Mem(_)) => {
                             // We load opnd1 because for mov, opnd0 is the output
@@ -347,7 +348,7 @@ impl Assembler
                     // Load each operand into the corresponding argument
                     // register.
                     for (idx, opnd) in opnds.into_iter().enumerate() {
-                        asm.load_into(C_ARG_OPNDS[idx], *opnd);
+                        asm.load_into(Opnd::c_arg(C_ARG_OPNDS[idx]), *opnd);
                     }
 
                     // Now we push the CCall without any arguments so that it
@@ -428,11 +429,31 @@ impl Assembler
             }
         }
 
-        fn emit_csel(cb: &mut CodeBlock, truthy: Opnd, falsy: Opnd, out: Opnd, cmov_fn: fn(&mut CodeBlock, X86Opnd, X86Opnd)) {
-            if out != truthy {
-                mov(cb, out.into(), truthy.into());
+        fn emit_csel(
+            cb: &mut CodeBlock,
+            truthy: Opnd,
+            falsy: Opnd,
+            out: Opnd,
+            cmov_fn: fn(&mut CodeBlock, X86Opnd, X86Opnd),
+            cmov_neg: fn(&mut CodeBlock, X86Opnd, X86Opnd)){
+
+            // Assert that output is a register
+            out.unwrap_reg();
+
+            // If the truthy value is a memory operand
+            if let Opnd::Mem(_) = truthy {
+                if out != falsy {
+                    mov(cb, out.into(), falsy.into());
+                }
+
+                cmov_fn(cb, out.into(), truthy.into());
+            } else {
+                if out != truthy {
+                    mov(cb, out.into(), truthy.into());
+                }
+
+                cmov_neg(cb, out.into(), falsy.into());
             }
-            cmov_fn(cb, out.into(), falsy.into());
         }
 
         //dbg!(&self.insns);
@@ -476,17 +497,22 @@ impl Assembler
                     cb.write_byte(0);
                 },
 
+                Insn::FrameSetup => {},
+                Insn::FrameTeardown => {},
+
                 Insn::Add { left, right, .. } => {
                     let opnd1 = emit_64bit_immediate(cb, right);
                     add(cb, left.into(), opnd1);
                 },
 
-                Insn::FrameSetup => {},
-                Insn::FrameTeardown => {},
-
                 Insn::Sub { left, right, .. } => {
                     let opnd1 = emit_64bit_immediate(cb, right);
                     sub(cb, left.into(), opnd1);
+                },
+
+                Insn::Mul { left, right, .. } => {
+                    let opnd1 = emit_64bit_immediate(cb, right);
+                    imul(cb, left.into(), opnd1);
                 },
 
                 Insn::And { left, right, .. } => {
@@ -673,10 +699,26 @@ impl Assembler
                     }
                 },
 
+                Insn::Jg(target) => {
+                    match compile_side_exit(*target, self, ocb) {
+                        Target::CodePtr(code_ptr) | Target::SideExitPtr(code_ptr) => jg_ptr(cb, code_ptr),
+                        Target::Label(label_idx) => jg_label(cb, label_idx),
+                        Target::SideExit { .. } => unreachable!("Target::SideExit should have been compiled by compile_side_exit"),
+                    }
+                },
+
                 Insn::Jbe(target) => {
                     match compile_side_exit(*target, self, ocb) {
                         Target::CodePtr(code_ptr) | Target::SideExitPtr(code_ptr) => jbe_ptr(cb, code_ptr),
                         Target::Label(label_idx) => jbe_label(cb, label_idx),
+                        Target::SideExit { .. } => unreachable!("Target::SideExit should have been compiled by compile_side_exit"),
+                    }
+                },
+
+                Insn::Jb(target) => {
+                    match compile_side_exit(*target, self, ocb) {
+                        Target::CodePtr(code_ptr) | Target::SideExitPtr(code_ptr) => jb_ptr(cb, code_ptr),
+                        Target::Label(label_idx) => jb_label(cb, label_idx),
                         Target::SideExit { .. } => unreachable!("Target::SideExit should have been compiled by compile_side_exit"),
                     }
                 },
@@ -716,28 +758,28 @@ impl Assembler
                 Insn::Breakpoint => int3(cb),
 
                 Insn::CSelZ { truthy, falsy, out } => {
-                    emit_csel(cb, *truthy, *falsy, *out, cmovnz);
+                    emit_csel(cb, *truthy, *falsy, *out, cmovz, cmovnz);
                 },
                 Insn::CSelNZ { truthy, falsy, out } => {
-                    emit_csel(cb, *truthy, *falsy, *out, cmovz);
+                    emit_csel(cb, *truthy, *falsy, *out, cmovnz, cmovz);
                 },
                 Insn::CSelE { truthy, falsy, out } => {
-                    emit_csel(cb, *truthy, *falsy, *out, cmovne);
+                    emit_csel(cb, *truthy, *falsy, *out, cmove, cmovne);
                 },
                 Insn::CSelNE { truthy, falsy, out } => {
-                    emit_csel(cb, *truthy, *falsy, *out, cmove);
+                    emit_csel(cb, *truthy, *falsy, *out, cmovne, cmove);
                 },
                 Insn::CSelL { truthy, falsy, out } => {
-                    emit_csel(cb, *truthy, *falsy, *out, cmovge);
+                    emit_csel(cb, *truthy, *falsy, *out, cmovl, cmovge);
                 },
                 Insn::CSelLE { truthy, falsy, out } => {
-                    emit_csel(cb, *truthy, *falsy, *out, cmovg);
+                    emit_csel(cb, *truthy, *falsy, *out, cmovle, cmovg);
                 },
                 Insn::CSelG { truthy, falsy, out } => {
-                    emit_csel(cb, *truthy, *falsy, *out, cmovle);
+                    emit_csel(cb, *truthy, *falsy, *out, cmovg, cmovle);
                 },
                 Insn::CSelGE { truthy, falsy, out } => {
-                    emit_csel(cb, *truthy, *falsy, *out, cmovl);
+                    emit_csel(cb, *truthy, *falsy, *out, cmovge, cmovl);
                 }
                 Insn::LiveReg { .. } => (), // just a reg alloc signal, no code
                 Insn::PadInvalPatch => {
@@ -1054,5 +1096,141 @@ mod tests {
         asm.compile_with_num_regs(&mut cb, 1);
 
         assert_eq!(format!("{:x}", cb), "4983f540");
+    }
+
+    #[test]
+    fn test_reorder_c_args_no_cycle() {
+        let (mut asm, mut cb) = setup_asm();
+
+        asm.ccall(0 as _, vec![
+            C_ARG_OPNDS[0], // mov rdi, rdi (optimized away)
+            C_ARG_OPNDS[1], // mov rsi, rsi (optimized away)
+        ]);
+        asm.compile_with_num_regs(&mut cb, 0);
+
+        assert_disasm!(cb, "b800000000ffd0", {"
+            0x0: mov eax, 0
+            0x5: call rax
+        "});
+    }
+
+    #[test]
+    fn test_reorder_c_args_single_cycle() {
+        let (mut asm, mut cb) = setup_asm();
+
+        // rdi and rsi form a cycle
+        asm.ccall(0 as _, vec![
+            C_ARG_OPNDS[1], // mov rdi, rsi
+            C_ARG_OPNDS[0], // mov rsi, rdi
+            C_ARG_OPNDS[2], // mov rdx, rdx (optimized away)
+        ]);
+        asm.compile_with_num_regs(&mut cb, 0);
+
+        assert_disasm!(cb, "4989f34889fe4c89dfb800000000ffd0", {"
+            0x0: mov r11, rsi
+            0x3: mov rsi, rdi
+            0x6: mov rdi, r11
+            0x9: mov eax, 0
+            0xe: call rax
+        "});
+    }
+
+    #[test]
+    fn test_reorder_c_args_two_cycles() {
+        let (mut asm, mut cb) = setup_asm();
+
+        // rdi and rsi form a cycle, and rdx and rcx form another cycle
+        asm.ccall(0 as _, vec![
+            C_ARG_OPNDS[1], // mov rdi, rsi
+            C_ARG_OPNDS[0], // mov rsi, rdi
+            C_ARG_OPNDS[3], // mov rdx, rcx
+            C_ARG_OPNDS[2], // mov rcx, rdx
+        ]);
+        asm.compile_with_num_regs(&mut cb, 0);
+
+        assert_disasm!(cb, "4989f34889fe4c89df4989cb4889d14c89dab800000000ffd0", {"
+            0x0: mov r11, rsi
+            0x3: mov rsi, rdi
+            0x6: mov rdi, r11
+            0x9: mov r11, rcx
+            0xc: mov rcx, rdx
+            0xf: mov rdx, r11
+            0x12: mov eax, 0
+            0x17: call rax
+        "});
+    }
+
+    #[test]
+    fn test_reorder_c_args_large_cycle() {
+        let (mut asm, mut cb) = setup_asm();
+
+        // rdi, rsi, and rdx form a cycle
+        asm.ccall(0 as _, vec![
+            C_ARG_OPNDS[1], // mov rdi, rsi
+            C_ARG_OPNDS[2], // mov rsi, rdx
+            C_ARG_OPNDS[0], // mov rdx, rdi
+        ]);
+        asm.compile_with_num_regs(&mut cb, 0);
+
+        assert_disasm!(cb, "4989f34889d64889fa4c89dfb800000000ffd0", {"
+            0x0: mov r11, rsi
+            0x3: mov rsi, rdx
+            0x6: mov rdx, rdi
+            0x9: mov rdi, r11
+            0xc: mov eax, 0
+            0x11: call rax
+        "});
+    }
+
+    #[test]
+    fn test_reorder_c_args_with_insn_out() {
+        let (mut asm, mut cb) = setup_asm();
+
+        let rax = asm.load(Opnd::UImm(1));
+        let rcx = asm.load(Opnd::UImm(2));
+        let rdx = asm.load(Opnd::UImm(3));
+        // rcx and rdx form a cycle
+        asm.ccall(0 as _, vec![
+            rax, // mov rdi, rax
+            rcx, // mov rsi, rcx
+            rcx, // mov rdx, rcx
+            rdx, // mov rcx, rdx
+        ]);
+        asm.compile_with_num_regs(&mut cb, 3);
+
+        assert_disasm!(cb, "b801000000b902000000ba030000004889c74889ce4989cb4889d14c89dab800000000ffd0", {"
+            0x0: mov eax, 1
+            0x5: mov ecx, 2
+            0xa: mov edx, 3
+            0xf: mov rdi, rax
+            0x12: mov rsi, rcx
+            0x15: mov r11, rcx
+            0x18: mov rcx, rdx
+            0x1b: mov rdx, r11
+            0x1e: mov eax, 0
+            0x23: call rax
+        "});
+    }
+
+    #[test]
+    fn test_cmov_mem() {
+        let (mut asm, mut cb) = setup_asm();
+
+        let top = Opnd::mem(64, SP, 0);
+        let ary_opnd = SP;
+        let array_len_opnd = Opnd::mem(64, SP, 16);
+
+        asm.cmp(array_len_opnd, 1.into());
+        let elem_opnd = asm.csel_g(Opnd::mem(64, ary_opnd, 0), Qnil.into());
+        asm.mov(top, elem_opnd);
+
+        asm.compile_with_num_regs(&mut cb, 1);
+
+        assert_disasm!(cb, "48837b1001b804000000480f4f03488903", {"
+            0x0: cmp qword ptr [rbx + 0x10], 1
+            0x5: mov eax, 4
+            0xa: cmovg rax, qword ptr [rbx]
+            0xe: mov qword ptr [rbx], rax
+        "});
     }
 }

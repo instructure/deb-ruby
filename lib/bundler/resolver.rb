@@ -37,9 +37,17 @@ module Bundler
       root_version = Resolver::Candidate.new(0)
 
       @all_specs = Hash.new do |specs, name|
-        specs[name] = source_for(name).specs.search(name).reject do |s|
-          s.dependencies.any? {|d| d.name == name && !d.requirement.satisfied_by?(s.version) } # ignore versions that depend on themselves incorrectly
-        end.sort_by {|s| [s.version, s.platform.to_s] }
+        source = source_for(name)
+        matches = source.specs.search(name)
+
+        # Don't bother to check for circular deps when no dependency API are
+        # available, since it's too slow to be usable. That edge case won't work
+        # but resolution other than that should work fine and reasonably fast.
+        if source.respond_to?(:dependency_api_available?) && source.dependency_api_available?
+          matches = filter_invalid_self_dependencies(matches, name)
+        end
+
+        specs[name] = matches.sort_by {|s| [s.version, s.platform.to_s] }
       end
 
       @sorted_versions = Hash.new do |candidates, package|
@@ -160,7 +168,7 @@ module Bundler
       constraint_string = constraint.constraint_string
       requirements = constraint_string.split(" OR ").map {|req| Gem::Requirement.new(req.split(",")) }
 
-      if name == "bundler"
+      if name == "bundler" && bundler_pinned_to_current_version?
         custom_explanation = "the current Bundler version (#{Bundler::VERSION}) does not satisfy #{constraint}"
         extended_explanation = bundler_not_found_message(requirements)
       else
@@ -230,6 +238,12 @@ module Bundler
     def all_versions_for(package)
       name = package.name
       results = (@base[name] + filter_prereleases(@all_specs[name], package)).uniq {|spec| [spec.version.hash, spec.platform] }
+
+      if name == "bundler" && !bundler_pinned_to_current_version?
+        bundler_spec = Gem.loaded_specs["bundler"]
+        results << bundler_spec if bundler_spec
+      end
+
       locked_requirement = base_requirements[name]
       results = filter_matching_specs(results, locked_requirement) if locked_requirement
 
@@ -252,6 +266,14 @@ module Bundler
 
     def source_for(name)
       @source_requirements[name] || @source_requirements[:default]
+    end
+
+    def default_bundler_source
+      @source_requirements[:default_bundler]
+    end
+
+    def bundler_pinned_to_current_version?
+      !default_bundler_source.nil?
     end
 
     def name_for_explicit_dependency_source
@@ -302,6 +324,13 @@ module Bundler
       return specs unless package.ignores_prereleases? && specs.size > 1
 
       specs.reject {|s| s.version.prerelease? }
+    end
+
+    # Ignore versions that depend on themselves incorrectly
+    def filter_invalid_self_dependencies(specs, name)
+      specs.reject do |s|
+        s.dependencies.any? {|d| d.name == name && !d.requirement.satisfied_by?(s.version) }
+      end
     end
 
     def requirement_satisfied_by?(requirement, spec)
@@ -398,7 +427,7 @@ module Bundler
     end
 
     def bundler_not_found_message(conflict_dependencies)
-      candidate_specs = filter_matching_specs(source_for(:default_bundler).specs.search("bundler"), conflict_dependencies)
+      candidate_specs = filter_matching_specs(default_bundler_source.specs.search("bundler"), conflict_dependencies)
 
       if candidate_specs.any?
         target_version = candidate_specs.last.version

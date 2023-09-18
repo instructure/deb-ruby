@@ -84,7 +84,7 @@ fn main() {
         // From include/ruby/internal/core/rbasic.h
         .allowlist_type("RBasic")
 
-        .allowlist_type("rstring_offsets")
+        // From include/ruby/internal/core/rstring.h
         .allowlist_type("ruby_rstring_flags")
 
         // From internal.h
@@ -165,6 +165,7 @@ fn main() {
         .allowlist_var("rb_cTrueClass")
         .allowlist_var("rb_cFalseClass")
         .allowlist_var("rb_cInteger")
+        .allowlist_var("rb_cIO")
         .allowlist_var("rb_cSymbol")
         .allowlist_var("rb_cFloat")
         .allowlist_var("rb_cString")
@@ -178,7 +179,6 @@ fn main() {
 
         // From include/ruby/internal/core/robject.h
         .allowlist_type("ruby_robject_flags")
-        .allowlist_var("ROBJECT_OFFSET_.*")
 
         // From include/ruby/internal/core/rarray.h
         .allowlist_type("ruby_rarray_flags")
@@ -283,6 +283,7 @@ fn main() {
         .blocklist_type("rb_control_frame_struct")
         .opaque_type("rb_control_frame_struct")
         .allowlist_function("rb_vm_bh_to_procval")
+        .allowlist_function("rb_vm_env_write")
         .allowlist_function("rb_vm_ep_local_ep")
         .allowlist_type("vm_special_object_type")
         .allowlist_var("VM_ENV_DATA_INDEX_SPECVAL")
@@ -290,6 +291,9 @@ fn main() {
         .allowlist_var("VM_ENV_DATA_SIZE")
         .allowlist_function("rb_iseq_path")
         .allowlist_type("rb_builtin_attr")
+        .allowlist_type("ruby_tag_type")
+        .allowlist_type("ruby_vm_throw_flags")
+        .allowlist_type("vm_check_match_type")
 
         // From yjit.c
         .allowlist_function("rb_iseq_(get|set)_yjit_payload")
@@ -324,6 +328,11 @@ fn main() {
         .allowlist_function("rb_yjit_icache_invalidate")
         .allowlist_function("rb_optimized_call")
         .allowlist_function("rb_yjit_assert_holding_vm_lock")
+        .allowlist_function("rb_yjit_sendish_sp_pops")
+        .allowlist_function("rb_yjit_invokeblock_sp_pops")
+        .allowlist_function("rb_yjit_set_exception_return")
+        .allowlist_type("robject_offsets")
+        .allowlist_type("rstring_offsets")
 
         // from vm_sync.h
         .allowlist_function("rb_vm_barrier")
@@ -355,6 +364,9 @@ fn main() {
         .allowlist_function("rb_attr_get")
         .allowlist_function("rb_ivar_defined")
         .allowlist_function("rb_ivar_get")
+
+        // From internal/vm.h
+        .allowlist_var("rb_vm_insns_count")
 
         // From include/ruby/internal/intern/vm.h
         .allowlist_function("rb_get_alloc_func")
@@ -390,6 +402,7 @@ fn main() {
         .allowlist_function("rb_get_def_iseq_ptr")
         .allowlist_function("rb_get_def_bmethod_proc")
         .allowlist_function("rb_iseq_encoded_size")
+        .allowlist_function("rb_get_iseq_body_total_calls")
         .allowlist_function("rb_get_iseq_body_local_iseq")
         .allowlist_function("rb_get_iseq_body_parent_iseq")
         .allowlist_function("rb_get_iseq_body_iseq_encoded")
@@ -434,6 +447,8 @@ fn main() {
         .allowlist_function("rb_method_basic_definition_p")
         .allowlist_function("rb_yjit_array_len")
         .allowlist_function("rb_obj_class")
+        .allowlist_function("rb_obj_is_proc")
+        .allowlist_function("rb_vm_base_ptr")
 
         // We define VALUE manually, don't import it
         .blocklist_type("VALUE")

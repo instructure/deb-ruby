@@ -214,11 +214,37 @@ class TestTRICK2022 < Test::Unit::TestCase
   end
 end
 
+class TestRubyKaigi2023🥢 < Test::Unit::TestCase
+  CHOPSTICKS = [<<~'0', <<~'1'] # by mame
+  BEGIN{q=:Ruby};p||=:Enjoy;END{puts p,q||2023}
+  0
+  q=print(q||"/:|}\n")||p&&:@Matsumoto;p=:Kaigi
+  1
+
+  def test_chopsticks_0
+    assert_in_out_err(%w[-W0], CHOPSTICKS[0], %w[Enjoy Ruby])
+  end
+
+  def test_chopsticks_1
+    assert_in_out_err(%w[-W0], CHOPSTICKS[1], %w[/:|}])
+  end
+
+  def test_chopsticks_0_1
+    assert_in_out_err(%w[-W0], "#{CHOPSTICKS[0]}\n#{CHOPSTICKS[1]}", %w[RubyKaigi @Matsumoto])
+  end
+
+  def test_chopsticks_1_0
+    assert_in_out_err(%w[-W0], "#{CHOPSTICKS[1]}\n#{CHOPSTICKS[0]}", %w[RubyKaigi 2023])
+  end
+end
+
 # https://github.com/mame/all-ruby-quine
 class TestAllRubyQuine < Test::Unit::TestCase
   def test_all_ruby_quine
     stdout_bak = $stdout
     $stdout = StringIO.new
+    verbose_bak = $VERBOSE
+    $VERBOSE = nil
     src = File.read(File.join(__dir__, "../sample/all-ruby-quine.rb"))
 
     eval(src)
@@ -242,5 +268,6 @@ class TestAllRubyQuine < Test::Unit::TestCase
     assert_equal(RUBY_VERSION, out)
   ensure
     $stdout = stdout_bak
+    $VERBOSE = verbose_bak
   end
 end

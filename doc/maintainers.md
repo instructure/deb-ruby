@@ -165,7 +165,10 @@ have commit right, others don't.
 * https://rubygems.org/gems/ipaddr
 
 #### lib/irb.rb, lib/irb/*
-* aycabta
+* Stan Lo (st0012)
+* Tomoya Ishida (tompng)
+* Mari Imaizumi (ima1zumi)
+* Hitoshi Hasumi (hasumikin)
 * https://github.com/ruby/irb
 * https://rubygems.org/gems/irb
 
@@ -227,12 +230,6 @@ have commit right, others don't.
 * https://github.com/ruby/pstore
 * https://rubygems.org/gems/pstore
 
-#### lib/racc.rb, lib/racc/*
-* Aaron Patterson (tenderlove)
-* Hiroshi SHIBATA (hsbt)
-* https://github.com/ruby/racc
-* https://rubygems.org/gems/racc
-
 #### lib/readline.rb
 * aycabta
 * https://github.com/ruby/readline
@@ -255,7 +252,10 @@ have commit right, others don't.
 * https://rubygems.org/gems/rdoc
 
 #### lib/reline.rb, lib/reline/*
-* aycabta
+* Tomoya Ishida (tompng)
+* Mari Imaizumi (ima1zumi)
+* Stan Lo (st0012)
+* Hitoshi Hasumi (hasumikin)
 * https://github.com/ruby/reline
 * https://rubygems.org/gems/reline
 
@@ -320,7 +320,7 @@ have commit right, others don't.
 * https://rubygems.org/gems/un
 
 #### lib/uri.rb, lib/uri/*
-* YAMADA, Akira (akira)
+* NARUSE, Yui (naruse)
 * https://github.com/ruby/uri
 * https://rubygems.org/gems/uri
 
@@ -407,12 +407,6 @@ have commit right, others don't.
 * https://github.com/ruby/psych
 * https://rubygems.org/gems/psych
 
-#### ext/racc
-* Aaron Patterson (tenderlove)
-* Hiroshi SHIBATA (hsbt)
-* https://github.com/ruby/racc
-* https://rubygems.org/gems/racc
-
 #### ext/stringio
 * Nobuyuki Nakada (nobu)
 * https://github.com/ruby/stringio
@@ -483,6 +477,10 @@ have commit right, others don't.
 
 ### debug
 * https://github.com/ruby/debug
+
+### racc
+* https://github.com/ruby/racc
+
 
 ## Platform Maintainers
 ### mswin64 (Microsoft Windows)

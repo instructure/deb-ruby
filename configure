@@ -774,7 +774,6 @@ optflags
 NULLCMD
 ENABLE_DEBUG_ENV
 DLNOBJ
-INSTALL_STATIC_LIBRARY
 RJIT_SUPPORT
 YJIT_OBJ
 YJIT_LIBS
@@ -782,6 +781,7 @@ CARGO_BUILD_ARGS
 YJIT_SUPPORT
 CARGO
 RUSTC
+INSTALL_STATIC_LIBRARY
 INSTALLDOC
 CAPITARGET
 RDOCTARGET
@@ -827,10 +827,6 @@ LDSHAREDXX
 LDSHARED
 CCDLFLAGS
 STATIC
-RJIT_LDSHARED
-RJIT_DEBUGFLAGS
-RJIT_OPTFLAGS
-RJIT_CFLAGS
 ARCH_FLAG
 DLDFLAGS
 X_COROUTINE_SRC
@@ -868,7 +864,6 @@ ARFLAGS
 try_header
 CC_VERSION_MESSAGE
 CC_VERSION
-RJIT_CC
 CSRCFLAG
 COUTFLAG
 OUTFLAG
@@ -1012,9 +1007,9 @@ enable_install_doc
 with_rdoc
 enable_install_rdoc
 enable_install_capi
+enable_install_static_library
 enable_yjit
 enable_rjit
-enable_install_static_library
 enable_dln
 enable_debug_env
 with_rubyarchprefix
@@ -1711,13 +1706,13 @@ Optional Features:
                           documents during install
   --disable-install-rdoc  do not install rdoc indexes during install
   --disable-install-capi  do not install C API documents during install
+  --disable-install-static-library
+                          do not install static ruby library
   --enable-yjit           enable in-process JIT compiler that requires Rust
                           build tools. enabled by default on supported
                           platforms if rustc 1.58.0+ is available
   --enable-rjit           enable pure-Ruby JIT compiler. enabled by default on
                           Unix x86_64 platforms
-  --disable-install-static-library
-                          do not install static ruby library
   --disable-dln           disable dynamic link feature
   --enable-debug-env      enable RUBY_DEBUG environment variable
   --enable-mkmf-verbose   enable verbose in mkmf
@@ -3623,10 +3618,6 @@ tooldir="$srcdir/tool"
 
 
 
-: "environment section" && {
-HAVE_BASERUBY=yes
-BASERUBY_VERSION=
-
     msg_checking= msg_result_yes= msg_result_no= msg_result_other= msg_reset=
     case "x${CONFIGURE_TTY}" in #(
   xyes|xalways) :
@@ -3674,6 +3665,21 @@ esac
 fi
 
 
+if test "x${GITHUB_ACTIONS}" = xtrue
+then :
+      begin_group() { printf "%s\n" "::group::[93m$1[m";}
+    end_group() { printf "%s\n" "::endgroup::";}
+
+else $as_nop
+      begin_group() { :;}
+    end_group() { :;}
+
+fi
+
+
+begin_group "environment section" && {
+HAVE_BASERUBY=yes
+BASERUBY_VERSION=
 
 # Check whether --with-baseruby was given.
 if test ${with_baseruby+y}
@@ -8456,75 +8462,6 @@ fi
 
 
 
-: ${RJIT_CC=$CC}
-if test "x$cross_compiling" = xno
-then :
-
-    # Extract the first word of "${RJIT_CC}", so it can be a program name with args.
-set dummy ${RJIT_CC}; ac_word=$2
-{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
-printf %s "checking for $ac_word... " >&6; }
-if test ${ac_cv_path_RJIT_CC+y}
-then :
-  printf %s "(cached) " >&6
-else $as_nop
-  case $RJIT_CC in
-  [\\/]* | ?:[\\/]*)
-  ac_cv_path_RJIT_CC="$RJIT_CC" # Let the user override the test with a path.
-  ;;
-  *)
-  as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
-for as_dir in $PATH
-do
-  IFS=$as_save_IFS
-  case $as_dir in #(((
-    '') as_dir=./ ;;
-    */) ;;
-    *) as_dir=$as_dir/ ;;
-  esac
-    for ac_exec_ext in '' $ac_executable_extensions; do
-  if as_fn_executable_p "$as_dir$ac_word$ac_exec_ext"; then
-    ac_cv_path_RJIT_CC="$as_dir$ac_word$ac_exec_ext"
-    printf "%s\n" "$as_me:${as_lineno-$LINENO}: found $as_dir$ac_word$ac_exec_ext" >&5
-    break 2
-  fi
-done
-  done
-IFS=$as_save_IFS
-
-  ;;
-esac
-fi
-RJIT_CC=$ac_cv_path_RJIT_CC
-if test -n "$RJIT_CC"; then
-  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $RJIT_CC" >&5
-    colorize_result "$RJIT_CC" ; }
-else
-  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no" >&5
-    printf "%s\n" "${msg_result_no}no${msg_reset}" >&6 ; }
-fi
-
-
-
-    # if $CC is in /usr/lib/ccache/$CC, search original $CC (disable ccache)
-    if echo $RUBY_DEBUG | grep ci > /dev/null &&
-           echo $RJIT_CC | grep ^/usr/lib/ccache > /dev/null
-then :
-
-           PATH=`echo $PATH | sed "s/\/usr\/lib\/ccache://"` RJIT_CC=`which $CC`
-fi
-
-    case $target_os in #(
-  *mingw*) :
-    command -v cygpath > /dev/null && RJIT_CC=`cygpath -ma $RJIT_CC` ;; #(
-  *) :
-     ;;
-esac
-    shift 2
-    RJIT_CC="$RJIT_CC${1+ }$*"
-
-fi
-
 case "$build_os" in #(
   darwin1*.*) :
 
@@ -9688,7 +9625,7 @@ rm -fr conf$$.dir
 
 }
 
-: "compiler section" && {
+begin_group "compiler section" && {
 save_CFLAGS="$CFLAGS"
 CFLAGS="$CFLAGS $rb_cv_warnflags"
 if test "${ac_c_werror_flag+set}"
@@ -10145,6 +10082,15 @@ then :
 	extra_warnflags="$extra_warnflags -Wno-maybe-uninitialized"
 
 fi
+    case  $CFLAGS  in #(
+  *" -save-temps="*|*" -save-temps "*) :
+     ;; #(
+  *) :
+
+	extra_warnflags="$extra_warnflags -Werror=misleading-indentation"
+     ;;
+esac
+
     # ICC doesn't support -Werror=
     if test $icc_version -gt 0
 then :
@@ -10159,7 +10105,6 @@ fi
 		 -Werror=duplicated-cond \
 		 -Werror=implicit-function-declaration \
 		 -Werror=implicit-int \
-		 -Werror=misleading-indentation \
 		 -Werror=pointer-arith \
 		 -Werror=shorten-64-to-32 \
 		 -Werror=write-strings \
@@ -11953,7 +11898,7 @@ then :
 
 fi
 
-: "header and library section" && {
+begin_group "header and library section" && {
 
 # Check whether --with-winnt-ver was given.
 if test ${with_winnt_ver+y}
@@ -27146,6 +27091,13 @@ then :
 
 fi
 
+ac_fn_c_check_func "$LINENO" "snprintf" "ac_cv_func_snprintf"
+if test "x$ac_cv_func_snprintf" = xyes
+then :
+  printf "%s\n" "#define HAVE_SNPRINTF 1" >>confdefs.h
+
+fi
+
 ac_fn_c_check_func "$LINENO" "spawnv" "ac_cv_func_spawnv"
 if test "x$ac_cv_func_spawnv" = xyes
 then :
@@ -27297,16 +27249,6 @@ then :
 fi
 
 fi
-
-case "$ac_cv_func_memset_s:$ac_cv_func_qsort_s" in #(
-  *yes*) :
-        test "X!defined __STDC_WANT_LIB_EXT1__" = X || printf "#if %s\n" "!defined __STDC_WANT_LIB_EXT1__" >>confdefs.h
-printf "%s\n" "#define __STDC_WANT_LIB_EXT1__ 1" >>confdefs.h
-    test "X!defined __STDC_WANT_LIB_EXT1__" = X || printf "#endif /* %s */\n" "!defined __STDC_WANT_LIB_EXT1__" >>confdefs.h
- ;; #(
-  *) :
-     ;;
-esac
 
 if test "$ac_cv_func_getcwd" = yes
 then :
@@ -28173,6 +28115,52 @@ if test "${rb_cv_builtin___builtin_expect}" != no
 then :
 
   printf "%s\n" "#define HAVE_BUILTIN___BUILTIN_EXPECT 1" >>confdefs.h
+
+
+fi
+
+if test "$rb_cv_builtin___builtin_mul_overflow" != no
+then :
+
+  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for __builtin_mul_overflow with long long arguments" >&5
+printf %s "checking for __builtin_mul_overflow with long long arguments... " >&6; }
+if test ${rb_cv_use___builtin_mul_overflow_long_long+y}
+then :
+  printf %s "(cached) " >&6
+else $as_nop
+
+    cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+#pragma clang optimize off
+
+int
+main(void)
+{
+    long long x = 0, y;
+    __builtin_mul_overflow(x, x, &y);
+
+    return 0;
+}
+
+_ACEOF
+if ac_fn_c_try_link "$LINENO"
+then :
+  rb_cv_use___builtin_mul_overflow_long_long=yes
+else $as_nop
+  rb_cv_use___builtin_mul_overflow_long_long=no
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.beam \
+    conftest$ac_exeext conftest.$ac_ext
+fi
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $rb_cv_use___builtin_mul_overflow_long_long" >&5
+    colorize_result "$rb_cv_use___builtin_mul_overflow_long_long" ; }
+
+fi
+if test "$rb_cv_use___builtin_mul_overflow_long_long" = yes
+then :
+
+  printf "%s\n" "#define USE___BUILTIN_MUL_OVERFLOW_LONG_LONG 1" >>confdefs.h
 
 
 fi
@@ -30223,7 +30211,7 @@ fi
 
 }
 
-: "runtime section" && {
+begin_group "runtime section" && {
 
 # Check whether --with-dln-a-out was given.
 if test ${with_dln_a_out+y}
@@ -30353,15 +30341,6 @@ fi ;; #(
 esac
 LIBEXT=a
 
-case "$GCC:$target_os" in #(
-  yes:aix*) :
-    rjit_std_cflag="-std=gnu99" ;; #(
-  *) :
-    rjit_std_cflag= ;;
-esac
-RJIT_CFLAGS=${RJIT_CFLAGS-"-w ${rjit_std_cflag} ${orig_cflags}"}
-RJIT_OPTFLAGS=${RJIT_OPTFLAGS-'$(optflags)'}
-RJIT_DEBUGFLAGS=${RJIT_DEBUGFLAGS-'$(debugflags)'}
 
 ASMEXT=S
 
@@ -30563,8 +30542,7 @@ fi
                         if test x"$enable_shared" = xyes
 then :
 
-                            # Resolve symbols from libruby.dylib when --enable-shared
-                            EXTDLDFLAGS='$(LIBRUBYARG_SHARED)'
+                            # Resolve symbols from libruby.dylib in $(LIBS) when --enable-shared
 
 elif test "x$EXTSTATIC" = x
 then :
@@ -32604,7 +32582,7 @@ fi
 
 }
 
-: "build section" && {
+begin_group "installation section" && {
 RDOCTARGET=""
 CAPITARGET=""
 # Check whether --enable-install-doc was given.
@@ -32692,6 +32670,27 @@ case "$RDOCTARGET:$CAPITARGET" in #(
 esac
 
 
+# Check whether --enable-install-static-library was given.
+if test ${enable_install_static_library+y}
+then :
+  enableval=$enable_install_static_library; INSTALL_STATIC_LIBRARY=$enableval
+         if test x"$enable_shared" = xno -a x"$INSTALL_STATIC_LIBRARY" = xno
+then :
+  as_fn_error $? "must install either static or shared library" "$LINENO" 5
+fi
+else $as_nop
+  if test x"$enable_shared" = xyes
+then :
+  INSTALL_STATIC_LIBRARY=no
+else $as_nop
+  INSTALL_STATIC_LIBRARY=yes
+fi
+fi
+
+
+}
+
+begin_group "JIT section" && {
 # Extract the first word of "rustc", so it can be a program name with args.
 set dummy rustc; ac_word=$2
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
@@ -33148,26 +33147,9 @@ esac
 esac
 
 
+}
 
-# Check whether --enable-install-static-library was given.
-if test ${enable_install_static_library+y}
-then :
-  enableval=$enable_install_static_library; INSTALL_STATIC_LIBRARY=$enableval
-         if test x"$enable_shared" = xno -a x"$INSTALL_STATIC_LIBRARY" = xno
-then :
-  as_fn_error $? "must install either static or shared library" "$LINENO" 5
-fi
-else $as_nop
-  if test x"$enable_shared" = xyes
-then :
-  INSTALL_STATIC_LIBRARY=no
-else $as_nop
-  INSTALL_STATIC_LIBRARY=yes
-fi
-fi
-
-
-
+begin_group "build section" && {
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for prefix of external symbols" >&5
 printf %s "checking for prefix of external symbols... " >&6; }
 if test ${rb_cv_symbol_prefix+y}
@@ -33623,8 +33605,9 @@ fi
     colorize_result "$rb_cv_architecture_available" ; }
 
 fi
+}
 
-: ${RJIT_LDSHARED=`echo "$LDSHARED" | sed 's|\$(LD)|'"${LD}"'|g;s|\$(CC)|$(RJIT_CC)|g'`}
+end_group
 
 MAINLIBS="$LIBS"
 LIBS=$ORIG_LIBS
@@ -35463,7 +35446,6 @@ if test -n "$ac_unrecognized_opts" && test "$enable_option_checking" != no; then
 printf "%s\n" "$as_me: WARNING: unrecognized options: $ac_unrecognized_opts" >&2;}
 fi
 
-}
 }
 
 if test "$silent" = yes

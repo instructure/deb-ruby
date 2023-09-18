@@ -32,6 +32,7 @@ void Init_builtin_yjit(void)
     RB_BUILTIN_FUNCTION(9, rb_yjit_insns_compiled, rb_yjit_insns_compiled, 1),
     RB_BUILTIN_FUNCTION(10, rb_yjit_code_gc, rb_yjit_code_gc, 0),
     RB_BUILTIN_FUNCTION(11, rb_yjit_simulate_oom_bang, rb_yjit_simulate_oom_bang, 0),
+    RB_BUILTIN_FUNCTION(12, rb_yjit_print_stats_p, rb_yjit_print_stats_p, 0),
     RB_BUILTIN_FUNCTION(-1, NULL, NULL, 0),
   };
 
@@ -52,6 +53,7 @@ COMPILER_WARNING_ERROR(-Wincompatible-pointer-types)
   if (0) rb_builtin_function_check_arity1(rb_yjit_insns_compiled);
   if (0) rb_builtin_function_check_arity0(rb_yjit_code_gc);
   if (0) rb_builtin_function_check_arity0(rb_yjit_simulate_oom_bang);
+  if (0) rb_builtin_function_check_arity0(rb_yjit_print_stats_p);
 COMPILER_WARNING_POP
 
   // load

@@ -689,11 +689,6 @@ define nd_stts
 end
 
 
-define nd_entry
-  printf "%su3.entry%s: ", $color_highlite, $color_end
-  p ($arg0).u3.entry
-end
-
 define nd_vid
   printf "%su1.id%s: ", $color_highlite, $color_end
   p ($arg0).u1.id
@@ -1279,7 +1274,7 @@ document rb_count_objects
   Counts all objects grouped by type.
 end
 
-# Details: https://bugs.ruby-lang.org/projects/ruby-master/wiki/MachineInstructionsTraceWithGDB
+# Details: https://github.com/ruby/ruby/wiki/Machine-Instructions-Trace-with-GDB
 define trace_machine_instructions
   set logging enabled
   set height 0

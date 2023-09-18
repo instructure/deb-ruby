@@ -2412,15 +2412,19 @@ class TestIO < Test::Unit::TestCase
   end
 
   def test_open_pipe
-    open("|" + EnvUtil.rubybin, "r+") do |f|
-      f.puts "puts 'foo'"
-      f.close_write
-      assert_equal("foo\n", f.read)
+    assert_deprecated_warning(/Kernel#open with a leading '\|'/) do # https://bugs.ruby-lang.org/issues/19630
+      open("|" + EnvUtil.rubybin, "r+") do |f|
+        f.puts "puts 'foo'"
+        f.close_write
+        assert_equal("foo\n", f.read)
+      end
     end
   end
 
   def test_read_command
-    assert_equal("foo\n", IO.read("|echo foo"))
+    assert_deprecated_warning(/IO process creation with a leading '\|'/) do # https://bugs.ruby-lang.org/issues/19630
+      assert_equal("foo\n", IO.read("|echo foo"))
+    end
     assert_raise(Errno::ENOENT, Errno::EINVAL) do
       File.read("|#{EnvUtil.rubybin} -e puts")
     end
@@ -2434,7 +2438,9 @@ class TestIO < Test::Unit::TestCase
       Class.new(IO).binread("|#{EnvUtil.rubybin} -e puts")
     end
     assert_raise(Errno::ESPIPE) do
-      IO.read("|echo foo", 1, 1)
+      assert_deprecated_warning(/IO process creation with a leading '\|'/) do # https://bugs.ruby-lang.org/issues/19630
+        IO.read("|echo foo", 1, 1)
+      end
     end
   end
 
@@ -2619,11 +2625,16 @@ class TestIO < Test::Unit::TestCase
 
   def test_foreach
     a = []
-    IO.foreach("|" + EnvUtil.rubybin + " -e 'puts :foo; puts :bar; puts :baz'") {|x| a << x }
+
+    assert_deprecated_warning(/IO process creation with a leading '\|'/) do # https://bugs.ruby-lang.org/issues/19630
+      IO.foreach("|" + EnvUtil.rubybin + " -e 'puts :foo; puts :bar; puts :baz'") {|x| a << x }
+    end
     assert_equal(["foo\n", "bar\n", "baz\n"], a)
 
     a = []
-    IO.foreach("|" + EnvUtil.rubybin + " -e 'puts :zot'", :open_args => ["r"]) {|x| a << x }
+    assert_deprecated_warning(/IO process creation with a leading '\|'/) do # https://bugs.ruby-lang.org/issues/19630
+      IO.foreach("|" + EnvUtil.rubybin + " -e 'puts :zot'", :open_args => ["r"]) {|x| a << x }
+    end
     assert_equal(["zot\n"], a)
 
     make_tempfile {|t|
@@ -3814,7 +3825,7 @@ __END__
   end
 
   def test_race_gets_and_close
-    opt = { signal: :ABRT, timeout: 200 }
+    opt = { signal: :ABRT, timeout: 10 }
     assert_separately([], "#{<<-"begin;"}\n#{<<-"end;"}", **opt)
     bug13076 = '[ruby-core:78845] [Bug #13076]'
     begin;
@@ -3976,7 +3987,7 @@ __END__
         assert_raise(EOFError) { f.pread(1, f.size) }
       end
     }
-  end if IO.method_defined?(:pread)
+  end
 
   def test_pwrite
     make_tempfile { |t|
@@ -3985,7 +3996,7 @@ __END__
         assert_equal("ooo", f.pread(3, 4))
       end
     }
-  end if IO.method_defined?(:pread) and IO.method_defined?(:pwrite)
+  end
 
   def test_select_exceptfds
     if Etc.uname[:sysname] == 'SunOS'

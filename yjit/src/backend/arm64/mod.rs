@@ -74,6 +74,7 @@ impl From<Opnd> for A64Opnd {
             Opnd::Mem(Mem { base: MemBase::InsnOut(_), .. }) => {
                 panic!("attempted to lower an Opnd::Mem with a MemBase::InsnOut base")
             },
+            Opnd::CArg(_) => panic!("attempted to lower an Opnd::CArg"),
             Opnd::InsnOut { .. } => panic!("attempted to lower an Opnd::InsnOut"),
             Opnd::Value(_) => panic!("attempted to lower an Opnd::Value"),
             Opnd::Stack { .. } => panic!("attempted to lower an Opnd::Stack"),
@@ -185,9 +186,10 @@ fn emit_load_value(cb: &mut CodeBlock, rd: A64Opnd, value: u64) -> usize {
 
 impl Assembler
 {
-    // A special scratch register for intermediate processing.
+    // Special scratch registers for intermediate processing.
     // This register is caller-saved (so we don't have to save it before using it)
-    const SCRATCH0: A64Opnd = A64Opnd::Reg(X16_REG);
+    pub const SCRATCH_REG: Reg = X16_REG;
+    const SCRATCH0: A64Opnd = A64Opnd::Reg(Assembler::SCRATCH_REG);
     const SCRATCH1: A64Opnd = A64Opnd::Reg(X17_REG);
 
     /// List of registers that can be used for stack temps.
@@ -280,7 +282,7 @@ impl Assembler
         /// do follow that encoding, and if they don't then we load them first.
         fn split_bitmask_immediate(asm: &mut Assembler, opnd: Opnd, dest_num_bits: u8) -> Opnd {
             match opnd {
-                Opnd::Reg(_) | Opnd::InsnOut { .. } | Opnd::Stack { .. } => opnd,
+                Opnd::Reg(_) | Opnd::CArg(_) | Opnd::InsnOut { .. } | Opnd::Stack { .. } => opnd,
                 Opnd::Mem(_) => split_load_operand(asm, opnd),
                 Opnd::Imm(imm) => {
                     if imm == 0 {
@@ -313,7 +315,7 @@ impl Assembler
         /// a certain size. If they don't then we need to load them first.
         fn split_shifted_immediate(asm: &mut Assembler, opnd: Opnd) -> Opnd {
             match opnd {
-                Opnd::Reg(_) | Opnd::InsnOut { .. } => opnd,
+                Opnd::Reg(_) | Opnd::CArg(_) | Opnd::InsnOut { .. } => opnd,
                 Opnd::Mem(_) => split_load_operand(asm, opnd),
                 Opnd::Imm(_) => asm.load(opnd),
                 Opnd::UImm(uimm) => {
@@ -452,7 +454,7 @@ impl Assembler
                             _ => *opnd
                         };
 
-                        asm.load_into(C_ARG_OPNDS[idx], value);
+                        asm.load_into(Opnd::c_arg(C_ARG_OPNDS[idx]), value);
                     }
 
                     // Now we push the CCall without any arguments so that it
@@ -610,6 +612,19 @@ impl Assembler
 
                     asm.not(opnd0);
                 },
+                Insn::LShift { opnd, shift, .. } |
+                Insn::RShift { opnd, shift, .. } |
+                Insn::URShift { opnd, shift, .. } => {
+                    // The operand must be in a register, so
+                    // if we get anything else we need to load it first.
+                    let opnd0 = match opnd {
+                        Opnd::Mem(_) => split_load_operand(asm, *opnd),
+                        _ => *opnd
+                    };
+
+                    *opnd = opnd0;
+                    asm.push_insn(insn);
+                },
                 Insn::Store { dest, src } => {
                     // The value being stored must be in a register, so if it's
                     // not already one we'll load it first.
@@ -639,6 +654,11 @@ impl Assembler
                     let opnd0 = split_load_operand(asm, *left);
                     let opnd1 = split_shifted_immediate(asm, *right);
                     asm.sub(opnd0, opnd1);
+                },
+                Insn::Mul { left, right, .. } => {
+                    let opnd0 = split_load_operand(asm, *left);
+                    let opnd1 = split_shifted_immediate(asm, *right);
+                    asm.mul(opnd0, opnd1);
                 },
                 Insn::Test { left, right } => {
                     // The value being tested must be in a register, so if it's
@@ -804,6 +824,7 @@ impl Assembler
         let start_write_pos = cb.get_write_pos();
         let mut insn_idx: usize = 0;
         while let Some(insn) = self.insns.get(insn_idx) {
+            let mut next_insn_idx = insn_idx + 1;
             let src_ptr = cb.get_write_ptr();
             let had_dropped_bytes = cb.has_dropped_bytes();
             let old_label_state = cb.get_label_state();
@@ -837,9 +858,6 @@ impl Assembler
                         cb.write_byte(0);
                     }
                 },
-                Insn::Add { left, right, out } => {
-                    adds(cb, out.into(), left.into(), right.into());
-                },
                 Insn::FrameSetup => {
                     stp_pre(cb, X29, X30, A64Opnd::new_mem(128, C_SP_REG, -16));
 
@@ -852,8 +870,39 @@ impl Assembler
 
                     ldp_post(cb, X29, X30, A64Opnd::new_mem(128, C_SP_REG, 16));
                 },
+                Insn::Add { left, right, out } => {
+                    adds(cb, out.into(), left.into(), right.into());
+                },
                 Insn::Sub { left, right, out } => {
                     subs(cb, out.into(), left.into(), right.into());
+                },
+                Insn::Mul { left, right, out } => {
+                    // If the next instruction is jo (jump on overflow)
+                    match self.insns.get(insn_idx + 1) {
+                        Some(Insn::Jo(target)) => {
+                            // Compute the high 64 bits
+                            smulh(cb, Self::SCRATCH0, left.into(), right.into());
+
+                            // Compute the low 64 bits
+                            // This may clobber one of the input registers,
+                            // so we do it after smulh
+                            mul(cb, out.into(), left.into(), right.into());
+
+                            // Produce a register that is all zeros or all ones
+                            // Based on the sign bit of the 64-bit mul result
+                            asr(cb, Self::SCRATCH1, out.into(), A64Opnd::UImm(63));
+
+                            // If the high 64-bits are not all zeros or all ones,
+                            // matching the sign bit, then we have an overflow
+                            cmp(cb, Self::SCRATCH0, Self::SCRATCH1);
+                            emit_conditional_jump::<{Condition::NE}>(cb, compile_side_exit(*target, self, ocb));
+
+                            next_insn_idx += 1;
+                        }
+                        _ => {
+                            mul(cb, out.into(), left.into(), right.into());
+                        }
+                    }
                 },
                 Insn::And { left, right, out } => {
                     and(cb, out.into(), left.into(), right.into());
@@ -924,6 +973,9 @@ impl Assembler
                             let ptr_offset: u32 = (cb.get_write_pos() as u32) - (SIZEOF_VALUE as u32);
                             insn_gc_offsets.push(ptr_offset);
                         },
+                        Opnd::CArg { .. } => {
+                            unreachable!("C argument operand was not lowered before arm64_emit");
+                        }
                         Opnd::Stack { .. } => {
                             unreachable!("Stack operand was not lowered before arm64_emit");
                         }
@@ -1074,8 +1126,14 @@ impl Assembler
                 Insn::Jl(target) => {
                     emit_conditional_jump::<{Condition::LT}>(cb, compile_side_exit(*target, self, ocb));
                 },
+                Insn::Jg(target) => {
+                    emit_conditional_jump::<{Condition::GT}>(cb, compile_side_exit(*target, self, ocb));
+                },
                 Insn::Jbe(target) => {
                     emit_conditional_jump::<{Condition::LS}>(cb, compile_side_exit(*target, self, ocb));
+                },
+                Insn::Jb(target) => {
+                    emit_conditional_jump::<{Condition::CC}>(cb, compile_side_exit(*target, self, ocb));
                 },
                 Insn::Jo(target) => {
                     emit_conditional_jump::<{Condition::VS}>(cb, compile_side_exit(*target, self, ocb));
@@ -1139,7 +1197,7 @@ impl Assembler
                     return Err(());
                 }
             } else {
-                insn_idx += 1;
+                insn_idx = next_insn_idx;
                 gc_offsets.append(&mut insn_gc_offsets);
             }
         }

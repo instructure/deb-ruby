@@ -4,6 +4,7 @@
  sources: ./ast, ./dir, ./gc, ./numeric, ./io, ./marshal, ./rjit, ./rjit_c, ./pack, ./trace_point, ./warning, ./array, ./kernel, ./ractor, ./symbol, ./timev, ./thread_sync, ./nilclass, ./prelude, ./gem_prelude, ./yjit
 */
 #include "internal.h"
+#include "internal/ruby_parser.h"
 #include "internal/warnings.h"
 #include "iseq.h"
 #include "ruby/ruby.h"
@@ -16,11 +17,11 @@ COMPILER_WARNING_IGNORED(-Wstring-concatenation)
 
 static const char prelude_name0[] = "<internal:ast>";
 static const struct {
-    char L0[477]; /* 1..95 */
-    char L95[493]; /* 96..149 */
-    char L149[504]; /* 150..193 */
-    char L193[490]; /* 194..267 */
-    char L267[163]; /* 268..277 */
+    char L0[508]; /* 1..88 */
+    char L88[498]; /* 89..148 */
+    char L148[491]; /* 149..191 */
+    char L191[465]; /* 192..266 */
+    char L266[222]; /* 267..277 */
 } prelude_code0 = {
 #line 1 "ast.rb"
 ""/* for ast.c */
@@ -45,12 +46,12 @@ static const struct {
 "module RubyVM::AbstractSyntaxTree\n"
 "\n"
 "\n"/*  call-seq: */
-"\n"/*     RubyVM::AbstractSyntaxTree.parse(string, keep_script_lines: false, error_tolerant: false, keep_tokens: false) -> RubyVM::AbstractSyntaxTree::Node */
+"\n"/*     RubyVM::AbstractSyntaxTree.parse(string, keep_script_lines: RubyVM.keep_script_lines, error_tolerant: false, keep_tokens: false) -> RubyVM::AbstractSyntaxTree::Node */
 "\n"/*  */
 "\n"/*  Parses the given _string_ into an abstract syntax tree, */
 "\n"/*  returning the root node of that tree. */
 "\n"/*  */
-"\n"/*    RubyVM::AbstractSyntaxTree.parse("x = 1 + 2") */
+"\n"/*    RubyVM::AbstractSyntaxTree.parse(\"x = 1 + 2\") */
 "\n"/*    # => #<RubyVM::AbstractSyntaxTree::Node:SCOPE@1:0-1:9> */
 "\n"/*  */
 "\n"/*  If <tt>keep_script_lines: true</tt> option is provided, the text of the parsed */
@@ -63,12 +64,12 @@ static const struct {
 "\n"/*  will produce a tree where expressions with syntax errors would be represented by */
 "\n"/*  Node with <tt>type=:ERROR</tt>. */
 "\n"/*  */
-"\n"/*     root = RubyVM::AbstractSyntaxTree.parse("x = 1; p(x; y=2") */
+"\n"/*     root = RubyVM::AbstractSyntaxTree.parse(\"x = 1; p(x; y=2\") */
 "\n"/*     # <internal:ast>:33:in `parse': syntax error, unexpected ';', expecting ')' (SyntaxError) */
 "\n"/*     # x = 1; p(x; y=2 */
 "\n"/*     #           ^ */
 "\n"/*  */
-"\n"/*     root = RubyVM::AbstractSyntaxTree.parse("x = 1; p(x; y=2", error_tolerant: true) */
+"\n"/*     root = RubyVM::AbstractSyntaxTree.parse(\"x = 1; p(x; y=2\", error_tolerant: true) */
 "\n"/*     # (SCOPE@1:0-1:15 */
 "\n"/*     #  tbl: [:x, :y] */
 "\n"/*     #  args: nil */
@@ -80,12 +81,12 @@ static const struct {
 "\n"/*  */
 "\n"/*  Note that parsing continues even after the errored expression. */
 "\n"/*  */
-"  def self.parse string, keep_script_lines: false, error_tolerant: false, keep_tokens: false\n"
+"  def self.parse string, keep_script_lines: RubyVM.keep_script_lines, error_tolerant: false, keep_tokens: false\n"
 "    Primitive.ast_s_parse string, keep_script_lines, error_tolerant, keep_tokens\n"
 "  end\n"
 "\n"
 "\n"/*  call-seq: */
-"\n"/*     RubyVM::AbstractSyntaxTree.parse_file(pathname, keep_script_lines: false, error_tolerant: false, keep_tokens: false) -> RubyVM::AbstractSyntaxTree::Node */
+"\n"/*     RubyVM::AbstractSyntaxTree.parse_file(pathname, keep_script_lines: RubyVM.keep_script_lines, error_tolerant: false, keep_tokens: false) -> RubyVM::AbstractSyntaxTree::Node */
 "\n"/*  */
 "\n"/*   Reads the file from _pathname_, then parses it like ::parse, */
 "\n"/*   returning the root node of the abstract syntax tree. */
@@ -93,17 +94,17 @@ static const struct {
 "\n"/*   SyntaxError is raised if _pathname_'s contents are not */
 "\n"/*   valid Ruby syntax. */
 "\n"/*  */
-"\n"/*     RubyVM::AbstractSyntaxTree.parse_file("my-app/app.rb") */
+"\n"/*     RubyVM::AbstractSyntaxTree.parse_file(\"my-app/app.rb\") */
 "\n"/*     # => #<RubyVM::AbstractSyntaxTree::Node:SCOPE@1:0-31:3> */
 "\n"/*  */
 "\n"/*   See ::parse for explanation of keyword argument meaning and usage. */
-"  def self.parse_file pathname, keep_script_lines: false, error_tolerant: false, keep_tokens: false\n"
+"  def self.parse_file pathname, keep_script_lines: RubyVM.keep_script_lines, error_tolerant: false, keep_tokens: false\n"
 "    Primitive.ast_s_parse_file pathname, keep_script_lines, error_tolerant, keep_tokens\n"
 "  end\n"
 "\n"
 "\n"/*  call-seq: */
-"\n"/*     RubyVM::AbstractSyntaxTree.of(proc, keep_script_lines: false, error_tolerant: false, keep_tokens: false)   -> RubyVM::AbstractSyntaxTree::Node */
-"\n"/*     RubyVM::AbstractSyntaxTree.of(method, keep_script_lines: false, error_tolerant: false, keep_tokens: false) -> RubyVM::AbstractSyntaxTree::Node */
+"\n"/*     RubyVM::AbstractSyntaxTree.of(proc, keep_script_lines: RubyVM.keep_script_lines, error_tolerant: false, keep_tokens: false)   -> RubyVM::AbstractSyntaxTree::Node */
+"\n"/*     RubyVM::AbstractSyntaxTree.of(method, keep_script_lines: RubyVM.keep_script_lines, error_tolerant: false, keep_tokens: false) -> RubyVM::AbstractSyntaxTree::Node */
 "\n"/*  */
 "\n"/*   Returns AST nodes of the given _proc_ or _method_. */
 "\n"/*  */
@@ -111,16 +112,16 @@ static const struct {
 "\n"/*     # => #<RubyVM::AbstractSyntaxTree::Node:SCOPE@1:35-1:42> */
 "\n"/*  */
 "\n"/*     def hello */
-"\n"/*       puts "hello, world" */
+,
+#line 89 "ast.rb"
+"\n"/*       puts \"hello, world\" */
 "\n"/*     end */
 "\n"/*  */
 "\n"/*     RubyVM::AbstractSyntaxTree.of(method(:hello)) */
 "\n"/*     # => #<RubyVM::AbstractSyntaxTree::Node:SCOPE@1:0-3:3> */
 "\n"/*  */
 "\n"/*   See ::parse for explanation of keyword argument meaning and usage. */
-,
-#line 96 "ast.rb"
-"  def self.of body, keep_script_lines: false, error_tolerant: false, keep_tokens: false\n"
+"  def self.of body, keep_script_lines: RubyVM.keep_script_lines, error_tolerant: false, keep_tokens: false\n"
 "    Primitive.ast_s_of body, keep_script_lines, error_tolerant, keep_tokens\n"
 "  end\n"
 "\n"
@@ -151,7 +152,7 @@ static const struct {
 "\n"/*  */
 "\n"/*  Returns the type of this node as a symbol. */
 "\n"/*  */
-"\n"/*    root = RubyVM::AbstractSyntaxTree.parse("x = 1 + 2") */
+"\n"/*    root = RubyVM::AbstractSyntaxTree.parse(\"x = 1 + 2\") */
 "\n"/*    root.type # => :SCOPE */
 "\n"/*    lasgn = root.children[2] */
 "\n"/*    lasgn.type # => :LASGN */
@@ -173,9 +174,9 @@ static const struct {
 "\n"/*     node.first_column -> integer */
 "\n"/*  */
 "\n"/*  The column number in the source code where this AST's text began. */
-"    def first_column\n"
 ,
-#line 150 "ast.rb"
+#line 149 "ast.rb"
+"    def first_column\n"
 "      Primitive.ast_node_first_column\n"
 "    end\n"
 "\n"
@@ -201,9 +202,9 @@ static const struct {
 "\n"/*  Returns tokens corresponding to the location of the node. */
 "\n"/*  Returns +nil+ if +keep_tokens+ is not enabled when #parse method is called. */
 "\n"/*  */
-"\n"/*    root = RubyVM::AbstractSyntaxTree.parse("x = 1 + 2", keep_tokens: true) */
-"\n"/*    root.tokens # => [[0, :tIDENTIFIER, "x", [1, 0, 1, 1]], [1, :tSP, " ", [1, 1, 1, 2]], ...] */
-"\n"/*    root.tokens.map{_1[2]}.join # => "x = 1 + 2" */
+"\n"/*    root = RubyVM::AbstractSyntaxTree.parse(\"x = 1 + 2\", keep_tokens: true) */
+"\n"/*    root.tokens # => [[0, :tIDENTIFIER, \"x\", [1, 0, 1, 1]], [1, :tSP, \" \", [1, 1, 1, 2]], ...] */
+"\n"/*    root.tokens.map{_1[2]}.join # => \"x = 1 + 2\" */
 "\n"/*  */
 "\n"/*  Token is an array of: */
 "\n"/*  */
@@ -218,10 +219,10 @@ static const struct {
 "        loc = token.last\n"
 "        if ([first_lineno, first_column] <=> [loc[0], loc[1]]) <= 0 &&\n"
 "           ([last_lineno, last_column]   <=> [loc[2], loc[3]]) >= 0\n"
+,
+#line 192 "ast.rb"
 "           a << token\n"
 "        end\n"
-,
-#line 194 "ast.rb"
 "      end\n"
 "    end\n"
 "\n"
@@ -231,9 +232,9 @@ static const struct {
 "\n"/*  Returns all tokens for the input script regardless the receiver node. */
 "\n"/*  Returns +nil+ if +keep_tokens+ is not enabled when #parse method is called. */
 "\n"/*  */
-"\n"/*    root = RubyVM::AbstractSyntaxTree.parse("x = 1 + 2", keep_tokens: true) */
-"\n"/*    root.all_tokens # => [[0, :tIDENTIFIER, "x", [1, 0, 1, 1]], [1, :tSP, " ", [1, 1, 1, 2]], ...] */
-"\n"/*    root.children[-1].all_tokens # => [[0, :tIDENTIFIER, "x", [1, 0, 1, 1]], [1, :tSP, " ", [1, 1, 1, 2]], ...] */
+"\n"/*    root = RubyVM::AbstractSyntaxTree.parse(\"x = 1 + 2\", keep_tokens: true) */
+"\n"/*    root.all_tokens # => [[0, :tIDENTIFIER, \"x\", [1, 0, 1, 1]], [1, :tSP, \" \", [1, 1, 1, 2]], ...] */
+"\n"/*    root.children[-1].all_tokens # => [[0, :tIDENTIFIER, \"x\", [1, 0, 1, 1]], [1, :tSP, \" \", [1, 1, 1, 2]], ...] */
 "    def all_tokens\n"
 "      Primitive.ast_node_all_tokens\n"
 "    end\n"
@@ -295,9 +296,9 @@ static const struct {
 "    def source\n"
 "      lines = script_lines\n"
 "      if lines\n"
-"        lines = lines[first_lineno - 1 .. last_lineno - 1]\n"
 ,
-#line 268 "ast.rb"
+#line 267 "ast.rb"
+"        lines = lines[first_lineno - 1 .. last_lineno - 1]\n"
 "        lines[-1] = lines[-1][0...last_column]\n"
 "        lines[0] = lines[0][first_column..-1]\n"
 "        lines.join\n"
@@ -307,33 +308,107 @@ static const struct {
 "    end\n"
 "  end\n"
 "end\n"
-#line 311 "miniprelude.c"
+#line 312 "miniprelude.c"
 };
 
 static const char prelude_name1[] = "<internal:dir>";
 static const struct {
-    char L0[508]; /* 1..191 */
-    char L191[350]; /* 192..315 */
+    char L0[508]; /* 1..266 */
+    char L266[466]; /* 267..506 */
 } prelude_code1 = {
 #line 1 "dir.rb"
-""/* Objects of class Dir are directory streams representing */
-""/* directories in the underlying file system. They provide a variety */
-""/* of ways to list directories and their contents. See also File. */
+""/* An object of class \\Dir represents a directory in the underlying file system. */
 ""/*  */
-""/* The directory used in these examples contains the two regular files */
-""/* (<code>config.h</code> and <code>main.rb</code>), the parent */
-""/* directory (<code>..</code>), and the directory itself */
-""/* (<code>.</code>). */
+""/* It consists mainly of: */
+""/*  */
+""/* - A string _path_, given when the object is created, */
+""/*   that specifies a directory in the underlying file system; */
+""/*   method #path returns the path. */
+""/* - A collection of string <i>entry names</i>, */
+""/*   each of which is the name of a directory or file in the underlying file system; */
+""/*   the entry names may be retrieved */
+""/*   in an {array-like fashion}[rdoc-ref:Dir@Dir+As+Array-Like] */
+""/*   or in a {stream-like fashion}[rdoc-ref:Dir@Dir+As+Stream-Like]. */
+""/*  */
+""/* == About the Examples */
+""/*  */
+""/* Some examples on this page use this simple file tree: */
+""/*  */
+""/*   example/ */
+""/*   \xE2\x94\x9C\xE2\x94\x80\xE2\x94\x80 config.h */
+""/*   \xE2\x94\x9C\xE2\x94\x80\xE2\x94\x80 lib/ */
+""/*   \xE2\x94\x82   \xE2\x94\x9C\xE2\x94\x80\xE2\x94\x80 song/ */
+""/*   \xE2\x94\x82   \xE2\x94\x82   \xE2\x94\x94\xE2\x94\x80\xE2\x94\x80 karaoke.rb */
+""/*   \xE2\x94\x82   \xE2\x94\x94\xE2\x94\x80\xE2\x94\x80 song.rb */
+""/*   \xE2\x94\x94\xE2\x94\x80\xE2\x94\x80 main.rb */
+""/*  */
+""/* Others use the file tree for the */
+""/* {Ruby project itself}[https://github.com/ruby/ruby]. */
+""/*  */
+""/* == \\Dir As \\Array-Like */
+""/*  */
+""/* A \\Dir object is in some ways array-like: */
+""/*  */
+""/* - It has instance methods #children, #each, and #each_child. */
+""/* - It includes {module Enumerable}[rdoc-ref:Enumerable@What-27s+Here]. */
+""/*  */
+""/* == \\Dir As Stream-Like */
+""/*  */
+""/* A \\Dir object is in some ways stream-like. */
+""/*  */
+""/* The stream is initially open for reading, */
+""/* but may be closed manually (using method #close), */
+""/* and will be closed on block exit if created by Dir.open called with a block. */
+""/* The closed stream may not be further manipulated, */
+""/* and may not be reopened. */
+""/*  */
+""/* The stream has a _position_, which is the index of an entry in the directory: */
+""/*  */
+""/* - The initial position is zero (before the first entry). */
+""/* - \\Method #tell (aliased as #pos) returns the position. */
+""/* - \\Method #pos= sets the position (but ignores a value outside the stream), */
+""/*   and returns the position. */
+""/* - \\Method #seek is like #pos=, but returns +self+ (convenient for chaining). */
+""/* - \\Method #read, if not at end-of-stream, reads the next entry and increments */
+""/*   the position; */
+""/*   if at end-of-stream, does not increment the position. */
+""/* - \\Method #rewind sets the position to zero. */
+""/*  */
+""/* Examples (using the {simple file tree}[rdoc-ref:Dir@About+the+Examples]): */
+""/*  */
+""/*   dir = Dir.new('example') # => #<Dir:example> */
+""/*   dir.pos                  # => 0 */
+""/*  */
+""/*   dir.read # => \".\" */
+""/*   dir.read # => \"..\" */
+""/*   dir.read # => \"config.h\" */
+""/*   dir.read # => \"lib\" */
+""/*   dir.read # => \"main.rb\" */
+""/*   dir.pos  # => 5 */
+""/*   dir.read # => nil */
+""/*   dir.pos  # => 5 */
+""/*  */
+""/*   dir.rewind # => #<Dir:example> */
+""/*   dir.pos    # => 0 */
+""/*  */
+""/*   dir.pos = 3 # => 3 */
+""/*   dir.pos     # => 3 */
+""/*  */
+""/*   dir.seek(4) # => #<Dir:example> */
+""/*   dir.pos     # => 4 */
+""/*  */
+""/*   dir.close # => nil */
+""/*   dir.read  # Raises IOError. */
 ""/*  */
 ""/* == What's Here */
 ""/*  */
-""/* First, what's elsewhere. \Class \Dir: */
+""/* First, what's elsewhere. \\Class \\Dir: */
 ""/*  */
 ""/* - Inherits from {class Object}[rdoc-ref:Object@What-27s+Here]. */
 ""/* - Includes {module Enumerable}[rdoc-ref:Enumerable@What-27s+Here], */
 ""/*   which provides dozens of additional methods. */
 ""/*  */
-""/* Here, class \Dir provides methods that are useful for: */
+""/* Here, class \\Dir provides methods that are useful for: */
 ""/*  */
 ""/* - {Reading}[rdoc-ref:Dir@Reading] */
 ""/* - {Setting}[rdoc-ref:Dir@Setting] */
@@ -393,25 +468,37 @@ static const struct {
 ""/* === Other */
 ""/*  */
 ""/* - ::mkdir: Creates a directory at the given path, with optional permissions. */
-""/* - ::new: Returns a new \Dir for the given path, with optional encoding. */
-""/* - ::open: Same as ::new, but if a block is given, yields the \Dir to the block, */
+""/* - ::new: Returns a new \\Dir for the given path, with optional encoding. */
+""/* - ::open: Same as ::new, but if a block is given, yields the \\Dir to the block, */
 ""/*   closing it upon block exit. */
 ""/* - ::unlink (aliased as ::delete and ::rmdir): Removes the given directory. */
 ""/* - #inspect: Returns a string description of +self+. */
+""/*  */
 "class Dir\n"
 "\n"/* call-seq: */
-"\n"/*    Dir.open( string ) -> aDir */
-"\n"/*    Dir.open( string, encoding: enc ) -> aDir */
-"\n"/*    Dir.open( string ) {| aDir | block } -> anObject */
-"\n"/*    Dir.open( string, encoding: enc ) {| aDir | block } -> anObject */
+"\n"/*   Dir.open(dirpath) -> dir */
+"\n"/*   Dir.open(dirpath, encoding: nil) -> dir */
+"\n"/*   Dir.open(dirpath) {|dir| ... } -> object */
+"\n"/*   Dir.open(dirpath, encoding: nil) {|dir| ... } -> object */
 "\n"/*  */
-"\n"/* The optional <i>encoding</i> keyword argument specifies the encoding of the directory. */
-"\n"/* If not specified, the filesystem encoding is used. */
+"\n"/* Creates a new \\Dir object _dir_ for the directory at +dirpath+. */
 "\n"/*  */
-"\n"/* With no block, <code>open</code> is a synonym for Dir::new. If a */
-"\n"/* block is present, it is passed <i>aDir</i> as a parameter. The */
-"\n"/* directory is closed at the end of the block, and Dir::open returns */
-"\n"/* the value of the block. */
+"\n"/* With no block, the method equivalent to Dir.new(dirpath, encoding): */
+"\n"/*  */
+"\n"/*   Dir.open('.') # => #<Dir:.> */
+"\n"/*  */
+"\n"/* With a block given, the block is called with the created _dir_; */
+"\n"/* on block exit _dir_ is closed and the block's value is returned: */
+"\n"/*  */
+"\n"/*   Dir.open('.') {|dir| dir.inspect } # => \"#<Dir:.>\" */
+"\n"/*  */
+"\n"/* The value given with optional keyword argument +encoding+ */
+"\n"/* specifies the encoding for the directory entry names; */
+"\n"/* if +nil+ (the default), the file system's encoding is used: */
+"\n"/*  */
+"\n"/*   Dir.open('.').read.encoding                       # => #<Encoding:UTF-8> */
+"\n"/*   Dir.open('.', encoding: 'US-ASCII').read.encoding # => #<Encoding:US-ASCII> */
+"\n"/*  */
 "  def self.open(name, encoding: nil, &block)\n"
 "    dir = Primitive.dir_s_open(name, encoding)\n"
 "    if block\n"
@@ -426,116 +513,221 @@ static const struct {
 "  end\n"
 "\n"
 "\n"/* call-seq: */
-"\n"/*    Dir.new( string ) -> aDir */
-"\n"/*    Dir.new( string, encoding: enc ) -> aDir */
+"\n"/*   Dir.new(dirpath) -> dir */
+"\n"/*   Dir.new(dirpath, encoding: nil) -> dir */
 "\n"/*  */
-"\n"/* Returns a new directory object for the named directory. */
+"\n"/* Returns a new \\Dir object for the directory at +dirpath+: */
 "\n"/*  */
-"\n"/* The optional <i>encoding</i> keyword argument specifies the encoding of the directory. */
-"\n"/* If not specified, the filesystem encoding is used. */
+"\n"/*   Dir.new('.') # => #<Dir:.> */
+"\n"/*  */
+"\n"/* The value given with optional keyword argument +encoding+ */
+"\n"/* specifies the encoding for the directory entry names; */
+"\n"/* if +nil+ (the default), the file system's encoding is used: */
+"\n"/*  */
+"\n"/*   Dir.new('.').read.encoding                       # => #<Encoding:UTF-8> */
+"\n"/*   Dir.new('.', encoding: 'US-ASCII').read.encoding # => #<Encoding:US-ASCII> */
+"\n"/*  */
 "  def initialize(name, encoding: nil)\n"
 "    Primitive.dir_initialize(name, encoding)\n"
 "  end\n"
 "\n"
 "\n"/* call-seq: */
-"\n"/*    Dir[ string [, string ...] [, base: path] [, sort: true] ] -> array */
+"\n"/*   Dir[*patterns, base: nil, sort: true] -> array */
 "\n"/*  */
-"\n"/* Equivalent to calling */
-"\n"/* <code>Dir.glob([</code><i>string,...</i><code>], 0)</code>. */
+"\n"/* Calls Dir.glob with argument +patterns+ */
+"\n"/* and the values of keyword arguments +base+ and +sort+; */
+"\n"/* returns the array of selected entry names. */
+"\n"/*  */
 "  def self.[](*args, base: nil, sort: true)\n"
 "    Primitive.dir_s_aref(args, base, sort)\n"
 "  end\n"
 "\n"
 "\n"/* call-seq: */
-"\n"/*    Dir.glob( pattern, [flags], [base: path] [, sort: true] )                       -> array */
-"\n"/*    Dir.glob( pattern, [flags], [base: path] [, sort: true] ) { |filename| block }  -> nil */
+"\n"/*   Dir.glob(*patterns, flags: 0, base: nil, sort: true) -> array */
+"\n"/*   Dir.glob(*patterns, flags: 0, base: nil, sort: true) {|entry_name| ... } -> nil */
 "\n"/*  */
-"\n"/* Expands +pattern+, which is a pattern string or an Array of pattern */
-"\n"/* strings, and returns an array containing the matching filenames. */
-"\n"/* If a block is given, calls the block once for each matching filename, */
-"\n"/* passing the filename as a parameter to the block. */
+"\n"/* Forms an array _entry_names_ of the entry names selected by the arguments. */
 "\n"/*  */
-"\n"/* The optional +base+ keyword argument specifies the base directory for */
-"\n"/* interpreting relative pathnames instead of the current working directory. */
-"\n"/* As the results are not prefixed with the base directory name in this */
-"\n"/* case, you will need to prepend the base directory name if you want real */
-"\n"/* paths. */
+"\n"/* Argument +patterns+ is a string pattern or an array of string patterns; */
+"\n"/* note that these are not regexps; see below. */
 "\n"/*  */
-"\n"/* The results which matched single wildcard or character set are sorted in */
-"\n"/* binary ascending order, unless +false+ is given as the optional +sort+ */
-"\n"/* keyword argument.  The order of an Array of pattern strings and braces */
-"\n"/* are preserved. */
+"\n"/* Notes for the following examples: */
 "\n"/*  */
-"\n"/* Note that the pattern is not a regexp, it's closer to a shell glob. */
-"\n"/* See File::fnmatch for the meaning of the +flags+ parameter. */
-"\n"/* Case sensitivity depends on your system (+File::FNM_CASEFOLD+ is ignored). */
+"\n"/* - <tt>'*'</tt> is the pattern that matches any entry name */
+"\n"/*   except those that begin with <tt>'.'</tt>. */
+"\n"/* - We use method Array#take to shorten returned arrays */
+"\n"/*   that otherwise would be very large. */
 "\n"/*  */
-"\n"/* <code>*</code>:: */
-"\n"/*   Matches any file. Can be restricted by other values in the glob. */
-"\n"/*   Equivalent to <code>/.*\/mx</code> in regexp. */
+"\n"/* With no block, returns array _entry_names_; */
+"\n"/* example (using the {simple file tree}[rdoc-ref:Dir@About+the+Examples]): */
 "\n"/*  */
-"\n"/*   <code>*</code>::     Matches all files */
-"\n"/*   <code>c*</code>::    Matches all files beginning with <code>c</code> */
-"\n"/*   <code>*c</code>::    Matches all files ending with <code>c</code> */
-"\n"/*   <code>\*c\*</code>:: Match all files that have <code>c</code> in them */
-"\n"/*                        (including at the beginning or end). */
+"\n"/*   Dir.glob('*') # => [\"config.h\", \"lib\", \"main.rb\"] */
 "\n"/*  */
-"\n"/*   Note, this will not match Unix-like hidden files (dotfiles).  In order */
-"\n"/*   to include those in the match results, you must use the */
-"\n"/*   File::FNM_DOTMATCH flag or something like <code>"{*,.*}"</code>. */
+"\n"/* With a block, calls the block with each of the _entry_names_ */
+"\n"/* and returns +nil+: */
 "\n"/*  */
-"\n"/* <code>**</code>:: */
-"\n"/*   Matches directories recursively if followed by <code>/</code>.  If */
-"\n"/*   this path segment contains any other characters, it is the same as the */
-"\n"/*   usual <code>*</code>. */
+"\n"/*   Dir.glob('*') {|entry_name| puts entry_name } # => nil */
 "\n"/*  */
-"\n"/* <code>?</code>:: */
-"\n"/*   Matches any one character. Equivalent to <code>/.{1}/</code> in regexp. */
+"\n"/* Output: */
 "\n"/*  */
-"\n"/* <code>[set]</code>:: */
-"\n"/*   Matches any one character in +set+.  Behaves exactly like character sets */
-"\n"/*   in Regexp, including set negation (<code>[^a-z]</code>). */
+"\n"/*   config.h */
+"\n"/*   lib */
+"\n"/*   main.rb */
 "\n"/*  */
-"\n"/* <code>{p,q}</code>:: */
-"\n"/*   Matches either literal <code>p</code> or literal <code>q</code>. */
-"\n"/*   Equivalent to pattern alternation in regexp. */
+"\n"/* If optional keyword argument +flags+ is given, */
+"\n"/* the value modifies the matching; see below. */
 "\n"/*  */
-"\n"/*   Matching literals may be more than one character in length.  More than */
-"\n"/*   two literals may be specified. */
+"\n"/* If optional keyword argument +base+ is given, */
+"\n"/* its value specifies the base directory. */
+"\n"/* Each pattern string specifies entries relative to the base directory; */
+"\n"/* the default is <tt>'.'</tt>. */
+"\n"/* The base directory is not prepended to the entry names in the result: */
 "\n"/*  */
-"\n"/* <code>\\</code>:: */
-"\n"/*   Escapes the next metacharacter. */
-"\n"/*  */
-"\n"/*   Note that this means you cannot use backslash on windows as part of a */
 ,
-#line 192 "dir.rb"
-"\n"/*   glob, i.e.  <code>Dir["c:\\foo*"]</code> will not work, use */
-"\n"/*   <code>Dir["c:/foo*"]</code> instead. */
+#line 267 "dir.rb"
+"\n"/*   Dir.glob(pattern, base: 'lib').take(5) */
+"\n"/*   # => [\"abbrev.gemspec\", \"abbrev.rb\", \"base64.gemspec\", \"base64.rb\", \"benchmark.gemspec\"] */
+"\n"/*   Dir.glob(pattern, base: 'lib/irb').take(5) */
+"\n"/*   # => [\"cmd\", \"color.rb\", \"color_printer.rb\", \"completion.rb\", \"context.rb\"] */
 "\n"/*  */
-"\n"/* Examples: */
+"\n"/* If optional keyword +sort+ is given, its value specifies whether */
+"\n"/* the array is to be sorted; the default is +true+. */
+"\n"/* Passing value +false+ with that keyword disables sorting */
+"\n"/* (though the underlying file system may already have sorted the array). */
 "\n"/*  */
-"\n"/*    Dir["config.?"]                     #=> ["config.h"] */
-"\n"/*    Dir.glob("config.?")                #=> ["config.h"] */
-"\n"/*    Dir.glob("*.[a-z][a-z]")            #=> ["main.rb"] */
-"\n"/*    Dir.glob("*.[^r]*")                 #=> ["config.h"] */
-"\n"/*    Dir.glob("*.{rb,h}")                #=> ["main.rb", "config.h"] */
-"\n"/*    Dir.glob("*")                       #=> ["config.h", "main.rb"] */
-"\n"/*    Dir.glob("*", File::FNM_DOTMATCH)   #=> [".", "config.h", "main.rb"] */
-"\n"/*    Dir.glob(["*.rb", "*.h"])           #=> ["main.rb", "config.h"] */
+"\n"/* <b>Patterns</b> */
 "\n"/*  */
-"\n"/*    Dir.glob("**\/\*.rb")                 #=> ["main.rb", */
-"\n"/*                                        #    "lib/song.rb", */
-"\n"/*                                        #    "lib/song/karaoke.rb"] */
+"\n"/* Each pattern string is expanded */
+"\n"/* according to certain metacharacters; */
+"\n"/* examples below use the {Ruby file tree}[rdoc-ref:Dir@About+the+Examples]: */
 "\n"/*  */
-"\n"/*    Dir.glob("**\/\*.rb", base: "lib")    #=> ["song.rb", */
-"\n"/*                                        #    "song/karaoke.rb"] */
+"\n"/* - <tt>'*'</tt>: Matches any substring in an entry name, */
+"\n"/*   similar in meaning to regexp <tt>/.*\/mx</tt>; */
+"\n"/*   may be restricted by other values in the pattern strings: */
 "\n"/*  */
-"\n"/*    Dir.glob("**\/lib")                  #=> ["lib"] */
+"\n"/*   - <tt>'*'</tt> matches all entry names: */
 "\n"/*  */
-"\n"/*    Dir.glob("**\/lib/\**\/\*.rb")          #=> ["lib/song.rb", */
-"\n"/*                                        #    "lib/song/karaoke.rb"] */
+"\n"/*       Dir.glob('*').take(3)  # => [\"BSDL\", \"CONTRIBUTING.md\", \"COPYING\"] */
 "\n"/*  */
-"\n"/*    Dir.glob("**\/lib/\*.rb")             #=> ["lib/song.rb"] */
+"\n"/*   - <tt>'c*'</tt> matches entry names beginning with <tt>'c'</tt>: */
+"\n"/*  */
+"\n"/*       Dir.glob('c*').take(3) # => [\"CONTRIBUTING.md\", \"COPYING\", \"COPYING.ja\"] */
+"\n"/*  */
+"\n"/*   - <tt>'*c'</tt> matches entry names ending with <tt>'c'</tt>: */
+"\n"/*  */
+"\n"/*       Dir.glob('*c').take(3) # => [\"addr2line.c\", \"array.c\", \"ast.c\"] */
+"\n"/*  */
+"\n"/*   - <tt>'\\*c\\*'</tt> matches entry names that contain <tt>'c'</tt>, */
+"\n"/*     even at the beginning or end: */
+"\n"/*  */
+"\n"/*       Dir.glob('*c*').take(3) # => [\"CONTRIBUTING.md\", \"COPYING\", \"COPYING.ja\"] */
+"\n"/*  */
+"\n"/*   Does not match Unix-like hidden entry names (\"dot files\"). */
+"\n"/*   To include those in the matched entry names, */
+"\n"/*   use flag IO::FNM_DOTMATCH or something like <tt>'{*,.*}'</tt>. */
+"\n"/*  */
+"\n"/*  - <tt>'**'</tt>: Matches entry names recursively */
+"\n"/*    if followed by  the slash character <tt>'/'</tt>: */
+"\n"/*  */
+"\n"/*      Dir.glob('**\/').take(3) # => [\"basictest/\", \"benchmark/\", \"benchmark/gc/\"] */
+"\n"/*  */
+"\n"/*    If the string pattern contains other characters */
+"\n"/*    or is not followed by a slash character, */
+"\n"/*    it is equivalent to <tt>'*'</tt>. */
+"\n"/*  */
+"\n"/* - <tt>'?'</tt> Matches any single character; */
+"\n"/*   similar in meaning to regexp <tt>/./</tt>: */
+"\n"/*  */
+"\n"/*     Dir.glob('io.?') # => [\"io.c\"] */
+"\n"/*  */
+"\n"/* - <tt>'[_set_]'</tt>: Matches any one character in the string _set_; */
+"\n"/*   behaves like a {Regexp character class}[rdoc-ref:regexp.rdoc@Character+Classes], */
+"\n"/*   including set negation (<tt>'[^a-z]'</tt>): */
+"\n"/*  */
+"\n"/*     Dir.glob('*.[a-z][a-z]').take(3) */
+"\n"/*     # => [\"CONTRIBUTING.md\", \"COPYING.ja\", \"KNOWNBUGS.rb\"] */
+"\n"/*  */
+"\n"/* - <tt>'{_abc_,_xyz_}'</tt>: */
+"\n"/*   Matches either string _abc_ or string _xyz_; */
+"\n"/*   behaves like {Regexp alternation}[rdoc-ref:regexp.rdoc@Alternation]: */
+"\n"/*  */
+"\n"/*     Dir.glob('{LEGAL,BSDL}') # => [\"LEGAL\", \"BSDL\"] */
+"\n"/*  */
+"\n"/*   More than two alternatives may be given. */
+"\n"/*  */
+"\n"/* - <tt>\\\\</tt>: Escapes the following metacharacter. */
+"\n"/*  */
+"\n"/*   Note that on Windows, the backslash character may not be used */
+"\n"/*   in a string pattern: */
+"\n"/*   <tt>Dir['c:\\\\foo*']</tt> will not work, use <tt>Dir['c:/foo*']</tt> instead. */
+"\n"/*  */
+"\n"/* More examples (using the {simple file tree}[rdoc-ref:Dir@About+the+Examples]): */
+"\n"/*  */
+"\n"/*   # We're in the example directory. */
+"\n"/*   File.basename(Dir.pwd) # => \"example\" */
+"\n"/*   Dir.glob('config.?')              # => [\"config.h\"] */
+"\n"/*   Dir.glob('*.[a-z][a-z]')          # => [\"main.rb\"] */
+"\n"/*   Dir.glob('*.[^r]*')               # => [\"config.h\"] */
+"\n"/*   Dir.glob('*.{rb,h}')              # => [\"main.rb\", \"config.h\"] */
+"\n"/*   Dir.glob('*')                     # => [\"config.h\", \"lib\", \"main.rb\"] */
+"\n"/*   Dir.glob('*', File::FNM_DOTMATCH) # => [\".\", \"config.h\", \"lib\", \"main.rb\"] */
+"\n"/*   Dir.glob([\"*.rb\", \"*.h\"])         # => [\"main.rb\", \"config.h\"] */
+"\n"/*  */
+"\n"/*   Dir.glob('**\/\*.rb') */
+"\n"/*   => [\"lib/song/karaoke.rb\", \"lib/song.rb\", \"main.rb\"] */
+"\n"/*  */
+"\n"/*   Dir.glob('**\/\*.rb', base: 'lib')  #   => [\"song/karaoke.rb\", \"song.rb\"] */
+"\n"/*  */
+"\n"/*   Dir.glob('**\/lib')                # => [\"lib\"] */
+"\n"/*  */
+"\n"/*   Dir.glob('**\/lib/\**\/\*.rb')        # => [\"lib/song/karaoke.rb\", \"lib/song.rb\"] */
+"\n"/*  */
+"\n"/*   Dir.glob('**\/lib/\*.rb')           # => [\"lib/song.rb\"] */
+"\n"/*  */
+"\n"/* <b>Flags</b> */
+"\n"/*  */
+"\n"/* If optional keyword argument +flags+ is given (the default is zero -- no flags), */
+"\n"/* its value should be the bitwise OR of one or more of the constants */
+"\n"/* defined in module File::Constants. */
+"\n"/*  */
+"\n"/* Example: */
+"\n"/*  */
+"\n"/*   flags = File::FNM_EXTGLOB | File::FNM_DOTMATCH */
+"\n"/*  */
+"\n"/* Specifying flags can extend, restrict, or otherwise modify the matching. */
+"\n"/*  */
+"\n"/* The flags for this method (other constants in File::Constants do not apply): */
+"\n"/*  */
+"\n"/* - File::FNM_DOTMATCH: */
+"\n"/*   specifies that entry names beginning with <tt>'.'</tt> */
+"\n"/*   should be considered for matching: */
+"\n"/*  */
+"\n"/*     Dir.glob('*').take(5) */
+"\n"/*     # => [\"BSDL\", \"CONTRIBUTING.md\", \"COPYING\", \"COPYING.ja\", \"GPL\"] */
+"\n"/*     Dir.glob('*', flags: File::FNM_DOTMATCH).take(5) */
+"\n"/*     # => [\".\", \".appveyor.yml\", \".cirrus.yml\", \".dir-locals.el\", \".document\"] */
+"\n"/*  */
+"\n"/* - File::FNM_EXTGLOB: */
+"\n"/*   enables the pattern extension */
+"\n"/*   <tt>'{_a_,_b_}'</tt>, which matches pattern _a_ and pattern _b_; */
+"\n"/*   behaves like a */
+"\n"/*   {regexp union}[rdoc-ref:Regexp.union] */
+"\n"/*   (e.g., <tt>'(?:_a_|_b_)'</tt>): */
+"\n"/*  */
+"\n"/*     pattern = '{LEGAL,BSDL}' */
+"\n"/*     Dir.glob(pattern)      # => [\"LEGAL\", \"BSDL\"] */
+"\n"/*  */
+"\n"/* - File::FNM_NOESCAPE: */
+"\n"/*   specifies that escaping with the backslash character <tt>'\\'</tt> */
+"\n"/*   is disabled; the character is not an escape character. */
+"\n"/*  */
+"\n"/* - File::FNM_PATHNAME: */
+"\n"/*   specifies that metacharacters <tt>'*'</tt> and <tt>'?'</tt> */
+"\n"/*   do not match directory separators. */
+"\n"/*  */
+"\n"/* - File::FNM_SHORTNAME: */
+"\n"/*   specifies that patterns may match short names if they exist; Windows only. */
+"\n"/*  */
 "  def self.glob(pattern, _flags = 0, flags: _flags, base: nil, sort: true)\n"
 "    Primitive.dir_s_glob(pattern, flags, base, sort)\n"
 "  end\n"
@@ -557,7 +749,7 @@ static const struct {
 "\n"/*   <code>*</code>::    Matches all regular files */
 "\n"/*   <code>c*</code>::   Matches all files beginning with <code>c</code> */
 "\n"/*   <code>*c</code>::   Matches all files ending with <code>c</code> */
-"\n"/*   <code>\*c*</code>:: Matches all files that have <code>c</code> in them */
+"\n"/*   <code>\\*c*</code>:: Matches all files that have <code>c</code> in them */
 "\n"/*                       (including at the beginning or end). */
 "\n"/*  */
 "\n"/*   To match hidden files (that start with a <code>.</code>) set the */
@@ -573,7 +765,7 @@ static const struct {
 "\n"/*   Matches any one character in +set+.  Behaves exactly like character sets */
 "\n"/*   in Regexp, including set negation (<code>[^a-z]</code>). */
 "\n"/*  */
-"\n"/* <code>\\</code>:: */
+"\n"/* <code>\\\\</code>:: */
 "\n"/*   Escapes the next metacharacter. */
 "\n"/*  */
 "\n"/* <code>{a,b}</code>:: */
@@ -606,10 +798,10 @@ static const struct {
 "\n"/*    File.fnmatch('*',   '/', File::FNM_PATHNAME)  #=> false # ditto */
 "\n"/*    File.fnmatch('[/]', '/', File::FNM_PATHNAME)  #=> false # ditto */
 "\n"/*  */
-"\n"/*    File.fnmatch('\?',   '?')                       #=> true  # escaped wildcard becomes ordinary */
-"\n"/*    File.fnmatch('\a',   'a')                       #=> true  # escaped ordinary remains ordinary */
-"\n"/*    File.fnmatch('\a',   '\a', File::FNM_NOESCAPE)  #=> true  # FNM_NOESCAPE makes '\' ordinary */
-"\n"/*    File.fnmatch('[\?]', '?')                       #=> true  # can escape inside bracket expression */
+"\n"/*    File.fnmatch('\\?',   '?')                       #=> true  # escaped wildcard becomes ordinary */
+"\n"/*    File.fnmatch('\\a',   'a')                       #=> true  # escaped ordinary remains ordinary */
+"\n"/*    File.fnmatch('\\a',   '\\a', File::FNM_NOESCAPE)  #=> true  # FNM_NOESCAPE makes '\\' ordinary */
+"\n"/*    File.fnmatch('[\\?]', '?')                       #=> true  # can escape inside bracket expression */
 "\n"/*  */
 "\n"/*    File.fnmatch('*',   '.profile')                      #=> false # wildcard doesn't match leading */
 "\n"/*    File.fnmatch('*',   '.profile', File::FNM_DOTMATCH)  #=> true  # period by default. */
@@ -632,49 +824,55 @@ static const struct {
 "  end\n"
 "  alias fnmatch? fnmatch\n"
 "end if false\n"
-#line 636 "miniprelude.c"
+#line 828 "miniprelude.c"
 };
 
 static const char prelude_name2[] = "<internal:gc>";
 static const struct {
-    char L0[492]; /* 1..70 */
-    char L70[495]; /* 71..230 */
-    char L230[507]; /* 231..272 */
-    char L272[496]; /* 273..297 */
+    char L0[497]; /* 1..75 */
+    char L75[507]; /* 76..252 */
+    char L252[506]; /* 253..298 */
+    char L298[475]; /* 299..328 */
+    char L328[39]; /* 329..331 */
 } prelude_code2 = {
 #line 1 "gc.rb"
 ""/* for gc.c */
 ""
-""/*  The GC module provides an interface to Ruby's mark and */
+""/*  The \\GC module provides an interface to Ruby's mark and */
 ""/*  sweep garbage collection mechanism. */
 ""/*  */
 ""/*  Some of the underlying methods are also available via the ObjectSpace */
 ""/*  module. */
 ""/*  */
-""/*  You may obtain information about the operation of the \GC through */
+""/*  You may obtain information about the operation of the \\GC through */
 ""/*  GC::Profiler. */
 "module GC\n"
 "\n"
-"\n"/*  call-seq: */
-"\n"/*     GC.start                     -> nil */
-"\n"/*     ObjectSpace.garbage_collect  -> nil */
-"\n"/*     include GC; garbage_collect  -> nil */
-"\n"/*     GC.start(full_mark: true, immediate_sweep: true)           -> nil */
-"\n"/*     ObjectSpace.garbage_collect(full_mark: true, immediate_sweep: true) -> nil */
-"\n"/*     include GC; garbage_collect(full_mark: true, immediate_sweep: true) -> nil */
+"\n"/* Initiates garbage collection, even if manually disabled. */
 "\n"/*  */
-"\n"/*  Initiates garbage collection, even if manually disabled. */
+"\n"/* The +full_mark+ keyword argument determines whether or not to perform a */
+"\n"/* major garbage collection cycle. When set to +true+, a major garbage */
+"\n"/* collection cycle is ran, meaning all objects are marked. When set to */
+"\n"/* +false+, a minor garbage collection cycle is ran, meaning only young */
+"\n"/* objects are marked. */
 "\n"/*  */
-"\n"/*  This method is defined with keyword arguments that default to true: */
+"\n"/* The +immediate_mark+ keyword argument determines whether or not to perform */
+"\n"/* incremental marking. When set to +true+, marking is completed during the */
+"\n"/* call to this method. When set to +false+, marking is performed in steps */
+"\n"/* that is interleaved with future Ruby code execution, so marking might not */
+"\n"/* be completed during this method call. Note that if +full_mark+ is +false+ */
+"\n"/* then marking will always be immediate, regardless of the value of */
+"\n"/* +immediate_mark+. */
 "\n"/*  */
-"\n"/*     def GC.start(full_mark: true, immediate_sweep: true); end */
+"\n"/* The +immedate_sweep+ keyword argument determines whether or not to defer */
+"\n"/* sweeping (using lazy sweep). When set to +true+, sweeping is performed in */
+"\n"/* steps that is interleaved with future Ruby code execution, so sweeping might */
+"\n"/* not be completed during this method call. When set to +false+, sweeping is */
+"\n"/* completed during the call to this method. */
 "\n"/*  */
-"\n"/*  Use full_mark: false to perform a minor \GC. */
-"\n"/*  Use immediate_sweep: false to defer sweeping (use lazy sweep). */
-"\n"/*  */
-"\n"/*  Note: These keyword arguments are implementation and version dependent. They */
-"\n"/*  are not guaranteed to be future-compatible, and may be ignored if the */
-"\n"/*  underlying implementation does not support them. */
+"\n"/* Note: These keyword arguments are implementation and version dependent. They */
+"\n"/* are not guaranteed to be future-compatible, and may be ignored if the */
+"\n"/* underlying implementation does not support them. */
 "  def self.start full_mark: true, immediate_mark: true, immediate_sweep: true\n"
 "    Primitive.gc_start_internal full_mark, immediate_mark, immediate_sweep, false\n"
 "  end\n"
@@ -710,11 +908,11 @@ static const struct {
 "  end\n"
 "\n"
 "\n"/*  call-seq: */
-"\n"/*    GC.stress	    -> integer, true or false */
+"\n"/*    GC.stress\t    -> integer, true or false */
 "\n"/*  */
-"\n"/*  Returns current status of \GC stress mode. */
+"\n"/*  Returns current status of \\GC stress mode. */
 ,
-#line 71 "gc.rb"
+#line 76 "gc.rb"
 "  def self.stress\n"
 "    Primitive.gc_stress_get\n"
 "  end\n"
@@ -722,9 +920,9 @@ static const struct {
 "\n"/*  call-seq: */
 "\n"/*    GC.stress = flag          -> flag */
 "\n"/*  */
-"\n"/*  Updates the \GC stress mode. */
+"\n"/*  Updates the \\GC stress mode. */
 "\n"/*  */
-"\n"/*  When stress mode is enabled, the \GC is invoked at every \GC opportunity: */
+"\n"/*  When stress mode is enabled, the \\GC is invoked at every \\GC opportunity: */
 "\n"/*  all memory and object allocations. */
 "\n"/*  */
 "\n"/*  Enabling stress mode will degrade performance, it is only for debugging. */
@@ -740,9 +938,9 @@ static const struct {
 "\n"/*  call-seq: */
 "\n"/*     GC.count -> Integer */
 "\n"/*  */
-"\n"/*  The number of times \GC occurred. */
+"\n"/*  The number of times \\GC occurred. */
 "\n"/*  */
-"\n"/*  It returns the number of times \GC occurred since the process started. */
+"\n"/*  It returns the number of times \\GC occurred since the process started. */
 "  def self.count\n"
 "    Primitive.gc_count\n"
 "  end\n"
@@ -752,12 +950,12 @@ static const struct {
 "\n"/*     GC.stat(hash) -> Hash */
 "\n"/*     GC.stat(:key) -> Numeric */
 "\n"/*  */
-"\n"/*  Returns a Hash containing information about the \GC. */
+"\n"/*  Returns a Hash containing information about the \\GC. */
 "\n"/*  */
 "\n"/*  The contents of the hash are implementation specific and may change in */
 "\n"/*  the future without notice. */
 "\n"/*  */
-"\n"/*  The hash includes information about internal statistics about \GC such as: */
+"\n"/*  The hash includes information about internal statistics about \\GC such as: */
 "\n"/*  */
 "\n"/*  [count] */
 "\n"/*    The total number of garbage collections ran since application start */
@@ -770,7 +968,7 @@ static const struct {
 "\n"/*    The number of pages that can fit into the buffer that holds references to */
 "\n"/*    all pages */
 "\n"/*  [heap_allocatable_pages] */
-"\n"/*    The total number of pages the application could allocate without additional \GC */
+"\n"/*    The total number of pages the application could allocate without additional \\GC */
 "\n"/*  [heap_available_slots] */
 "\n"/*    The total number of slots in all +:heap_allocated_pages+ */
 "\n"/*  [heap_live_slots] */
@@ -780,7 +978,7 @@ static const struct {
 "\n"/*  [heap_final_slots] */
 "\n"/*    The total number of slots with pending finalizers to be run */
 "\n"/*  [heap_marked_slots] */
-"\n"/*    The total number of objects marked in the last \GC */
+"\n"/*    The total number of objects marked in the last \\GC */
 "\n"/*  [heap_eden_pages] */
 "\n"/*    The total number of pages which contain at least one live slot */
 "\n"/*  [heap_tomb_pages] */
@@ -794,9 +992,9 @@ static const struct {
 "\n"/*  [total_freed_objects] */
 "\n"/*    The cumulative number of objects freed since application start */
 "\n"/*  [malloc_increase_bytes] */
-"\n"/*    Amount of memory allocated on the heap for objects. Decreased by any \GC */
+"\n"/*    Amount of memory allocated on the heap for objects. Decreased by any \\GC */
 "\n"/*  [malloc_increase_bytes_limit] */
-"\n"/*    When +:malloc_increase_bytes+ crosses this limit, \GC is triggered */
+"\n"/*    When +:malloc_increase_bytes+ crosses this limit, \\GC is triggered */
 "\n"/*  [minor_gc_count] */
 "\n"/*    The total number of minor garbage collections run since process start */
 "\n"/*  [major_gc_count] */
@@ -812,15 +1010,15 @@ static const struct {
 "\n"/*    The total number of objects without write barriers */
 "\n"/*  [remembered_wb_unprotected_objects_limit] */
 "\n"/*    When +:remembered_wb_unprotected_objects+ crosses this limit, */
-"\n"/*    major \GC is triggered */
+"\n"/*    major \\GC is triggered */
 "\n"/*  [old_objects] */
 "\n"/*    Number of live, old objects which have survived at least 3 garbage collections */
 "\n"/*  [old_objects_limit] */
-"\n"/*    When +:old_objects+ crosses this limit, major \GC is triggered */
+"\n"/*    When +:old_objects+ crosses this limit, major \\GC is triggered */
 "\n"/*  [oldmalloc_increase_bytes] */
-"\n"/*    Amount of memory allocated on the heap for objects. Decreased by major \GC */
+"\n"/*    Amount of memory allocated on the heap for objects. Decreased by major \\GC */
 "\n"/*  [oldmalloc_increase_bytes_limit] */
-"\n"/*    When +:old_malloc_increase_bytes+ crosses this limit, major \GC is triggered */
+"\n"/*    When +:old_malloc_increase_bytes+ crosses this limit, major \\GC is triggered */
 "\n"/*  */
 "\n"/*  If the optional argument, hash, is given, */
 "\n"/*  it is overwritten and returned. */
@@ -838,19 +1036,18 @@ static const struct {
 "\n"/*    GC.stat_heap(heap_name, hash) -> Hash */
 "\n"/*    GC.stat_heap(heap_name, :key) -> Numeric */
 "\n"/*  */
-"\n"/* Returns information for memory pools in the \GC. */
+"\n"/* Returns information for heaps in the \\GC. */
 "\n"/*  */
 "\n"/* If the first optional argument, +heap_name+, is passed in and not +nil+, it */
-"\n"/* returns a +Hash+ containing information about the particular memory pool. */
-"\n"/* Otherwise, it will return a +Hash+ with memory pool names as keys and */
-"\n"/* a +Hash+ containing information about the memory pool as values. */
+"\n"/* returns a +Hash+ containing information about the particular heap. */
+"\n"/* Otherwise, it will return a +Hash+ with heap names as keys and */
+"\n"/* a +Hash+ containing information about the heap as values. */
 "\n"/*  */
 "\n"/* If the second optional argument, +hash_or_key+, is given as +Hash+, it will */
 "\n"/* be overwritten and returned. This is intended to avoid the probe effect. */
 "\n"/*  */
 "\n"/* If both optional arguments are passed in and the second optional argument is */
-"\n"/* a symbol, it will return a +Numeric+ of the value for the particular memory */
-"\n"/* pool. */
+"\n"/* a symbol, it will return a +Numeric+ of the value for the particular heap. */
 "\n"/*  */
 "\n"/* On CRuby, +heap_name+ is of the type +Integer+ but may be of type +String+ */
 "\n"/* on other implementations. */
@@ -861,8 +1058,40 @@ static const struct {
 "\n"/* If the optional argument, hash, is given, it is overwritten and returned. */
 "\n"/*  */
 "\n"/* This method is only expected to work on CRuby. */
+"\n"/*  */
+"\n"/* The hash includes the following keys about the internal information in */
+"\n"/* the \\GC: */
+"\n"/*  */
+"\n"/* [slot_size] */
+"\n"/*   The slot size of the heap in bytes. */
+"\n"/* [heap_allocatable_pages] */
+"\n"/*   The number of pages that can be allocated without triggering a new */
+"\n"/*   garbage collection cycle. */
+"\n"/* [heap_eden_pages] */
+"\n"/*   The number of pages in the eden heap. */
+"\n"/* [heap_eden_slots] */
+"\n"/*   The total number of slots in all of the pages in the eden heap. */
+"\n"/* [heap_tomb_pages] */
+"\n"/*   The number of pages in the tomb heap. The tomb heap only contains pages */
+"\n"/*   that do not have any live objects. */
+"\n"/* [heap_tomb_slots] */
+"\n"/*   The total number of slots in all of the pages in the tomb heap. */
+"\n"/* [total_allocated_pages] */
+"\n"/*   The total number of pages that have been allocated in the heap. */
+"\n"/* [total_freed_pages] */
+"\n"/*   The total number of pages that have been freed and released back to the */
+"\n"/*   system in the heap. */
+"\n"/* [force_major_gc_count] */
+"\n"/*   The number of times major garbage collection cycles this heap has forced */
+"\n"/*   to start due to running out of free slots. */
+"\n"/* [force_incremental_marking_finish_count] */
+"\n"/*   The number of times this heap has forced incremental marking to complete */
+"\n"/*   due to running out of pooled slots. */
+"\n"/*  */
 "  def self.stat_heap heap_name = nil, hash_or_key = nil\n"
 "    Primitive.gc_stat_heap heap_name, hash_or_key\n"
+,
+#line 253 "gc.rb"
 "  end\n"
 "\n"
 "\n"/* call-seq: */
@@ -875,8 +1104,6 @@ static const struct {
 "\n"/* If the optional argument, hash, is given, */
 "\n"/* it is overwritten and returned. */
 "\n"/* This is intended to avoid probe effect. */
-,
-#line 231 "gc.rb"
 "  def self.latest_gc_info hash_or_key = nil\n"
 "    Primitive.gc_latest_gc_info hash_or_key\n"
 "  end\n"
@@ -893,7 +1120,7 @@ static const struct {
 "\n"/*  */
 "\n"/* This function expands the heap to ensure room to move all objects, */
 "\n"/* compacts the heap to make sure everything moves, updates all references, */
-"\n"/* then performs a full \GC.  If any object contains a reference to a T_MOVED */
+"\n"/* then performs a full \\GC.  If any object contains a reference to a T_MOVED */
 "\n"/* object, that object should be pushed on the mark stack, and will */
 "\n"/* make a SEGV. */
 "    def self.verify_compaction_references(toward: nil, double_heap: false, expand_heap: false)\n"
@@ -904,13 +1131,15 @@ static const struct {
 "\n"/* call-seq: */
 "\n"/*    GC.measure_total_time = true/false */
 "\n"/*  */
-"\n"/* Enable to measure \GC time. */
+"\n"/* Enable to measure \\GC time. */
 "\n"/* You can get the result with <tt>GC.stat(:time)</tt>. */
-"\n"/* Note that \GC time measurement can cause some performance overhead. */
+"\n"/* Note that \\GC time measurement can cause some performance overhead. */
 "  def self.measure_total_time=(flag)\n"
 "    Primitive.cstmt! %{\n"
 "      rb_objspace.flags.measure_gc = RTEST(flag) ? TRUE : FALSE;\n"
 "      return flag;\n"
+,
+#line 299 "gc.rb"
 "    }\n"
 "  end\n"
 "\n"
@@ -919,8 +1148,6 @@ static const struct {
 "\n"/*  */
 "\n"/* Return measure_total_time flag (default: +true+). */
 "\n"/* Note that measurement can affect the application performance. */
-,
-#line 273 "gc.rb"
 "  def self.measure_total_time\n"
 "    Primitive.cexpr! %{\n"
 "      RBOOL(rb_objspace.flags.measure_gc)\n"
@@ -930,7 +1157,7 @@ static const struct {
 "\n"/* call-seq: */
 "\n"/*    GC.total_time -> int */
 "\n"/*  */
-"\n"/* Return measured \GC total time in nano seconds. */
+"\n"/* Return measured \\GC total time in nano seconds. */
 "  def self.total_time\n"
 "    Primitive.cexpr! %{\n"
 "      ULL2NUM(rb_objspace.profile.marking_time_ns + rb_objspace.profile.sweeping_time_ns)\n"
@@ -943,79 +1170,75 @@ static const struct {
 "    Primitive.gc_start_internal full_mark, immediate_mark, immediate_sweep, false\n"
 "  end\n"
 "\n"
+,
+#line 329 "gc.rb"
 "  module_function :garbage_collect\n"
 "end\n"
-#line 949 "miniprelude.c"
+#line 1178 "miniprelude.c"
 };
 
 static const char prelude_name3[] = "<internal:numeric>";
 static const struct {
-    char L0[471]; /* 1..105 */
-    char L105[470]; /* 106..194 */
-    char L194[498]; /* 195..300 */
-    char L300[455]; /* 301..355 */
-    char L355[176]; /* 356..371 */
+    char L0[507]; /* 1..101 */
+    char L101[508]; /* 102..200 */
+    char L200[503]; /* 201..284 */
+    char L284[507]; /* 285..357 */
+    char L357[216]; /* 358..373 */
 } prelude_code3 = {
 #line 1 "numeric.rb"
 "class Numeric\n"
-"\n"/*  */
+"\n"
 "\n"/*  call-seq: */
-"\n"/*     num.real?  ->  true or false */
+"\n"/*    real? -> true or false */
 "\n"/*  */
-"\n"/*  Returns +true+ if +num+ is a real number (i.e. not Complex). */
+"\n"/*  Returns +true+ if +self+ is a real number (i.e. not Complex). */
 "\n"/*  */
 "  def real?\n"
 "    true\n"
 "  end\n"
 "\n"
-"\n"/*  */
 "\n"/* call-seq: */
-"\n"/*    num.real  ->  self */
+"\n"/*   real -> self */
 "\n"/*  */
-"\n"/* Returns self. */
+"\n"/* Returns +self+. */
 "\n"/*  */
 "  def real\n"
 "    self\n"
 "  end\n"
 "\n"
-"\n"/*  */
 "\n"/*  call-seq: */
-"\n"/*     num.integer?  ->  true or false */
+"\n"/*    integer? -> true or false */
 "\n"/*  */
-"\n"/*  Returns +true+ if +num+ is an Integer. */
+"\n"/*  Returns +true+ if +self+ is an Integer. */
 "\n"/*  */
-"\n"/*      1.0.integer?   #=> false */
-"\n"/*      1.integer?     #=> true */
+"\n"/*    1.0.integer? # => false */
+"\n"/*    1.integer?   # => true */
 "\n"/*  */
 "  def integer?\n"
 "    false\n"
 "  end\n"
 "\n"
-"\n"/*  */
 "\n"/*  call-seq: */
-"\n"/*     num.finite?  ->  true or false */
+"\n"/*    finite? -> true or false */
 "\n"/*  */
-"\n"/*  Returns +true+ if +num+ is a finite number, otherwise returns +false+. */
+"\n"/*  Returns +true+ if +self+ is a finite number, +false+ otherwise. */
 "\n"/*  */
 "  def finite?\n"
 "    true\n"
 "  end\n"
 "\n"
-"\n"/*  */
 "\n"/*  call-seq: */
-"\n"/*     num.infinite?  ->  -1, 1, or nil */
+"\n"/*    infinite? -> -1, 1, or nil */
 "\n"/*  */
-"\n"/*  Returns +nil+, -1, or 1 depending on whether the value is */
-"\n"/*  finite, <code>-Infinity</code>, or <code>+Infinity</code>. */
+"\n"/*  Returns +nil+, -1, or 1 depending on whether +self+ is */
+"\n"/*  finite, <tt>-Infinity</tt>, or <tt>+Infinity</tt>. */
 "\n"/*  */
 "  def infinite?\n"
 "    nil\n"
 "  end\n"
 "\n"
-"\n"/*  */
 "\n"/* call-seq: */
-"\n"/*    num.imag       ->  0 */
-"\n"/*    num.imaginary  ->  0 */
+"\n"/*   imag -> 0 */
 "\n"/*  */
 "\n"/* Returns zero. */
 "\n"/*  */
@@ -1025,12 +1248,10 @@ static const struct {
 "\n"
 "  alias imag imaginary\n"
 "\n"
-"\n"/*  */
 "\n"/* call-seq: */
-"\n"/*    num.conj       ->  self */
-"\n"/*    num.conjugate  ->  self */
+"\n"/*   conj -> self */
 "\n"/*  */
-"\n"/* Returns self. */
+"\n"/* Returns +self+. */
 "\n"/*  */
 "  def conjugate\n"
 "    self\n"
@@ -1041,41 +1262,43 @@ static const struct {
 "\n"
 "class Integer\n"
 "\n"/* call-seq: */
-"\n"/*    -int  ->  integer */
+"\n"/*    -int -> integer */
 "\n"/*  */
-"\n"/* Returns +int+, negated. */
+"\n"/* Returns +self+, negated. */
 "  def -@\n"
 "    Primitive.attr! :leaf\n"
 "    Primitive.cexpr! 'rb_int_uminus(self)'\n"
 "  end\n"
 "\n"
 "\n"/* call-seq: */
-"\n"/*   ~int  ->  integer */
+"\n"/*   ~int -> integer */
 "\n"/*  */
-"\n"/* One's complement: returns a number where each bit is flipped. */
+"\n"/* One's complement: */
+"\n"/* returns the value of +self+ with each bit inverted. */
 "\n"/*  */
-"\n"/* Inverts the bits in an Integer. As integers are conceptually of */
-"\n"/* infinite length, the result acts as if it had an infinite number of */
-"\n"/* one bits to the left. In hex representations, this is displayed */
-"\n"/* as two periods to the left of the digits. */
+"\n"/* Because an integer value is conceptually of infinite length, */
+"\n"/* the result acts as if it had an infinite number of */
+"\n"/* one bits to the left. */
+"\n"/* In hex representations, this is displayed */
+"\n"/* as two periods to the left of the digits: */
 "\n"/*  */
-"\n"/*   sprintf("%X", ~0x1122334455)    #=> "..FEEDDCCBBAA" */
+"\n"/*   sprintf(\"%X\", ~0x1122334455)    # => \"..FEEDDCCBBAA\" */
+"\n"/*  */
 "  def ~\n"
 "    Primitive.attr! :leaf\n"
-,
-#line 106 "numeric.rb"
 "    Primitive.cexpr! 'rb_int_comp(self)'\n"
+,
+#line 102 "numeric.rb"
 "  end\n"
 "\n"
 "\n"/* call-seq: */
-"\n"/*    int.abs        ->  integer */
-"\n"/*    int.magnitude  ->  integer */
+"\n"/*   abs -> integer */
 "\n"/*  */
-"\n"/* Returns the absolute value of +int+. */
+"\n"/* Returns the absolute value of +self+. */
 "\n"/*  */
-"\n"/*    (-12345).abs   #=> 12345 */
-"\n"/*    -12345.abs     #=> 12345 */
-"\n"/*    12345.abs      #=> 12345 */
+"\n"/*   (-12345).abs # => 12345 */
+"\n"/*   -12345.abs   # => 12345 */
+"\n"/*   12345.abs    # => 12345 */
 "\n"/*  */
 "  def abs\n"
 "    Primitive.attr! :leaf\n"
@@ -1083,64 +1306,65 @@ static const struct {
 "  end\n"
 "\n"
 "\n"/* call-seq: */
-"\n"/*    int.bit_length  ->  integer */
+"\n"/*   bit_length -> integer */
 "\n"/*  */
-"\n"/* Returns the number of bits of the value of +int+. */
-"\n"/*  */
-"\n"/* "Number of bits" means the bit position of the highest bit */
-"\n"/* which is different from the sign bit */
+"\n"/* Returns the number of bits of the value of +self+, */
+"\n"/* which is the bit position of the highest-order bit */
+"\n"/* that is different from the sign bit */
 "\n"/* (where the least significant bit has bit position 1). */
-"\n"/* If there is no such bit (zero or minus one), zero is returned. */
+"\n"/* If there is no such bit (zero or minus one), returns zero. */
 "\n"/*  */
-"\n"/* I.e. this method returns <i>ceil(log2(int < 0 ? -int : int+1))</i>. */
+"\n"/* This method returns <tt>ceil(log2(self < 0 ? -self : self + 1))</tt>>. */
 "\n"/*  */
-"\n"/*    (-2**1000-1).bit_length   #=> 1001 */
-"\n"/*    (-2**1000).bit_length     #=> 1000 */
-"\n"/*    (-2**1000+1).bit_length   #=> 1000 */
-"\n"/*    (-2**12-1).bit_length     #=> 13 */
-"\n"/*    (-2**12).bit_length       #=> 12 */
-"\n"/*    (-2**12+1).bit_length     #=> 12 */
-"\n"/*    -0x101.bit_length         #=> 9 */
-"\n"/*    -0x100.bit_length         #=> 8 */
-"\n"/*    -0xff.bit_length          #=> 8 */
-"\n"/*    -2.bit_length             #=> 1 */
-"\n"/*    -1.bit_length             #=> 0 */
-"\n"/*    0.bit_length              #=> 0 */
-"\n"/*    1.bit_length              #=> 1 */
-"\n"/*    0xff.bit_length           #=> 8 */
-"\n"/*    0x100.bit_length          #=> 9 */
-"\n"/*    (2**12-1).bit_length      #=> 12 */
-"\n"/*    (2**12).bit_length        #=> 13 */
-"\n"/*    (2**12+1).bit_length      #=> 13 */
-"\n"/*    (2**1000-1).bit_length    #=> 1000 */
-"\n"/*    (2**1000).bit_length      #=> 1001 */
-"\n"/*    (2**1000+1).bit_length    #=> 1001 */
+"\n"/*   (-2**1000-1).bit_length   # => 1001 */
+"\n"/*   (-2**1000).bit_length     # => 1000 */
+"\n"/*   (-2**1000+1).bit_length   # => 1000 */
+"\n"/*   (-2**12-1).bit_length     # => 13 */
+"\n"/*   (-2**12).bit_length       # => 12 */
+"\n"/*   (-2**12+1).bit_length     # => 12 */
+"\n"/*   -0x101.bit_length         # => 9 */
+"\n"/*   -0x100.bit_length         # => 8 */
+"\n"/*   -0xff.bit_length          # => 8 */
+"\n"/*   -2.bit_length             # => 1 */
+"\n"/*   -1.bit_length             # => 0 */
+"\n"/*   0.bit_length              # => 0 */
+"\n"/*   1.bit_length              # => 1 */
+"\n"/*   0xff.bit_length           # => 8 */
+"\n"/*   0x100.bit_length          # => 9 */
+"\n"/*   (2**12-1).bit_length      # => 12 */
+"\n"/*   (2**12).bit_length        # => 13 */
+"\n"/*   (2**12+1).bit_length      # => 13 */
+"\n"/*   (2**1000-1).bit_length    # => 1000 */
+"\n"/*   (2**1000).bit_length      # => 1001 */
+"\n"/*   (2**1000+1).bit_length    # => 1001 */
 "\n"/*  */
-"\n"/* This method can be used to detect overflow in Array#pack as follows: */
+"\n"/* For \\Integer _n_, */
+"\n"/* this method can be used to detect overflow in Array#pack: */
 "\n"/*  */
-"\n"/*    if n.bit_length < 32 */
-"\n"/*      [n].pack("l") # no overflow */
-"\n"/*    else */
-"\n"/*      raise "overflow" */
-"\n"/*    end */
+"\n"/*   if n.bit_length < 32 */
+"\n"/*     [n].pack('l') # No overflow. */
+"\n"/*   else */
+"\n"/*     raise 'Overflow' */
+"\n"/*   end */
+"\n"/*  */
 "  def bit_length\n"
 "    Primitive.attr! :leaf\n"
 "    Primitive.cexpr! 'rb_int_bit_length(self)'\n"
 "  end\n"
 "\n"
 "\n"/*  call-seq: */
-"\n"/*     int.even?  ->  true or false */
+"\n"/*    even? -> true or false */
 "\n"/*  */
-"\n"/*  Returns +true+ if +int+ is an even number. */
+"\n"/*  Returns +true+ if +self+ is an even number, +false+ otherwise. */
 "  def even?\n"
 "    Primitive.attr! :leaf\n"
 "    Primitive.cexpr! 'rb_int_even_p(self)'\n"
 "  end\n"
 "\n"
 "\n"/*  call-seq: */
-"\n"/*     int.integer?  ->  true */
+"\n"/*    integer? -> true */
 "\n"/*  */
-"\n"/*  Since +int+ is already an Integer, this always returns +true+. */
+"\n"/*  Since +self+ is already an \\Integer, always returns +true+. */
 "  def integer?\n"
 "    true\n"
 "  end\n"
@@ -1148,135 +1372,149 @@ static const struct {
 "  alias magnitude abs\n"
 "\n"
 "\n"/*  call-seq: */
-"\n"/*     int.odd?  ->  true or false */
+"\n"/*    odd? -> true or false */
 "\n"/*  */
-"\n"/*  Returns +true+ if +int+ is an odd number. */
+"\n"/*  Returns +true+ if +self+ is an odd number, +false+ otherwise. */
 "  def odd?\n"
 "    Primitive.attr! :leaf\n"
-,
-#line 195 "numeric.rb"
 "    Primitive.cexpr! 'rb_int_odd_p(self)'\n"
 "  end\n"
 "\n"
 "\n"/*  call-seq: */
-"\n"/*     int.ord  ->  self */
+"\n"/*    ord -> self */
 "\n"/*  */
-"\n"/*  Returns the +int+ itself. */
-"\n"/*  */
-"\n"/*     97.ord   #=> 97 */
-"\n"/*  */
-"\n"/*  This method is intended for compatibility to character literals */
-"\n"/*  in Ruby 1.9. */
-"\n"/*  */
-"\n"/*  For example, <code>?a.ord</code> returns 97 both in 1.8 and 1.9. */
+"\n"/*  Returns +self+; */
+"\n"/*  intended for compatibility to character literals in Ruby 1.9. */
 "  def ord\n"
 "    self\n"
 "  end\n"
+,
+#line 201 "numeric.rb"
 "\n"
 "\n"/*  call-seq: */
-"\n"/*     int.size  ->  int */
+"\n"/*    size -> integer */
 "\n"/*  */
-"\n"/*  Returns the number of bytes in the machine representation of +int+ */
-"\n"/*  (machine dependent). */
+"\n"/*  Returns the number of bytes in the machine representation of +self+; */
+"\n"/*  the value is system-dependent: */
 "\n"/*  */
-"\n"/*     1.size               #=> 8 */
-"\n"/*     -1.size              #=> 8 */
-"\n"/*     2147483647.size      #=> 8 */
-"\n"/*     (256**10 - 1).size   #=> 10 */
-"\n"/*     (256**20 - 1).size   #=> 20 */
-"\n"/*     (256**40 - 1).size   #=> 40 */
+"\n"/*    1.size             # => 8 */
+"\n"/*    -1.size            # => 8 */
+"\n"/*    2147483647.size    # => 8 */
+"\n"/*    (256**10 - 1).size # => 10 */
+"\n"/*    (256**20 - 1).size # => 20 */
+"\n"/*    (256**40 - 1).size # => 40 */
 "\n"/*  */
 "  def size\n"
 "    Primitive.attr! :leaf\n"
 "    Primitive.cexpr! 'rb_int_size(self)'\n"
 "  end\n"
 "\n"
-"\n"/*  call-seq: */
-"\n"/*     int.to_i    ->  integer */
+"\n"/* call-seq: */
+"\n"/*   times {|i| ... } -> self */
+"\n"/*   times            -> enumerator */
 "\n"/*  */
-"\n"/*  Since +int+ is already an Integer, returns +self+. */
+"\n"/* Calls the given block +self+ times with each integer in <tt>(0..self-1)</tt>: */
+"\n"/*  */
+"\n"/*   a = [] */
+"\n"/*   5.times {|i| a.push(i) } # => 5 */
+"\n"/*   a                        # => [0, 1, 2, 3, 4] */
+"\n"/*  */
+"\n"/* With no block given, returns an Enumerator. */
+"  def times\n"
+"    unless block_given?\n"
+"      return to_enum(:times) { self < 0 ? 0 : self }\n"
+"    end\n"
+"    i = 0\n"
+"    while i < self\n"
+"      yield i\n"
+"      i = i.succ\n"
+"    end\n"
+"    self\n"
+"  end\n"
+"\n"
+"\n"/*  call-seq: */
+"\n"/*    to_i -> self */
+"\n"/*  */
+"\n"/*  Returns +self+ (which is already an \\Integer). */
 "  def to_i\n"
 "    self\n"
 "  end\n"
 "\n"
 "\n"/*  call-seq: */
-"\n"/*     int.to_int  ->  integer */
+"\n"/*    to_int -> self */
 "\n"/*  */
-"\n"/*  Since +int+ is already an Integer, returns +self+. */
+"\n"/*  Returns +self+ (which is already an \\Integer). */
 "  def to_int\n"
 "    self\n"
 "  end\n"
 "\n"
 "\n"/* call-seq: */
-"\n"/*    int.zero? -> true or false */
+"\n"/*   zero? -> true or false */
 "\n"/*  */
-"\n"/* Returns +true+ if +int+ has a zero value. */
+"\n"/* Returns +true+ if +self+ has a zero value, +false+ otherwise. */
 "  def zero?\n"
 "    Primitive.attr! :leaf\n"
 "    Primitive.cexpr! 'rb_int_zero_p(self)'\n"
 "  end\n"
 "\n"
 "\n"/*  call-seq: */
-"\n"/*    ceildiv(other) -> integer */
+"\n"/*    ceildiv(numeric) -> integer */
 "\n"/*  */
-"\n"/*  Returns the result of division +self+ by +other+. The result is rounded up to the nearest integer. */
+"\n"/*  Returns the result of division +self+ by +numeric+. */
+"\n"/*  rounded up to the nearest integer. */
 "\n"/*  */
-"\n"/*    3.ceildiv(3) # => 1 */
-"\n"/*    4.ceildiv(3) # => 2 */
+"\n"/*    3.ceildiv(3)   # => 1 */
+"\n"/*    4.ceildiv(3)   # => 2 */
 "\n"/*  */
-"\n"/*    4.ceildiv(-3) # => -1 */
-"\n"/*    -4.ceildiv(3) # => -1 */
+"\n"/*    4.ceildiv(-3)  # => -1 */
+"\n"/*    -4.ceildiv(3)  # => -1 */
 "\n"/*    -4.ceildiv(-3) # => 2 */
 "\n"/*  */
 "\n"/*    3.ceildiv(1.2) # => 3 */
+"\n"/*  */
 "  def ceildiv(other)\n"
 "    -div(0 - other)\n"
+,
+#line 285 "numeric.rb"
 "  end\n"
 "\n"
 "\n"/*  */
 "\n"/* call-seq: */
-"\n"/*    int.numerator  ->  self */
+"\n"/*   numerator -> self */
 "\n"/*  */
-"\n"/* Returns self. */
+"\n"/* Returns +self+. */
 "\n"/*  */
 "  def numerator\n"
 "    self\n"
 "  end\n"
 "\n"
-"\n"/*  */
 "\n"/* call-seq: */
-"\n"/*    int.denominator  ->  1 */
+"\n"/*   denominator -> 1 */
 "\n"/*  */
-"\n"/* Returns 1. */
-"\n"/*  */
+"\n"/* Returns +1+. */
 "  def denominator\n"
 "    1\n"
 "  end\n"
 "end\n"
 "\n"
 "class Float\n"
-"\n"/*  */
+"\n"
 "\n"/* call-seq: */
-"\n"/*    float.to_f  ->  self */
+"\n"/*   to_f -> self */
 "\n"/*  */
-"\n"/* Since +float+ is already a Float, returns +self+. */
-"\n"/*  */
-,
-#line 301 "numeric.rb"
+"\n"/*  Returns +self+ (which is already a \\Float). */
 "  def to_f\n"
 "    self\n"
 "  end\n"
 "\n"
-"\n"/*  */
 "\n"/*  call-seq: */
-"\n"/*     float.abs        ->  float */
-"\n"/*     float.magnitude  ->  float */
+"\n"/*    float.abs ->  float */
 "\n"/*  */
-"\n"/*  Returns the absolute value of +float+. */
+"\n"/*  Returns the absolute value of +self+: */
 "\n"/*  */
-"\n"/*     (-34.56).abs   #=> 34.56 */
-"\n"/*     -34.56.abs     #=> 34.56 */
-"\n"/*     34.56.abs      #=> 34.56 */
+"\n"/*    (-34.56).abs # => 34.56 */
+"\n"/*    -34.56.abs   # => 34.56 */
+"\n"/*    34.56.abs    # => 34.56 */
 "\n"/*  */
 "  def abs\n"
 "    Primitive.attr! :leaf\n"
@@ -1288,54 +1526,47 @@ static const struct {
 "    Primitive.cexpr! 'rb_float_abs(self)'\n"
 "  end\n"
 "\n"
-"\n"/*  */
 "\n"/* call-seq: */
-"\n"/*    -float  ->  float */
+"\n"/*   -float -> float */
 "\n"/*  */
-"\n"/* Returns +float+, negated. */
+"\n"/* Returns +self+, negated. */
 "\n"/*  */
 "  def -@\n"
 "    Primitive.attr! :leaf\n"
 "    Primitive.cexpr! 'rb_float_uminus(self)'\n"
 "  end\n"
 "\n"
-"\n"/*  */
 "\n"/*  call-seq: */
-"\n"/*     float.zero?  ->  true or false */
+"\n"/*    zero? -> true or false */
 "\n"/*  */
-"\n"/*  Returns +true+ if +float+ is 0.0. */
-"\n"/*  */
+"\n"/*  Returns +true+ if +self+ is 0.0, +false+ otherwise. */
 "  def zero?\n"
 "    Primitive.attr! :leaf\n"
 "    Primitive.cexpr! 'RBOOL(FLOAT_ZERO_P(self))'\n"
 "  end\n"
 "\n"
-"\n"/*  */
 "\n"/*  call-seq: */
-"\n"/*     float.positive?  ->  true or false */
+"\n"/*    positive? -> true or false */
 "\n"/*  */
-"\n"/*  Returns +true+ if +float+ is greater than 0. */
-"\n"/*  */
+"\n"/*  Returns +true+ if +self+ is greater than 0, +false+ otherwise. */
+,
+#line 358 "numeric.rb"
 "  def positive?\n"
 "    Primitive.attr! :leaf\n"
-,
-#line 356 "numeric.rb"
 "    Primitive.cexpr! 'RBOOL(RFLOAT_VALUE(self) > 0.0)'\n"
 "  end\n"
 "\n"
-"\n"/*  */
 "\n"/*  call-seq: */
-"\n"/*     float.negative?  ->  true or false */
+"\n"/*    negative? -> true or false */
 "\n"/*  */
-"\n"/*  Returns +true+ if +float+ is less than 0. */
-"\n"/*  */
+"\n"/*  Returns +true+ if +self+ is less than 0, +false+ otherwise. */
 "  def negative?\n"
 "    Primitive.attr! :leaf\n"
 "    Primitive.cexpr! 'RBOOL(RFLOAT_VALUE(self) < 0.0)'\n"
 "  end\n"
 "\n"
 "end\n"
-#line 1339 "miniprelude.c"
+#line 1570 "miniprelude.c"
 };
 
 static const char prelude_name4[] = "<internal:io>";
@@ -1432,11 +1663,11 @@ static const struct {
 "\n"/*  */
 "\n"/*   # write_nonblock writes only 65536 bytes and return 65536. */
 "\n"/*   # (The pipe size is 65536 bytes on this environment.) */
-"\n"/*   s = "a" * 100000 */
+"\n"/*   s = \"a\" * 100000 */
 "\n"/*   p w.write_nonblock(s)     #=> 65536 */
 "\n"/*  */
 "\n"/*   # write_nonblock cannot write a byte and raise EWOULDBLOCK (EAGAIN). */
-"\n"/*   p w.write_nonblock("b")   # Resource temporarily unavailable (Errno::EAGAIN) */
+"\n"/*   p w.write_nonblock(\"b\")   # Resource temporarily unavailable (Errno::EAGAIN) */
 "\n"/*  */
 "\n"/* If the write buffer is not empty, it is flushed at first. */
 "\n"/*  */
@@ -1466,7 +1697,7 @@ static const struct {
 "    Primitive.io_write_nonblock(buf, exception)\n"
 "  end\n"
 "end\n"
-#line 1470 "miniprelude.c"
+#line 1701 "miniprelude.c"
 };
 
 static const char prelude_name5[] = "<internal:marshal>";
@@ -1514,7 +1745,7 @@ static const struct {
 "    alias restore load\n"
 "  end\n"
 "end\n"
-#line 1518 "miniprelude.c"
+#line 1749 "miniprelude.c"
 };
 
 static const char prelude_name6[] = "<internal:rjit>";
@@ -1566,7 +1797,7 @@ static const struct {
 "  require 'ruby_vm/rjit/hooks'\n"
 "  require 'ruby_vm/rjit/stats'\n"
 "end\n"
-#line 1570 "miniprelude.c"
+#line 1801 "miniprelude.c"
 };
 
 static const char prelude_name7[] = "<internal:rjit_c>";
@@ -1618,166 +1849,166 @@ static const struct {
     char L571[462]; /* 572..591 */
     char L591[508]; /* 592..612 */
     char L612[496]; /* 613..634 */
-    char L634[496]; /* 635..655 */
-    char L655[500]; /* 656..675 */
-    char L675[473]; /* 676..695 */
-    char L695[474]; /* 696..715 */
-    char L715[486]; /* 716..734 */
-    char L734[450]; /* 735..751 */
-    char L751[495]; /* 752..771 */
-    char L771[505]; /* 772..790 */
-    char L790[489]; /* 791..811 */
-    char L811[499]; /* 812..819 */
-    char L819[469]; /* 820..833 */
-    char L833[492]; /* 834..844 */
-    char L844[463]; /* 845..850 */
-    char L850[473]; /* 851..862 */
-    char L862[505]; /* 863..868 */
-    char L868[502]; /* 869..875 */
-    char L875[436]; /* 876..887 */
-    char L887[484]; /* 888..897 */
-    char L897[415]; /* 898..904 */
-    char L904[482]; /* 905..912 */
-    char L912[366]; /* 913..915 */
-    char L915[488]; /* 916..923 */
-    char L923[437]; /* 924..932 */
-    char L932[500]; /* 933..944 */
-    char L944[500]; /* 945..957 */
-    char L957[498]; /* 958..966 */
-    char L966[416]; /* 967..974 */
-    char L974[465]; /* 975..982 */
-    char L982[414]; /* 983..985 */
-    char L985[451]; /* 986..993 */
-    char L993[414]; /* 994..996 */
-    char L996[483]; /* 997..1005 */
-    char L1005[492]; /* 1006..1011 */
-    char L1011[486]; /* 1012..1022 */
-    char L1022[431]; /* 1023..1027 */
-    char L1027[490]; /* 1028..1036 */
-    char L1036[398]; /* 1037..1044 */
-    char L1044[489]; /* 1045..1055 */
-    char L1055[392]; /* 1056..1059 */
-    char L1059[508]; /* 1060..1063 */
-    char L1063[440]; /* 1064..1071 */
-    char L1071[458]; /* 1072..1075 */
-    char L1075[474]; /* 1076..1083 */
-    char L1083[432]; /* 1084..1086 */
-    char L1086[423]; /* 1087..1089 */
-    char L1089[474]; /* 1090..1092 */
-    char L1092[438]; /* 1093..1095 */
-    char L1095[438]; /* 1096..1098 */
-    char L1098[408]; /* 1099..1101 */
-    char L1101[435]; /* 1102..1105 */
-    char L1105[453]; /* 1106..1112 */
-    char L1112[496]; /* 1113..1120 */
-    char L1120[497]; /* 1121..1127 */
-    char L1127[439]; /* 1128..1135 */
-    char L1135[373]; /* 1136..1138 */
-    char L1138[420]; /* 1139..1141 */
-    char L1141[426]; /* 1142..1144 */
-    char L1144[498]; /* 1145..1148 */
-    char L1148[443]; /* 1149..1151 */
-    char L1151[490]; /* 1152..1155 */
-    char L1155[472]; /* 1156..1159 */
-    char L1159[382]; /* 1160..1162 */
-    char L1162[437]; /* 1163..1165 */
-    char L1165[427]; /* 1166..1168 */
-    char L1168[476]; /* 1169..1173 */
-    char L1173[446]; /* 1174..1177 */
-    char L1177[481]; /* 1178..1185 */
-    char L1185[452]; /* 1186..1189 */
-    char L1189[505]; /* 1190..1197 */
-    char L1197[487]; /* 1198..1201 */
-    char L1201[490]; /* 1202..1209 */
-    char L1209[446]; /* 1210..1214 */
-    char L1214[378]; /* 1215..1219 */
-    char L1219[421]; /* 1220..1224 */
-    char L1224[473]; /* 1225..1240 */
-    char L1240[484]; /* 1241..1249 */
-    char L1249[468]; /* 1250..1257 */
-    char L1257[491]; /* 1258..1264 */
-    char L1264[490]; /* 1265..1273 */
-    char L1273[472]; /* 1274..1282 */
-    char L1282[452]; /* 1283..1290 */
-    char L1290[494]; /* 1291..1294 */
-    char L1294[418]; /* 1295..1302 */
-    char L1302[429]; /* 1303..1310 */
-    char L1310[467]; /* 1311..1326 */
-    char L1326[508]; /* 1327..1331 */
-    char L1331[438]; /* 1332..1335 */
-    char L1335[445]; /* 1336..1343 */
-    char L1343[476]; /* 1344..1346 */
-    char L1346[358]; /* 1347..1348 */
+    char L634[500]; /* 635..655 */
+    char L655[498]; /* 656..675 */
+    char L675[478]; /* 676..695 */
+    char L695[470]; /* 696..715 */
+    char L715[504]; /* 716..735 */
+    char L735[500]; /* 736..754 */
+    char L754[493]; /* 755..774 */
+    char L774[457]; /* 775..791 */
+    char L791[443]; /* 792..813 */
+    char L813[452]; /* 814..820 */
+    char L820[504]; /* 821..828 */
+    char L828[503]; /* 829..846 */
+    char L846[429]; /* 847..852 */
+    char L852[498]; /* 853..863 */
+    char L863[494]; /* 864..870 */
+    char L870[372]; /* 871..877 */
+    char L877[476]; /* 878..888 */
+    char L888[480]; /* 889..895 */
+    char L895[360]; /* 896..906 */
+    char L906[415]; /* 907..913 */
+    char L913[471]; /* 914..917 */
+    char L917[475]; /* 918..925 */
+    char L925[485]; /* 926..934 */
+    char L934[491]; /* 935..943 */
+    char L943[485]; /* 944..956 */
+    char L956[489]; /* 957..968 */
+    char L968[467]; /* 969..976 */
+    char L976[427]; /* 977..984 */
+    char L984[365]; /* 985..987 */
+    char L987[500]; /* 988..995 */
+    char L995[365]; /* 996..998 */
+    char L998[472]; /* 999..1006 */
+    char L1006[412]; /* 1007..1010 */
+    char L1010[479]; /* 1011..1017 */
+    char L1017[462]; /* 1018..1028 */
+    char L1028[500]; /* 1029..1037 */
+    char L1037[431]; /* 1038..1045 */
+    char L1045[468]; /* 1046..1051 */
+    char L1051[469]; /* 1052..1061 */
+    char L1061[493]; /* 1062..1065 */
+    char L1065[447]; /* 1066..1073 */
+    char L1073[458]; /* 1074..1077 */
+    char L1077[474]; /* 1078..1085 */
+    char L1085[432]; /* 1086..1088 */
+    char L1088[423]; /* 1089..1091 */
+    char L1091[474]; /* 1092..1094 */
+    char L1094[438]; /* 1095..1097 */
+    char L1097[438]; /* 1098..1100 */
+    char L1100[408]; /* 1101..1103 */
+    char L1103[435]; /* 1104..1107 */
+    char L1107[453]; /* 1108..1114 */
+    char L1114[496]; /* 1115..1122 */
+    char L1122[497]; /* 1123..1129 */
+    char L1129[439]; /* 1130..1137 */
+    char L1137[373]; /* 1138..1140 */
+    char L1140[420]; /* 1141..1143 */
+    char L1143[426]; /* 1144..1146 */
+    char L1146[498]; /* 1147..1150 */
+    char L1150[443]; /* 1151..1153 */
+    char L1153[490]; /* 1154..1157 */
+    char L1157[472]; /* 1158..1161 */
+    char L1161[382]; /* 1162..1164 */
+    char L1164[437]; /* 1165..1167 */
+    char L1167[427]; /* 1168..1170 */
+    char L1170[476]; /* 1171..1175 */
+    char L1175[446]; /* 1176..1179 */
+    char L1179[491]; /* 1180..1187 */
+    char L1187[452]; /* 1188..1191 */
+    char L1191[505]; /* 1192..1199 */
+    char L1199[487]; /* 1200..1203 */
+    char L1203[490]; /* 1204..1211 */
+    char L1211[446]; /* 1212..1216 */
+    char L1216[378]; /* 1217..1221 */
+    char L1221[421]; /* 1222..1226 */
+    char L1226[473]; /* 1227..1242 */
+    char L1242[484]; /* 1243..1251 */
+    char L1251[468]; /* 1252..1259 */
+    char L1259[491]; /* 1260..1266 */
+    char L1266[490]; /* 1267..1275 */
+    char L1275[472]; /* 1276..1284 */
+    char L1284[452]; /* 1285..1292 */
+    char L1292[494]; /* 1293..1296 */
+    char L1296[418]; /* 1297..1304 */
+    char L1304[429]; /* 1305..1312 */
+    char L1312[467]; /* 1313..1328 */
+    char L1328[508]; /* 1329..1333 */
+    char L1333[438]; /* 1334..1337 */
+    char L1337[445]; /* 1338..1345 */
+    char L1345[476]; /* 1346..1348 */
     char L1348[358]; /* 1349..1350 */
-    char L1350[350]; /* 1351..1352 */
-    char L1352[484]; /* 1353..1355 */
-    char L1355[466]; /* 1356..1358 */
-    char L1358[484]; /* 1359..1361 */
-    char L1361[434]; /* 1362..1364 */
-    char L1364[432]; /* 1365..1367 */
-    char L1367[450]; /* 1368..1370 */
-    char L1370[502]; /* 1371..1373 */
-    char L1373[462]; /* 1374..1376 */
-    char L1376[470]; /* 1377..1379 */
-    char L1379[486]; /* 1380..1382 */
-    char L1382[332]; /* 1383..1384 */
-    char L1384[374]; /* 1385..1386 */
-    char L1386[492]; /* 1387..1389 */
-    char L1389[488]; /* 1390..1392 */
-    char L1392[500]; /* 1393..1395 */
-    char L1395[352]; /* 1396..1397 */
-    char L1397[340]; /* 1398..1399 */
-    char L1399[374]; /* 1400..1401 */
-    char L1401[504]; /* 1402..1404 */
-    char L1404[498]; /* 1405..1407 */
-    char L1407[484]; /* 1408..1410 */
-    char L1410[470]; /* 1411..1413 */
-    char L1413[366]; /* 1414..1415 */
-    char L1415[386]; /* 1416..1417 */
-    char L1417[348]; /* 1418..1419 */
-    char L1419[344]; /* 1420..1421 */
-    char L1421[358]; /* 1422..1423 */
-    char L1423[346]; /* 1424..1425 */
-    char L1425[494]; /* 1426..1428 */
-    char L1428[468]; /* 1429..1431 */
-    char L1431[504]; /* 1432..1434 */
-    char L1434[342]; /* 1435..1436 */
-    char L1436[352]; /* 1437..1438 */
-    char L1438[364]; /* 1439..1440 */
-    char L1440[478]; /* 1441..1443 */
-    char L1443[488]; /* 1444..1446 */
-    char L1446[476]; /* 1447..1449 */
-    char L1449[486]; /* 1450..1452 */
-    char L1452[464]; /* 1453..1455 */
-    char L1455[476]; /* 1456..1458 */
-    char L1458[336]; /* 1459..1460 */
-    char L1460[364]; /* 1461..1462 */
-    char L1462[506]; /* 1463..1465 */
-    char L1465[445]; /* 1466..1477 */
-    char L1477[493]; /* 1478..1481 */
-    char L1481[444]; /* 1482..1493 */
-    char L1493[484]; /* 1494..1497 */
-    char L1497[477]; /* 1498..1501 */
-    char L1501[491]; /* 1502..1505 */
-    char L1505[431]; /* 1506..1508 */
-    char L1508[388]; /* 1509..1511 */
-    char L1511[375]; /* 1512..1514 */
-    char L1514[455]; /* 1515..1519 */
-    char L1519[486]; /* 1520..1524 */
-    char L1524[437]; /* 1525..1529 */
-    char L1529[479]; /* 1530..1533 */
-    char L1533[493]; /* 1534..1541 */
-    char L1541[504]; /* 1542..1561 */
-    char L1561[504]; /* 1562..1590 */
-    char L1590[502]; /* 1591..1621 */
-    char L1621[490]; /* 1622..1652 */
-    char L1652[472]; /* 1653..1677 */
-    char L1677[218]; /* 1678..1691 */
+    char L1350[358]; /* 1351..1352 */
+    char L1352[350]; /* 1353..1354 */
+    char L1354[484]; /* 1355..1357 */
+    char L1357[466]; /* 1358..1360 */
+    char L1360[484]; /* 1361..1363 */
+    char L1363[434]; /* 1364..1366 */
+    char L1366[432]; /* 1367..1369 */
+    char L1369[450]; /* 1370..1372 */
+    char L1372[502]; /* 1373..1375 */
+    char L1375[462]; /* 1376..1378 */
+    char L1378[470]; /* 1379..1381 */
+    char L1381[486]; /* 1382..1384 */
+    char L1384[332]; /* 1385..1386 */
+    char L1386[374]; /* 1387..1388 */
+    char L1388[492]; /* 1389..1391 */
+    char L1391[488]; /* 1392..1394 */
+    char L1394[500]; /* 1395..1397 */
+    char L1397[352]; /* 1398..1399 */
+    char L1399[340]; /* 1400..1401 */
+    char L1401[374]; /* 1402..1403 */
+    char L1403[504]; /* 1404..1406 */
+    char L1406[498]; /* 1407..1409 */
+    char L1409[484]; /* 1410..1412 */
+    char L1412[470]; /* 1413..1415 */
+    char L1415[366]; /* 1416..1417 */
+    char L1417[386]; /* 1418..1419 */
+    char L1419[348]; /* 1420..1421 */
+    char L1421[344]; /* 1422..1423 */
+    char L1423[358]; /* 1424..1425 */
+    char L1425[346]; /* 1426..1427 */
+    char L1427[494]; /* 1428..1430 */
+    char L1430[468]; /* 1431..1433 */
+    char L1433[504]; /* 1434..1436 */
+    char L1436[342]; /* 1437..1438 */
+    char L1438[352]; /* 1439..1440 */
+    char L1440[364]; /* 1441..1442 */
+    char L1442[478]; /* 1443..1445 */
+    char L1445[488]; /* 1446..1448 */
+    char L1448[476]; /* 1449..1451 */
+    char L1451[486]; /* 1452..1454 */
+    char L1454[464]; /* 1455..1457 */
+    char L1457[476]; /* 1458..1460 */
+    char L1460[336]; /* 1461..1462 */
+    char L1462[364]; /* 1463..1464 */
+    char L1464[506]; /* 1465..1467 */
+    char L1467[445]; /* 1468..1479 */
+    char L1479[493]; /* 1480..1483 */
+    char L1483[444]; /* 1484..1495 */
+    char L1495[484]; /* 1496..1499 */
+    char L1499[477]; /* 1500..1503 */
+    char L1503[491]; /* 1504..1507 */
+    char L1507[431]; /* 1508..1510 */
+    char L1510[388]; /* 1511..1513 */
+    char L1513[375]; /* 1514..1516 */
+    char L1516[455]; /* 1517..1521 */
+    char L1521[486]; /* 1522..1526 */
+    char L1526[437]; /* 1527..1531 */
+    char L1531[479]; /* 1532..1535 */
+    char L1535[493]; /* 1536..1543 */
+    char L1543[504]; /* 1544..1563 */
+    char L1563[504]; /* 1564..1592 */
+    char L1592[502]; /* 1593..1623 */
+    char L1623[490]; /* 1624..1654 */
+    char L1654[472]; /* 1655..1679 */
+    char L1679[218]; /* 1680..1693 */
 } prelude_code7 = {
 #line 1 "rjit_c.rb"
 ""/* frozen_string_literal: true */
 ""/* Part of this file is generated by tool/rjit/bindgen.rb. */
-""/* Run `make rjit-bindgen` to update code between "RJIT bindgen begin" and "RJIT bindgen end". */
+""/* Run `make rjit-bindgen` to update code between \"RJIT bindgen begin\" and \"RJIT bindgen end\". */
 "module RubyVM::RJIT\n"/* :nodoc: all */
 "\n"/*  */
 "\n"/* Main: Used by RJIT */
@@ -2485,6 +2716,10 @@ static const struct {
 "    Primitive.cexpr! %q{ SIZET2NUM((size_t)rb_hash_new_with_size) }\n"
 "  end\n"
 "\n"
+"  def C.rb_hash_resurrect\n"
+"    Primitive.cexpr! %q{ SIZET2NUM((size_t)rb_hash_resurrect) }\n"
+"  end\n"
+"\n"
 "  def C.rb_ivar_defined\n"
 "    Primitive.cexpr! %q{ SIZET2NUM((size_t)rb_ivar_defined) }\n"
 "  end\n"
@@ -2497,12 +2732,12 @@ static const struct {
 "    Primitive.cexpr! %q{ SIZET2NUM((size_t)rb_obj_as_string_result) }\n"
 "  end\n"
 "\n"
+,
+#line 635 "rjit_c.rb"
 "  def C.rb_obj_is_kind_of\n"
 "    Primitive.cexpr! %q{ SIZET2NUM((size_t)rb_obj_is_kind_of) }\n"
 "  end\n"
 "\n"
-,
-#line 635 "rjit_c.rb"
 "  def C.rb_range_new\n"
 "    Primitive.cexpr! %q{ SIZET2NUM((size_t)rb_range_new) }\n"
 "  end\n"
@@ -2520,12 +2755,12 @@ static const struct {
 "  end\n"
 "\n"
 "  def C.rb_reg_match_pre\n"
+,
+#line 656 "rjit_c.rb"
 "    Primitive.cexpr! %q{ SIZET2NUM((size_t)rb_reg_match_pre) }\n"
 "  end\n"
 "\n"
 "  def C.rb_reg_new_ary\n"
-,
-#line 656 "rjit_c.rb"
 "    Primitive.cexpr! %q{ SIZET2NUM((size_t)rb_reg_new_ary) }\n"
 "  end\n"
 "\n"
@@ -2542,12 +2777,12 @@ static const struct {
 "  end\n"
 "\n"
 "  def C.rb_str_buf_append\n"
+,
+#line 676 "rjit_c.rb"
 "    Primitive.cexpr! %q{ SIZET2NUM((size_t)rb_str_buf_append) }\n"
 "  end\n"
 "\n"
 "  def C.rb_str_bytesize\n"
-,
-#line 676 "rjit_c.rb"
 "    Primitive.cexpr! %q{ SIZET2NUM((size_t)rb_str_bytesize) }\n"
 "  end\n"
 "\n"
@@ -2564,12 +2799,12 @@ static const struct {
 "  end\n"
 "\n"
 "  def C.rb_str_getbyte\n"
+,
+#line 696 "rjit_c.rb"
 "    Primitive.cexpr! %q{ SIZET2NUM((size_t)rb_str_getbyte) }\n"
 "  end\n"
 "\n"
 "  def C.rb_str_intern\n"
-,
-#line 696 "rjit_c.rb"
 "    Primitive.cexpr! %q{ SIZET2NUM((size_t)rb_str_intern) }\n"
 "  end\n"
 "\n"
@@ -2586,12 +2821,12 @@ static const struct {
 "  end\n"
 "\n"
 "  def C.rb_vm_defined\n"
+,
+#line 716 "rjit_c.rb"
 "    Primitive.cexpr! %q{ SIZET2NUM((size_t)rb_vm_defined) }\n"
 "  end\n"
 "\n"
 "  def C.rb_vm_get_ev_const\n"
-,
-#line 716 "rjit_c.rb"
 "    Primitive.cexpr! %q{ SIZET2NUM((size_t)rb_vm_get_ev_const) }\n"
 "  end\n"
 "\n"
@@ -2608,11 +2843,11 @@ static const struct {
 "  end\n"
 "\n"
 "  def C.rb_vm_opt_newarray_max\n"
+,
+#line 736 "rjit_c.rb"
 "    Primitive.cexpr! %q{ SIZET2NUM((size_t)rb_vm_opt_newarray_max) }\n"
 "  end\n"
 "\n"
-,
-#line 735 "rjit_c.rb"
 "  def C.rb_vm_opt_newarray_min\n"
 "    Primitive.cexpr! %q{ SIZET2NUM((size_t)rb_vm_opt_newarray_min) }\n"
 "  end\n"
@@ -2629,9 +2864,9 @@ static const struct {
 "    Primitive.cexpr! %q{ SIZET2NUM((size_t)rb_vm_setinstancevariable) }\n"
 "  end\n"
 "\n"
-"  def C.rb_vm_splat_array\n"
 ,
-#line 752 "rjit_c.rb"
+#line 755 "rjit_c.rb"
+"  def C.rb_vm_splat_array\n"
 "    Primitive.cexpr! %q{ SIZET2NUM((size_t)rb_vm_splat_array) }\n"
 "  end\n"
 "\n"
@@ -2651,9 +2886,9 @@ static const struct {
 "    Primitive.cexpr! %q{ SIZET2NUM((size_t)rjit_full_cfunc_return) }\n"
 "  end\n"
 "\n"
-"  def C.rjit_optimized_call\n"
 ,
-#line 772 "rjit_c.rb"
+#line 775 "rjit_c.rb"
+"  def C.rjit_optimized_call\n"
 "    Primitive.cexpr! %q{ SIZET2NUM((size_t)rjit_optimized_call) }\n"
 "  end\n"
 "\n"
@@ -2670,11 +2905,11 @@ static const struct {
 "  end\n"
 "\n"
 "  def C.rjit_str_simple_append\n"
+,
+#line 792 "rjit_c.rb"
 "    Primitive.cexpr! %q{ SIZET2NUM((size_t)rjit_str_simple_append) }\n"
 "  end\n"
 "\n"
-,
-#line 791 "rjit_c.rb"
 "  def C.CALL_DATA\n"
 "    @CALL_DATA ||= self.rb_call_data\n"
 "  end\n"
@@ -2694,25 +2929,27 @@ static const struct {
 "  def C.RArray\n"
 "    @RArray ||= CType::Struct.new(\n"
 "      \"RArray\", Primitive.cexpr!(\"SIZEOF(struct RArray)\"),\n"
+,
+#line 814 "rjit_c.rb"
 "      basic: [self.RBasic, Primitive.cexpr!(\"OFFSETOF((*((struct RArray *)NULL)), basic)\")],\n"
 "      as: [CType::Union.new(\n"
-,
-#line 812 "rjit_c.rb"
 "        \"\", Primitive.cexpr!(\"SIZEOF(((struct RArray *)NULL)->as)\"),\n"
 "        heap: CType::Struct.new(\n"
 "          \"\", Primitive.cexpr!(\"SIZEOF(((struct RArray *)NULL)->as.heap)\"),\n"
 "          len: [CType::Immediate.parse(\"long\"), Primitive.cexpr!(\"OFFSETOF(((struct RArray *)NULL)->as.heap, len)\")],\n"
 "          aux: [CType::Union.new(\n"
+,
+#line 821 "rjit_c.rb"
 "            \"\", Primitive.cexpr!(\"SIZEOF(((struct RArray *)NULL)->as.heap.aux)\"),\n"
 "            capa: CType::Immediate.parse(\"long\"),\n"
 "            shared_root: self.VALUE,\n"
-,
-#line 820 "rjit_c.rb"
 "          ), Primitive.cexpr!(\"OFFSETOF(((struct RArray *)NULL)->as.heap, aux)\")],\n"
 "          ptr: [CType::Pointer.new { self.VALUE }, Primitive.cexpr!(\"OFFSETOF(((struct RArray *)NULL)->as.heap, ptr)\")],\n"
 "        ),\n"
 "        ary: CType::Pointer.new { self.VALUE },\n"
 "      ), Primitive.cexpr!(\"OFFSETOF((*((struct RArray *)NULL)), as)\")],\n"
+,
+#line 829 "rjit_c.rb"
 "    )\n"
 "  end\n"
 "\n"
@@ -2722,8 +2959,6 @@ static const struct {
 "\n"
 "  def C.RBasic\n"
 "    @RBasic ||= CType::Struct.new(\n"
-,
-#line 834 "rjit_c.rb"
 "      \"RBasic\", Primitive.cexpr!(\"SIZEOF(struct RBasic)\"),\n"
 "      flags: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct RBasic *)NULL)), flags)\")],\n"
 "      klass: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct RBasic *)NULL)), klass)\")],\n"
@@ -2733,18 +2968,18 @@ static const struct {
 "  def C.RObject\n"
 "    @RObject ||= CType::Struct.new(\n"
 "      \"RObject\", Primitive.cexpr!(\"SIZEOF(struct RObject)\"),\n"
+,
+#line 847 "rjit_c.rb"
 "      basic: [self.RBasic, Primitive.cexpr!(\"OFFSETOF((*((struct RObject *)NULL)), basic)\")],\n"
 "      as: [CType::Union.new(\n"
-,
-#line 845 "rjit_c.rb"
 "        \"\", Primitive.cexpr!(\"SIZEOF(((struct RObject *)NULL)->as)\"),\n"
 "        heap: CType::Struct.new(\n"
 "          \"\", Primitive.cexpr!(\"SIZEOF(((struct RObject *)NULL)->as.heap)\"),\n"
 "          ivptr: [CType::Pointer.new { self.VALUE }, Primitive.cexpr!(\"OFFSETOF(((struct RObject *)NULL)->as.heap, ivptr)\")],\n"
+,
+#line 853 "rjit_c.rb"
 "          iv_index_tbl: [CType::Pointer.new { self.rb_id_table }, Primitive.cexpr!(\"OFFSETOF(((struct RObject *)NULL)->as.heap, iv_index_tbl)\")],\n"
 "        ),\n"
-,
-#line 851 "rjit_c.rb"
 "        ary: CType::Pointer.new { self.VALUE },\n"
 "      ), Primitive.cexpr!(\"OFFSETOF((*((struct RObject *)NULL)), as)\")],\n"
 "    )\n"
@@ -2754,28 +2989,27 @@ static const struct {
 "    @RString ||= CType::Struct.new(\n"
 "      \"RString\", Primitive.cexpr!(\"SIZEOF(struct RString)\"),\n"
 "      basic: [self.RBasic, Primitive.cexpr!(\"OFFSETOF((*((struct RString *)NULL)), basic)\")],\n"
+,
+#line 864 "rjit_c.rb"
+"      len: [CType::Immediate.parse(\"long\"), Primitive.cexpr!(\"OFFSETOF((*((struct RString *)NULL)), len)\")],\n"
 "      as: [CType::Union.new(\n"
 "        \"\", Primitive.cexpr!(\"SIZEOF(((struct RString *)NULL)->as)\"),\n"
 "        heap: CType::Struct.new(\n"
-,
-#line 863 "rjit_c.rb"
 "          \"\", Primitive.cexpr!(\"SIZEOF(((struct RString *)NULL)->as.heap)\"),\n"
-"          len: [CType::Immediate.parse(\"long\"), Primitive.cexpr!(\"OFFSETOF(((struct RString *)NULL)->as.heap, len)\")],\n"
 "          ptr: [CType::Pointer.new { CType::Immediate.parse(\"char\") }, Primitive.cexpr!(\"OFFSETOF(((struct RString *)NULL)->as.heap, ptr)\")],\n"
 "          aux: [CType::Union.new(\n"
+,
+#line 871 "rjit_c.rb"
 "            \"\", Primitive.cexpr!(\"SIZEOF(((struct RString *)NULL)->as.heap.aux)\"),\n"
 "            capa: CType::Immediate.parse(\"long\"),\n"
-,
-#line 869 "rjit_c.rb"
 "            shared: self.VALUE,\n"
 "          ), Primitive.cexpr!(\"OFFSETOF(((struct RString *)NULL)->as.heap, aux)\")],\n"
 "        ),\n"
 "        embed: CType::Struct.new(\n"
 "          \"\", Primitive.cexpr!(\"SIZEOF(((struct RString *)NULL)->as.embed)\"),\n"
-"          len: [CType::Immediate.parse(\"long\"), Primitive.cexpr!(\"OFFSETOF(((struct RString *)NULL)->as.embed, len)\")],\n"
-"          ary: [CType::Pointer.new { CType::Immediate.parse(\"char\") }, Primitive.cexpr!(\"OFFSETOF(((struct RString *)NULL)->as.embed, ary)\")],\n"
 ,
-#line 876 "rjit_c.rb"
+#line 878 "rjit_c.rb"
+"          ary: [CType::Pointer.new { CType::Immediate.parse(\"char\") }, Primitive.cexpr!(\"OFFSETOF(((struct RString *)NULL)->as.embed, ary)\")],\n"
 "        ),\n"
 "      ), Primitive.cexpr!(\"OFFSETOF((*((struct RString *)NULL)), as)\")],\n"
 "    )\n"
@@ -2786,46 +3020,46 @@ static const struct {
 "      \"RStruct\", Primitive.cexpr!(\"SIZEOF(struct RStruct)\"),\n"
 "      basic: [self.RBasic, Primitive.cexpr!(\"OFFSETOF((*((struct RStruct *)NULL)), basic)\")],\n"
 "      as: [CType::Union.new(\n"
+,
+#line 889 "rjit_c.rb"
 "        \"\", Primitive.cexpr!(\"SIZEOF(((struct RStruct *)NULL)->as)\"),\n"
 "        heap: CType::Struct.new(\n"
-,
-#line 888 "rjit_c.rb"
 "          \"\", Primitive.cexpr!(\"SIZEOF(((struct RStruct *)NULL)->as.heap)\"),\n"
 "          len: [CType::Immediate.parse(\"long\"), Primitive.cexpr!(\"OFFSETOF(((struct RStruct *)NULL)->as.heap, len)\")],\n"
 "          ptr: [CType::Pointer.new { self.VALUE }, Primitive.cexpr!(\"OFFSETOF(((struct RStruct *)NULL)->as.heap, ptr)\")],\n"
 "        ),\n"
 "        ary: CType::Pointer.new { self.VALUE },\n"
+,
+#line 896 "rjit_c.rb"
 "      ), Primitive.cexpr!(\"OFFSETOF((*((struct RStruct *)NULL)), as)\")],\n"
 "    )\n"
 "  end\n"
 "\n"
 "  def C.attr_index_t\n"
-,
-#line 898 "rjit_c.rb"
 "    @attr_index_t ||= CType::Immediate.parse(\"uint32_t\")\n"
 "  end\n"
 "\n"
 "  def C.iseq_inline_constant_cache\n"
 "    @iseq_inline_constant_cache ||= CType::Struct.new(\n"
 "      \"iseq_inline_constant_cache\", Primitive.cexpr!(\"SIZEOF(struct iseq_inline_constant_cache)\"),\n"
-"      entry: [CType::Pointer.new { self.iseq_inline_constant_cache_entry }, Primitive.cexpr!(\"OFFSETOF((*((struct iseq_inline_constant_cache *)NULL)), entry)\")],\n"
 ,
-#line 905 "rjit_c.rb"
+#line 907 "rjit_c.rb"
+"      entry: [CType::Pointer.new { self.iseq_inline_constant_cache_entry }, Primitive.cexpr!(\"OFFSETOF((*((struct iseq_inline_constant_cache *)NULL)), entry)\")],\n"
 "      segments: [CType::Pointer.new { self.ID }, Primitive.cexpr!(\"OFFSETOF((*((struct iseq_inline_constant_cache *)NULL)), segments)\")],\n"
 "    )\n"
 "  end\n"
 "\n"
 "  def C.iseq_inline_constant_cache_entry\n"
 "    @iseq_inline_constant_cache_entry ||= CType::Struct.new(\n"
+,
+#line 914 "rjit_c.rb"
 "      \"iseq_inline_constant_cache_entry\", Primitive.cexpr!(\"SIZEOF(struct iseq_inline_constant_cache_entry)\"),\n"
 "      flags: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct iseq_inline_constant_cache_entry *)NULL)), flags)\")],\n"
-,
-#line 913 "rjit_c.rb"
 "      value: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct iseq_inline_constant_cache_entry *)NULL)), value)\")],\n"
 "      _unused1: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct iseq_inline_constant_cache_entry *)NULL)), _unused1)\")],\n"
-"      _unused2: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct iseq_inline_constant_cache_entry *)NULL)), _unused2)\")],\n"
 ,
-#line 916 "rjit_c.rb"
+#line 918 "rjit_c.rb"
+"      _unused2: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct iseq_inline_constant_cache_entry *)NULL)), _unused2)\")],\n"
 "      ic_cref: [CType::Pointer.new { self.rb_cref_t }, Primitive.cexpr!(\"OFFSETOF((*((struct iseq_inline_constant_cache_entry *)NULL)), ic_cref)\")],\n"
 "    )\n"
 "  end\n"
@@ -2833,9 +3067,9 @@ static const struct {
 "  def C.iseq_inline_iv_cache_entry\n"
 "    @iseq_inline_iv_cache_entry ||= CType::Struct.new(\n"
 "      \"iseq_inline_iv_cache_entry\", Primitive.cexpr!(\"SIZEOF(struct iseq_inline_iv_cache_entry)\"),\n"
-"      value: [CType::Immediate.parse(\"uintptr_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct iseq_inline_iv_cache_entry *)NULL)), value)\")],\n"
 ,
-#line 924 "rjit_c.rb"
+#line 926 "rjit_c.rb"
+"      value: [CType::Immediate.parse(\"uintptr_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct iseq_inline_iv_cache_entry *)NULL)), value)\")],\n"
 "      iv_set_name: [self.ID, Primitive.cexpr!(\"OFFSETOF((*((struct iseq_inline_iv_cache_entry *)NULL)), iv_set_name)\")],\n"
 "    )\n"
 "  end\n"
@@ -2844,9 +3078,9 @@ static const struct {
 "    @iseq_inline_storage_entry ||= CType::Union.new(\n"
 "      \"iseq_inline_storage_entry\", Primitive.cexpr!(\"SIZEOF(union iseq_inline_storage_entry)\"),\n"
 "      once: CType::Struct.new(\n"
-"        \"\", Primitive.cexpr!(\"SIZEOF(((union iseq_inline_storage_entry *)NULL)->once)\"),\n"
 ,
-#line 933 "rjit_c.rb"
+#line 935 "rjit_c.rb"
+"        \"\", Primitive.cexpr!(\"SIZEOF(((union iseq_inline_storage_entry *)NULL)->once)\"),\n"
 "        running_thread: [CType::Pointer.new { self.rb_thread_struct }, Primitive.cexpr!(\"OFFSETOF(((union iseq_inline_storage_entry *)NULL)->once, running_thread)\")],\n"
 "        value: [self.VALUE, Primitive.cexpr!(\"OFFSETOF(((union iseq_inline_storage_entry *)NULL)->once, value)\")],\n"
 "      ),\n"
@@ -2855,12 +3089,12 @@ static const struct {
 "    )\n"
 "  end\n"
 "\n"
+,
+#line 944 "rjit_c.rb"
 "  def C.method_optimized_type\n"
 "    @method_optimized_type ||= CType::Immediate.parse(\"int\")\n"
 "  end\n"
 "\n"
-,
-#line 945 "rjit_c.rb"
 "  def C.rb_block\n"
 "    @rb_block ||= CType::Struct.new(\n"
 "      \"rb_block\", Primitive.cexpr!(\"SIZEOF(struct rb_block)\"),\n"
@@ -2870,12 +3104,12 @@ static const struct {
 "        symbol: self.VALUE,\n"
 "        proc: self.VALUE,\n"
 "      ), Primitive.cexpr!(\"OFFSETOF((*((struct rb_block *)NULL)), as)\")],\n"
+,
+#line 957 "rjit_c.rb"
 "      type: [self.rb_block_type, Primitive.cexpr!(\"OFFSETOF((*((struct rb_block *)NULL)), type)\")],\n"
 "    )\n"
 "  end\n"
 "\n"
-,
-#line 958 "rjit_c.rb"
 "  def C.rb_block_type\n"
 "    @rb_block_type ||= CType::Immediate.parse(\"int\")\n"
 "  end\n"
@@ -2884,9 +3118,9 @@ static const struct {
 "    @rb_builtin_function ||= CType::Struct.new(\n"
 "      \"rb_builtin_function\", Primitive.cexpr!(\"SIZEOF(struct rb_builtin_function)\"),\n"
 "      func_ptr: [CType::Immediate.parse(\"void *\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_builtin_function *)NULL)), func_ptr)\")],\n"
-"      argc: [CType::Immediate.parse(\"int\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_builtin_function *)NULL)), argc)\")],\n"
 ,
-#line 967 "rjit_c.rb"
+#line 969 "rjit_c.rb"
+"      argc: [CType::Immediate.parse(\"int\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_builtin_function *)NULL)), argc)\")],\n"
 "      index: [CType::Immediate.parse(\"int\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_builtin_function *)NULL)), index)\")],\n"
 "      name: [CType::Pointer.new { CType::Immediate.parse(\"char\") }, Primitive.cexpr!(\"OFFSETOF((*((struct rb_builtin_function *)NULL)), name)\")],\n"
 "    )\n"
@@ -2894,9 +3128,9 @@ static const struct {
 "\n"
 "  def C.rb_call_data\n"
 "    @rb_call_data ||= CType::Struct.new(\n"
-"      \"rb_call_data\", Primitive.cexpr!(\"SIZEOF(struct rb_call_data)\"),\n"
 ,
-#line 975 "rjit_c.rb"
+#line 977 "rjit_c.rb"
+"      \"rb_call_data\", Primitive.cexpr!(\"SIZEOF(struct rb_call_data)\"),\n"
 "      ci: [CType::Pointer.new { self.rb_callinfo }, Primitive.cexpr!(\"OFFSETOF((*((struct rb_call_data *)NULL)), ci)\")],\n"
 "      cc: [CType::Pointer.new { self.rb_callcache }, Primitive.cexpr!(\"OFFSETOF((*((struct rb_call_data *)NULL)), cc)\")],\n"
 "    )\n"
@@ -2904,14 +3138,14 @@ static const struct {
 "\n"
 "  def C.rb_callable_method_entry_struct\n"
 "    @rb_callable_method_entry_struct ||= CType::Struct.new(\n"
-"      \"rb_callable_method_entry_struct\", Primitive.cexpr!(\"SIZEOF(struct rb_callable_method_entry_struct)\"),\n"
 ,
-#line 983 "rjit_c.rb"
+#line 985 "rjit_c.rb"
+"      \"rb_callable_method_entry_struct\", Primitive.cexpr!(\"SIZEOF(struct rb_callable_method_entry_struct)\"),\n"
 "      flags: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct rb_callable_method_entry_struct *)NULL)), flags)\")],\n"
 "      defined_class: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct rb_callable_method_entry_struct *)NULL)), defined_class)\"), true],\n"
-"      def: [CType::Pointer.new { self.rb_method_definition_struct }, Primitive.cexpr!(\"OFFSETOF((*((struct rb_callable_method_entry_struct *)NULL)), def)\")],\n"
 ,
-#line 986 "rjit_c.rb"
+#line 988 "rjit_c.rb"
+"      def: [CType::Pointer.new { self.rb_method_definition_struct }, Primitive.cexpr!(\"OFFSETOF((*((struct rb_callable_method_entry_struct *)NULL)), def)\")],\n"
 "      called_id: [self.ID, Primitive.cexpr!(\"OFFSETOF((*((struct rb_callable_method_entry_struct *)NULL)), called_id)\")],\n"
 "      owner: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct rb_callable_method_entry_struct *)NULL)), owner)\")],\n"
 "    )\n"
@@ -2919,14 +3153,14 @@ static const struct {
 "\n"
 "  def C.rb_callable_method_entry_t\n"
 "    @rb_callable_method_entry_t ||= CType::Struct.new(\n"
-"      \"rb_callable_method_entry_struct\", Primitive.cexpr!(\"SIZEOF(struct rb_callable_method_entry_struct)\"),\n"
 ,
-#line 994 "rjit_c.rb"
+#line 996 "rjit_c.rb"
+"      \"rb_callable_method_entry_struct\", Primitive.cexpr!(\"SIZEOF(struct rb_callable_method_entry_struct)\"),\n"
 "      flags: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct rb_callable_method_entry_struct *)NULL)), flags)\")],\n"
 "      defined_class: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct rb_callable_method_entry_struct *)NULL)), defined_class)\"), true],\n"
-"      def: [CType::Pointer.new { self.rb_method_definition_struct }, Primitive.cexpr!(\"OFFSETOF((*((struct rb_callable_method_entry_struct *)NULL)), def)\")],\n"
 ,
-#line 997 "rjit_c.rb"
+#line 999 "rjit_c.rb"
+"      def: [CType::Pointer.new { self.rb_method_definition_struct }, Primitive.cexpr!(\"OFFSETOF((*((struct rb_callable_method_entry_struct *)NULL)), def)\")],\n"
 "      called_id: [self.ID, Primitive.cexpr!(\"OFFSETOF((*((struct rb_callable_method_entry_struct *)NULL)), called_id)\")],\n"
 "      owner: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct rb_callable_method_entry_struct *)NULL)), owner)\")],\n"
 "    )\n"
@@ -2934,21 +3168,23 @@ static const struct {
 "\n"
 "  def C.rb_callcache\n"
 "    @rb_callcache ||= CType::Struct.new(\n"
+,
+#line 1007 "rjit_c.rb"
 "      \"rb_callcache\", Primitive.cexpr!(\"SIZEOF(struct rb_callcache)\"),\n"
 "      flags: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct rb_callcache *)NULL)), flags)\")],\n"
-,
-#line 1006 "rjit_c.rb"
 "      klass: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct rb_callcache *)NULL)), klass)\")],\n"
 "      cme_: [CType::Pointer.new { self.rb_callable_method_entry_struct }, Primitive.cexpr!(\"OFFSETOF((*((struct rb_callcache *)NULL)), cme_)\")],\n"
+,
+#line 1011 "rjit_c.rb"
 "      call_: [self.vm_call_handler, Primitive.cexpr!(\"OFFSETOF((*((struct rb_callcache *)NULL)), call_)\")],\n"
 "      aux_: [CType::Union.new(\n"
 "        \"\", Primitive.cexpr!(\"SIZEOF(((struct rb_callcache *)NULL)->aux_)\"),\n"
 "        attr: CType::Struct.new(\n"
-,
-#line 1012 "rjit_c.rb"
 "          \"\", Primitive.cexpr!(\"SIZEOF(((struct rb_callcache *)NULL)->aux_.attr)\"),\n"
 "          value: [CType::Immediate.parse(\"uintptr_t\"), Primitive.cexpr!(\"OFFSETOF(((struct rb_callcache *)NULL)->aux_.attr, value)\")],\n"
 "        ),\n"
+,
+#line 1018 "rjit_c.rb"
 "        method_missing_reason: self.method_missing_reason,\n"
 "        v: self.VALUE,\n"
 "        bf: CType::Pointer.new { self.rb_builtin_function },\n"
@@ -2957,15 +3193,13 @@ static const struct {
 "  end\n"
 "\n"
 "  def C.rb_callinfo\n"
-,
-#line 1023 "rjit_c.rb"
 "    @rb_callinfo ||= CType::Struct.new(\n"
 "      \"rb_callinfo\", Primitive.cexpr!(\"SIZEOF(struct rb_callinfo)\"),\n"
 "      flags: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct rb_callinfo *)NULL)), flags)\")],\n"
+,
+#line 1029 "rjit_c.rb"
 "      kwarg: [CType::Pointer.new { self.rb_callinfo_kwarg }, Primitive.cexpr!(\"OFFSETOF((*((struct rb_callinfo *)NULL)), kwarg)\")],\n"
 "      mid: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct rb_callinfo *)NULL)), mid)\")],\n"
-,
-#line 1028 "rjit_c.rb"
 "      flag: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct rb_callinfo *)NULL)), flag)\")],\n"
 "      argc: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct rb_callinfo *)NULL)), argc)\")],\n"
 "    )\n"
@@ -2973,24 +3207,26 @@ static const struct {
 "\n"
 "  def C.rb_callinfo_kwarg\n"
 "    @rb_callinfo_kwarg ||= CType::Struct.new(\n"
+,
+#line 1038 "rjit_c.rb"
 "      \"rb_callinfo_kwarg\", Primitive.cexpr!(\"SIZEOF(struct rb_callinfo_kwarg)\"),\n"
 "      keyword_len: [CType::Immediate.parse(\"int\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_callinfo_kwarg *)NULL)), keyword_len)\")],\n"
-,
-#line 1037 "rjit_c.rb"
 "      keywords: [CType::Immediate.parse(\"void *\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_callinfo_kwarg *)NULL)), keywords)\")],\n"
 "    )\n"
 "  end\n"
 "\n"
 "  def C.rb_captured_block\n"
 "    @rb_captured_block ||= CType::Struct.new(\n"
+,
+#line 1046 "rjit_c.rb"
 "      \"rb_captured_block\", Primitive.cexpr!(\"SIZEOF(struct rb_captured_block)\"),\n"
 "      self: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct rb_captured_block *)NULL)), self)\")],\n"
-,
-#line 1045 "rjit_c.rb"
 "      ep: [CType::Pointer.new { self.VALUE }, Primitive.cexpr!(\"OFFSETOF((*((struct rb_captured_block *)NULL)), ep)\")],\n"
 "      code: [CType::Union.new(\n"
 "        \"\", Primitive.cexpr!(\"SIZEOF(((struct rb_captured_block *)NULL)->code)\"),\n"
 "        iseq: CType::Pointer.new { self.rb_iseq_t },\n"
+,
+#line 1052 "rjit_c.rb"
 "        ifunc: CType::Pointer.new { self.vm_ifunc },\n"
 "        val: self.VALUE,\n"
 "      ), Primitive.cexpr!(\"OFFSETOF((*((struct rb_captured_block *)NULL)), code)\")],\n"
@@ -2998,21 +3234,18 @@ static const struct {
 "  end\n"
 "\n"
 "  def C.rb_control_frame_t\n"
-,
-#line 1056 "rjit_c.rb"
 "    @rb_control_frame_t ||= CType::Struct.new(\n"
 "      \"rb_control_frame_struct\", Primitive.cexpr!(\"SIZEOF(struct rb_control_frame_struct)\"),\n"
 "      pc: [CType::Pointer.new { self.VALUE }, Primitive.cexpr!(\"OFFSETOF((*((struct rb_control_frame_struct *)NULL)), pc)\")],\n"
-"      sp: [CType::Pointer.new { self.VALUE }, Primitive.cexpr!(\"OFFSETOF((*((struct rb_control_frame_struct *)NULL)), sp)\")],\n"
 ,
-#line 1060 "rjit_c.rb"
+#line 1062 "rjit_c.rb"
+"      sp: [CType::Pointer.new { self.VALUE }, Primitive.cexpr!(\"OFFSETOF((*((struct rb_control_frame_struct *)NULL)), sp)\")],\n"
 "      iseq: [CType::Pointer.new { self.rb_iseq_t }, Primitive.cexpr!(\"OFFSETOF((*((struct rb_control_frame_struct *)NULL)), iseq)\")],\n"
 "      self: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct rb_control_frame_struct *)NULL)), self)\")],\n"
 "      ep: [CType::Pointer.new { self.VALUE }, Primitive.cexpr!(\"OFFSETOF((*((struct rb_control_frame_struct *)NULL)), ep)\")],\n"
-"      block_code: [CType::Immediate.parse(\"void *\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_control_frame_struct *)NULL)), block_code)\")],\n"
 ,
-#line 1064 "rjit_c.rb"
-"      __bp__: [CType::Pointer.new { self.VALUE }, Primitive.cexpr!(\"OFFSETOF((*((struct rb_control_frame_struct *)NULL)), __bp__)\")],\n"
+#line 1066 "rjit_c.rb"
+"      block_code: [CType::Immediate.parse(\"void *\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_control_frame_struct *)NULL)), block_code)\")],\n"
 "      jit_return: [CType::Pointer.new { CType::Immediate.parse(\"void\") }, Primitive.cexpr!(\"OFFSETOF((*((struct rb_control_frame_struct *)NULL)), jit_return)\")],\n"
 "    )\n"
 "  end\n"
@@ -3021,13 +3254,13 @@ static const struct {
 "    @rb_cref_t ||= CType::Struct.new(\n"
 "      \"rb_cref_struct\", Primitive.cexpr!(\"SIZEOF(struct rb_cref_struct)\"),\n"
 ,
-#line 1072 "rjit_c.rb"
+#line 1074 "rjit_c.rb"
 "      flags: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct rb_cref_struct *)NULL)), flags)\")],\n"
 "      refinements: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct rb_cref_struct *)NULL)), refinements)\")],\n"
 "      klass_or_self: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct rb_cref_struct *)NULL)), klass_or_self)\")],\n"
 "      next: [CType::Pointer.new { self.rb_cref_struct }, Primitive.cexpr!(\"OFFSETOF((*((struct rb_cref_struct *)NULL)), next)\")],\n"
 ,
-#line 1076 "rjit_c.rb"
+#line 1078 "rjit_c.rb"
 "      scope_visi: [self.rb_scope_visibility_t, Primitive.cexpr!(\"OFFSETOF((*((struct rb_cref_struct *)NULL)), scope_visi)\")],\n"
 "    )\n"
 "  end\n"
@@ -3037,43 +3270,43 @@ static const struct {
 "      \"rb_execution_context_struct\", Primitive.cexpr!(\"SIZEOF(struct rb_execution_context_struct)\"),\n"
 "      vm_stack: [CType::Pointer.new { self.VALUE }, Primitive.cexpr!(\"OFFSETOF((*((struct rb_execution_context_struct *)NULL)), vm_stack)\")],\n"
 ,
-#line 1084 "rjit_c.rb"
+#line 1086 "rjit_c.rb"
 "      vm_stack_size: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_execution_context_struct *)NULL)), vm_stack_size)\")],\n"
 "      cfp: [CType::Pointer.new { self.rb_control_frame_t }, Primitive.cexpr!(\"OFFSETOF((*((struct rb_execution_context_struct *)NULL)), cfp)\")],\n"
 "      tag: [CType::Pointer.new { self.rb_vm_tag }, Primitive.cexpr!(\"OFFSETOF((*((struct rb_execution_context_struct *)NULL)), tag)\")],\n"
 ,
-#line 1087 "rjit_c.rb"
+#line 1089 "rjit_c.rb"
 "      interrupt_flag: [self.rb_atomic_t, Primitive.cexpr!(\"OFFSETOF((*((struct rb_execution_context_struct *)NULL)), interrupt_flag)\")],\n"
 "      interrupt_mask: [self.rb_atomic_t, Primitive.cexpr!(\"OFFSETOF((*((struct rb_execution_context_struct *)NULL)), interrupt_mask)\")],\n"
 "      fiber_ptr: [CType::Pointer.new { self.rb_fiber_t }, Primitive.cexpr!(\"OFFSETOF((*((struct rb_execution_context_struct *)NULL)), fiber_ptr)\")],\n"
 ,
-#line 1090 "rjit_c.rb"
+#line 1092 "rjit_c.rb"
 "      thread_ptr: [CType::Pointer.new { self.rb_thread_struct }, Primitive.cexpr!(\"OFFSETOF((*((struct rb_execution_context_struct *)NULL)), thread_ptr)\")],\n"
 "      local_storage: [CType::Pointer.new { self.rb_id_table }, Primitive.cexpr!(\"OFFSETOF((*((struct rb_execution_context_struct *)NULL)), local_storage)\")],\n"
 "      local_storage_recursive_hash: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct rb_execution_context_struct *)NULL)), local_storage_recursive_hash)\")],\n"
 ,
-#line 1093 "rjit_c.rb"
+#line 1095 "rjit_c.rb"
 "      local_storage_recursive_hash_for_trace: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct rb_execution_context_struct *)NULL)), local_storage_recursive_hash_for_trace)\")],\n"
 "      storage: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct rb_execution_context_struct *)NULL)), storage)\")],\n"
 "      root_lep: [CType::Pointer.new { self.VALUE }, Primitive.cexpr!(\"OFFSETOF((*((struct rb_execution_context_struct *)NULL)), root_lep)\")],\n"
 ,
-#line 1096 "rjit_c.rb"
+#line 1098 "rjit_c.rb"
 "      root_svar: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct rb_execution_context_struct *)NULL)), root_svar)\")],\n"
 "      ensure_list: [CType::Pointer.new { self.rb_ensure_list_t }, Primitive.cexpr!(\"OFFSETOF((*((struct rb_execution_context_struct *)NULL)), ensure_list)\")],\n"
 "      trace_arg: [CType::Pointer.new { self.rb_trace_arg_struct }, Primitive.cexpr!(\"OFFSETOF((*((struct rb_execution_context_struct *)NULL)), trace_arg)\")],\n"
 ,
-#line 1099 "rjit_c.rb"
+#line 1101 "rjit_c.rb"
 "      errinfo: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct rb_execution_context_struct *)NULL)), errinfo)\")],\n"
 "      passed_block_handler: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct rb_execution_context_struct *)NULL)), passed_block_handler)\")],\n"
 "      raised_flag: [CType::Immediate.parse(\"uint8_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_execution_context_struct *)NULL)), raised_flag)\")],\n"
 ,
-#line 1102 "rjit_c.rb"
+#line 1104 "rjit_c.rb"
 "      private_const_reference: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct rb_execution_context_struct *)NULL)), private_const_reference)\")],\n"
 "      machine: [CType::Struct.new(\n"
 "        \"\", Primitive.cexpr!(\"SIZEOF(((struct rb_execution_context_struct *)NULL)->machine)\"),\n"
 "        stack_start: [CType::Pointer.new { self.VALUE }, Primitive.cexpr!(\"OFFSETOF(((struct rb_execution_context_struct *)NULL)->machine, stack_start)\")],\n"
 ,
-#line 1106 "rjit_c.rb"
+#line 1108 "rjit_c.rb"
 "        stack_end: [CType::Pointer.new { self.VALUE }, Primitive.cexpr!(\"OFFSETOF(((struct rb_execution_context_struct *)NULL)->machine, stack_end)\")],\n"
 "        stack_maxsize: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF(((struct rb_execution_context_struct *)NULL)->machine, stack_maxsize)\")],\n"
 "      ), Primitive.cexpr!(\"OFFSETOF((*((struct rb_execution_context_struct *)NULL)), machine)\")],\n"
@@ -3082,7 +3315,7 @@ static const struct {
 "\n"
 "  def C.rb_execution_context_t\n"
 ,
-#line 1113 "rjit_c.rb"
+#line 1115 "rjit_c.rb"
 "    @rb_execution_context_t ||= self.rb_execution_context_struct\n"
 "  end\n"
 "\n"
@@ -3092,7 +3325,7 @@ static const struct {
 "      type: [self.rb_iseq_type, Primitive.cexpr!(\"OFFSETOF((*((struct rb_iseq_constant_body *)NULL)), type)\")],\n"
 "      iseq_size: [CType::Immediate.parse(\"unsigned int\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_iseq_constant_body *)NULL)), iseq_size)\")],\n"
 ,
-#line 1121 "rjit_c.rb"
+#line 1123 "rjit_c.rb"
 "      iseq_encoded: [CType::Pointer.new { self.VALUE }, Primitive.cexpr!(\"OFFSETOF((*((struct rb_iseq_constant_body *)NULL)), iseq_encoded)\")],\n"
 "      param: [CType::Struct.new(\n"
 "        \"\", Primitive.cexpr!(\"SIZEOF(((struct rb_iseq_constant_body *)NULL)->param)\"),\n"
@@ -3101,7 +3334,7 @@ static const struct {
 "          has_lead: [CType::BitField.new(1, 0), 0],\n"
 "          has_opt: [CType::BitField.new(1, 1), 1],\n"
 ,
-#line 1128 "rjit_c.rb"
+#line 1130 "rjit_c.rb"
 "          has_rest: [CType::BitField.new(1, 2), 2],\n"
 "          has_post: [CType::BitField.new(1, 3), 3],\n"
 "          has_kw: [CType::BitField.new(1, 4), 4],\n"
@@ -3111,75 +3344,75 @@ static const struct {
 "          accepts_no_kwarg: [CType::BitField.new(1, 0), 8],\n"
 "          ruby2_keywords: [CType::BitField.new(1, 1), 9],\n"
 ,
-#line 1136 "rjit_c.rb"
+#line 1138 "rjit_c.rb"
 "        ), Primitive.cexpr!(\"OFFSETOF(((struct rb_iseq_constant_body *)NULL)->param, flags)\")],\n"
 "        size: [CType::Immediate.parse(\"unsigned int\"), Primitive.cexpr!(\"OFFSETOF(((struct rb_iseq_constant_body *)NULL)->param, size)\")],\n"
 "        lead_num: [CType::Immediate.parse(\"int\"), Primitive.cexpr!(\"OFFSETOF(((struct rb_iseq_constant_body *)NULL)->param, lead_num)\")],\n"
 ,
-#line 1139 "rjit_c.rb"
+#line 1141 "rjit_c.rb"
 "        opt_num: [CType::Immediate.parse(\"int\"), Primitive.cexpr!(\"OFFSETOF(((struct rb_iseq_constant_body *)NULL)->param, opt_num)\")],\n"
 "        rest_start: [CType::Immediate.parse(\"int\"), Primitive.cexpr!(\"OFFSETOF(((struct rb_iseq_constant_body *)NULL)->param, rest_start)\")],\n"
 "        post_start: [CType::Immediate.parse(\"int\"), Primitive.cexpr!(\"OFFSETOF(((struct rb_iseq_constant_body *)NULL)->param, post_start)\")],\n"
 ,
-#line 1142 "rjit_c.rb"
+#line 1144 "rjit_c.rb"
 "        post_num: [CType::Immediate.parse(\"int\"), Primitive.cexpr!(\"OFFSETOF(((struct rb_iseq_constant_body *)NULL)->param, post_num)\")],\n"
 "        block_start: [CType::Immediate.parse(\"int\"), Primitive.cexpr!(\"OFFSETOF(((struct rb_iseq_constant_body *)NULL)->param, block_start)\")],\n"
 "        opt_table: [CType::Pointer.new { self.VALUE }, Primitive.cexpr!(\"OFFSETOF(((struct rb_iseq_constant_body *)NULL)->param, opt_table)\")],\n"
 ,
-#line 1145 "rjit_c.rb"
+#line 1147 "rjit_c.rb"
 "        keyword: [CType::Pointer.new { self.rb_iseq_param_keyword }, Primitive.cexpr!(\"OFFSETOF(((struct rb_iseq_constant_body *)NULL)->param, keyword)\")],\n"
 "      ), Primitive.cexpr!(\"OFFSETOF((*((struct rb_iseq_constant_body *)NULL)), param)\")],\n"
 "      location: [self.rb_iseq_location_t, Primitive.cexpr!(\"OFFSETOF((*((struct rb_iseq_constant_body *)NULL)), location)\")],\n"
 "      insns_info: [self.iseq_insn_info, Primitive.cexpr!(\"OFFSETOF((*((struct rb_iseq_constant_body *)NULL)), insns_info)\")],\n"
 ,
-#line 1149 "rjit_c.rb"
+#line 1151 "rjit_c.rb"
 "      local_table: [CType::Pointer.new { self.ID }, Primitive.cexpr!(\"OFFSETOF((*((struct rb_iseq_constant_body *)NULL)), local_table)\")],\n"
 "      catch_table: [CType::Pointer.new { self.iseq_catch_table }, Primitive.cexpr!(\"OFFSETOF((*((struct rb_iseq_constant_body *)NULL)), catch_table)\")],\n"
 "      parent_iseq: [CType::Pointer.new { self.rb_iseq_struct }, Primitive.cexpr!(\"OFFSETOF((*((struct rb_iseq_constant_body *)NULL)), parent_iseq)\")],\n"
 ,
-#line 1152 "rjit_c.rb"
+#line 1154 "rjit_c.rb"
 "      local_iseq: [CType::Pointer.new { self.rb_iseq_struct }, Primitive.cexpr!(\"OFFSETOF((*((struct rb_iseq_constant_body *)NULL)), local_iseq)\")],\n"
 "      is_entries: [CType::Pointer.new { self.iseq_inline_storage_entry }, Primitive.cexpr!(\"OFFSETOF((*((struct rb_iseq_constant_body *)NULL)), is_entries)\")],\n"
 "      call_data: [CType::Pointer.new { self.rb_call_data }, Primitive.cexpr!(\"OFFSETOF((*((struct rb_iseq_constant_body *)NULL)), call_data)\")],\n"
 "      variable: [CType::Struct.new(\n"
 ,
-#line 1156 "rjit_c.rb"
+#line 1158 "rjit_c.rb"
 "        \"\", Primitive.cexpr!(\"SIZEOF(((struct rb_iseq_constant_body *)NULL)->variable)\"),\n"
 "        flip_count: [self.rb_snum_t, Primitive.cexpr!(\"OFFSETOF(((struct rb_iseq_constant_body *)NULL)->variable, flip_count)\")],\n"
 "        script_lines: [self.VALUE, Primitive.cexpr!(\"OFFSETOF(((struct rb_iseq_constant_body *)NULL)->variable, script_lines)\")],\n"
 "        coverage: [self.VALUE, Primitive.cexpr!(\"OFFSETOF(((struct rb_iseq_constant_body *)NULL)->variable, coverage)\")],\n"
 ,
-#line 1160 "rjit_c.rb"
+#line 1162 "rjit_c.rb"
 "        pc2branchindex: [self.VALUE, Primitive.cexpr!(\"OFFSETOF(((struct rb_iseq_constant_body *)NULL)->variable, pc2branchindex)\")],\n"
 "        original_iseq: [CType::Pointer.new { self.VALUE }, Primitive.cexpr!(\"OFFSETOF(((struct rb_iseq_constant_body *)NULL)->variable, original_iseq)\")],\n"
 "      ), Primitive.cexpr!(\"OFFSETOF((*((struct rb_iseq_constant_body *)NULL)), variable)\")],\n"
 ,
-#line 1163 "rjit_c.rb"
+#line 1165 "rjit_c.rb"
 "      local_table_size: [CType::Immediate.parse(\"unsigned int\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_iseq_constant_body *)NULL)), local_table_size)\")],\n"
 "      ic_size: [CType::Immediate.parse(\"unsigned int\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_iseq_constant_body *)NULL)), ic_size)\")],\n"
 "      ise_size: [CType::Immediate.parse(\"unsigned int\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_iseq_constant_body *)NULL)), ise_size)\")],\n"
 ,
-#line 1166 "rjit_c.rb"
+#line 1168 "rjit_c.rb"
 "      ivc_size: [CType::Immediate.parse(\"unsigned int\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_iseq_constant_body *)NULL)), ivc_size)\")],\n"
 "      icvarc_size: [CType::Immediate.parse(\"unsigned int\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_iseq_constant_body *)NULL)), icvarc_size)\")],\n"
 "      ci_size: [CType::Immediate.parse(\"unsigned int\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_iseq_constant_body *)NULL)), ci_size)\")],\n"
 ,
-#line 1169 "rjit_c.rb"
+#line 1171 "rjit_c.rb"
 "      stack_max: [CType::Immediate.parse(\"unsigned int\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_iseq_constant_body *)NULL)), stack_max)\")],\n"
 "      builtin_attrs: [CType::Immediate.parse(\"unsigned int\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_iseq_constant_body *)NULL)), builtin_attrs)\")],\n"
 "      mark_bits: [CType::Union.new(\n"
 "        \"\", Primitive.cexpr!(\"SIZEOF(((struct rb_iseq_constant_body *)NULL)->mark_bits)\"),\n"
 "        list: CType::Pointer.new { self.iseq_bits_t },\n"
 ,
-#line 1174 "rjit_c.rb"
+#line 1176 "rjit_c.rb"
 "        single: self.iseq_bits_t,\n"
 "      ), Primitive.cexpr!(\"OFFSETOF((*((struct rb_iseq_constant_body *)NULL)), mark_bits)\")],\n"
 "      outer_variables: [CType::Pointer.new { self.rb_id_table }, Primitive.cexpr!(\"OFFSETOF((*((struct rb_iseq_constant_body *)NULL)), outer_variables)\")],\n"
 "      mandatory_only_iseq: [CType::Pointer.new { self.rb_iseq_t }, Primitive.cexpr!(\"OFFSETOF((*((struct rb_iseq_constant_body *)NULL)), mandatory_only_iseq)\")],\n"
 ,
-#line 1178 "rjit_c.rb"
-"      jit_func: [self.rb_jit_func_t, Primitive.cexpr!(\"OFFSETOF((*((struct rb_iseq_constant_body *)NULL)), jit_func)\")],\n"
-"      total_calls: [CType::Immediate.parse(\"unsigned long\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_iseq_constant_body *)NULL)), total_calls)\")],\n"
+#line 1180 "rjit_c.rb"
+"      jit_entry: [self.rb_jit_func_t, Primitive.cexpr!(\"OFFSETOF((*((struct rb_iseq_constant_body *)NULL)), jit_entry)\")],\n"
+"      jit_entry_calls: [CType::Immediate.parse(\"unsigned long\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_iseq_constant_body *)NULL)), jit_entry_calls)\")],\n"
 "      rjit_blocks: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct rb_iseq_constant_body *)NULL)), rjit_blocks)\"), true],\n"
 "    )\n"
 "  end\n"
@@ -3187,13 +3420,13 @@ static const struct {
 "  def C.rb_iseq_location_t\n"
 "    @rb_iseq_location_t ||= CType::Struct.new(\n"
 ,
-#line 1186 "rjit_c.rb"
+#line 1188 "rjit_c.rb"
 "      \"rb_iseq_location_struct\", Primitive.cexpr!(\"SIZEOF(struct rb_iseq_location_struct)\"),\n"
 "      pathobj: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct rb_iseq_location_struct *)NULL)), pathobj)\"), true],\n"
 "      base_label: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct rb_iseq_location_struct *)NULL)), base_label)\"), true],\n"
 "      label: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct rb_iseq_location_struct *)NULL)), label)\"), true],\n"
 ,
-#line 1190 "rjit_c.rb"
+#line 1192 "rjit_c.rb"
 "      first_lineno: [CType::Immediate.parse(\"int\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_iseq_location_struct *)NULL)), first_lineno)\")],\n"
 "      node_id: [CType::Immediate.parse(\"int\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_iseq_location_struct *)NULL)), node_id)\")],\n"
 "      code_location: [self.rb_code_location_t, Primitive.cexpr!(\"OFFSETOF((*((struct rb_iseq_location_struct *)NULL)), code_location)\")],\n"
@@ -3203,13 +3436,13 @@ static const struct {
 "  def C.rb_iseq_param_keyword\n"
 "    @rb_iseq_param_keyword ||= CType::Struct.new(\n"
 ,
-#line 1198 "rjit_c.rb"
+#line 1200 "rjit_c.rb"
 "      \"rb_iseq_param_keyword\", Primitive.cexpr!(\"SIZEOF(struct rb_iseq_param_keyword)\"),\n"
 "      num: [CType::Immediate.parse(\"int\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_iseq_param_keyword *)NULL)), num)\")],\n"
 "      required_num: [CType::Immediate.parse(\"int\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_iseq_param_keyword *)NULL)), required_num)\")],\n"
 "      bits_start: [CType::Immediate.parse(\"int\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_iseq_param_keyword *)NULL)), bits_start)\")],\n"
 ,
-#line 1202 "rjit_c.rb"
+#line 1204 "rjit_c.rb"
 "      rest_start: [CType::Immediate.parse(\"int\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_iseq_param_keyword *)NULL)), rest_start)\")],\n"
 "      table: [CType::Pointer.new { self.ID }, Primitive.cexpr!(\"OFFSETOF((*((struct rb_iseq_param_keyword *)NULL)), table)\")],\n"
 "      default_values: [CType::Pointer.new { self.VALUE }, Primitive.cexpr!(\"OFFSETOF((*((struct rb_iseq_param_keyword *)NULL)), default_values)\")],\n"
@@ -3219,28 +3452,28 @@ static const struct {
 "  def C.rb_iseq_struct\n"
 "    @rb_iseq_struct ||= CType::Struct.new(\n"
 ,
-#line 1210 "rjit_c.rb"
+#line 1212 "rjit_c.rb"
 "      \"rb_iseq_struct\", Primitive.cexpr!(\"SIZEOF(struct rb_iseq_struct)\"),\n"
 "      flags: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct rb_iseq_struct *)NULL)), flags)\")],\n"
 "      wrapper: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct rb_iseq_struct *)NULL)), wrapper)\")],\n"
 "      body: [CType::Pointer.new { self.rb_iseq_constant_body }, Primitive.cexpr!(\"OFFSETOF((*((struct rb_iseq_struct *)NULL)), body)\")],\n"
 "      aux: [CType::Union.new(\n"
 ,
-#line 1215 "rjit_c.rb"
+#line 1217 "rjit_c.rb"
 "        \"\", Primitive.cexpr!(\"SIZEOF(((struct rb_iseq_struct *)NULL)->aux)\"),\n"
 "        compile_data: CType::Pointer.new { self.iseq_compile_data },\n"
 "        loader: CType::Struct.new(\n"
 "          \"\", Primitive.cexpr!(\"SIZEOF(((struct rb_iseq_struct *)NULL)->aux.loader)\"),\n"
 "          obj: [self.VALUE, Primitive.cexpr!(\"OFFSETOF(((struct rb_iseq_struct *)NULL)->aux.loader, obj)\")],\n"
 ,
-#line 1220 "rjit_c.rb"
+#line 1222 "rjit_c.rb"
 "          index: [CType::Immediate.parse(\"int\"), Primitive.cexpr!(\"OFFSETOF(((struct rb_iseq_struct *)NULL)->aux.loader, index)\")],\n"
 "        ),\n"
 "        exec: CType::Struct.new(\n"
 "          \"\", Primitive.cexpr!(\"SIZEOF(((struct rb_iseq_struct *)NULL)->aux.exec)\"),\n"
 "          local_hooks: [CType::Pointer.new { self.rb_hook_list_struct }, Primitive.cexpr!(\"OFFSETOF(((struct rb_iseq_struct *)NULL)->aux.exec, local_hooks)\")],\n"
 ,
-#line 1225 "rjit_c.rb"
+#line 1227 "rjit_c.rb"
 "          global_trace_events: [self.rb_event_flag_t, Primitive.cexpr!(\"OFFSETOF(((struct rb_iseq_struct *)NULL)->aux.exec, global_trace_events)\")],\n"
 "        ),\n"
 "      ), Primitive.cexpr!(\"OFFSETOF((*((struct rb_iseq_struct *)NULL)), aux)\")],\n"
@@ -3258,7 +3491,7 @@ static const struct {
 "  def C.rb_method_attr_t\n"
 "    @rb_method_attr_t ||= CType::Struct.new(\n"
 ,
-#line 1241 "rjit_c.rb"
+#line 1243 "rjit_c.rb"
 "      \"rb_method_attr_struct\", Primitive.cexpr!(\"SIZEOF(struct rb_method_attr_struct)\"),\n"
 "      id: [self.ID, Primitive.cexpr!(\"OFFSETOF((*((struct rb_method_attr_struct *)NULL)), id)\")],\n"
 "      location: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct rb_method_attr_struct *)NULL)), location)\")],\n"
@@ -3269,7 +3502,7 @@ static const struct {
 "    @rb_method_bmethod_t ||= CType::Struct.new(\n"
 "      \"rb_method_bmethod_struct\", Primitive.cexpr!(\"SIZEOF(struct rb_method_bmethod_struct)\"),\n"
 ,
-#line 1250 "rjit_c.rb"
+#line 1252 "rjit_c.rb"
 "      proc: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct rb_method_bmethod_struct *)NULL)), proc)\")],\n"
 "      hooks: [CType::Pointer.new { self.rb_hook_list_struct }, Primitive.cexpr!(\"OFFSETOF((*((struct rb_method_bmethod_struct *)NULL)), hooks)\")],\n"
 "      defined_ractor: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct rb_method_bmethod_struct *)NULL)), defined_ractor)\")],\n"
@@ -3279,7 +3512,7 @@ static const struct {
 "  def C.rb_method_cfunc_t\n"
 "    @rb_method_cfunc_t ||= CType::Struct.new(\n"
 ,
-#line 1258 "rjit_c.rb"
+#line 1260 "rjit_c.rb"
 "      \"rb_method_cfunc_struct\", Primitive.cexpr!(\"SIZEOF(struct rb_method_cfunc_struct)\"),\n"
 "      func: [CType::Immediate.parse(\"void *\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_method_cfunc_struct *)NULL)), func)\")],\n"
 "      invoker: [CType::Immediate.parse(\"void *\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_method_cfunc_struct *)NULL)), invoker)\")],\n"
@@ -3288,7 +3521,7 @@ static const struct {
 "  end\n"
 "\n"
 ,
-#line 1265 "rjit_c.rb"
+#line 1267 "rjit_c.rb"
 "  def C.rb_method_definition_struct\n"
 "    @rb_method_definition_struct ||= CType::Struct.new(\n"
 "      \"rb_method_definition_struct\", Primitive.cexpr!(\"SIZEOF(struct rb_method_definition_struct)\"),\n"
@@ -3299,7 +3532,7 @@ static const struct {
 "      no_redef_warning: [CType::BitField.new(1, 4), 60],\n"
 "      body: [CType::Union.new(\n"
 ,
-#line 1274 "rjit_c.rb"
+#line 1276 "rjit_c.rb"
 "        \"\", Primitive.cexpr!(\"SIZEOF(((struct rb_method_definition_struct *)NULL)->body)\"),\n"
 "        iseq: self.rb_method_iseq_t,\n"
 "        cfunc: self.rb_method_cfunc_t,\n"
@@ -3310,7 +3543,7 @@ static const struct {
 "        optimized: self.rb_method_optimized_t,\n"
 "      ), Primitive.cexpr!(\"OFFSETOF((*((struct rb_method_definition_struct *)NULL)), body)\")],\n"
 ,
-#line 1283 "rjit_c.rb"
+#line 1285 "rjit_c.rb"
 "      original_id: [self.ID, Primitive.cexpr!(\"OFFSETOF((*((struct rb_method_definition_struct *)NULL)), original_id)\")],\n"
 "      method_serial: [CType::Immediate.parse(\"uintptr_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_method_definition_struct *)NULL)), method_serial)\")],\n"
 "    )\n"
@@ -3320,13 +3553,13 @@ static const struct {
 "    @rb_method_entry_t ||= CType::Struct.new(\n"
 "      \"rb_method_entry_struct\", Primitive.cexpr!(\"SIZEOF(struct rb_method_entry_struct)\"),\n"
 ,
-#line 1291 "rjit_c.rb"
+#line 1293 "rjit_c.rb"
 "      flags: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct rb_method_entry_struct *)NULL)), flags)\")],\n"
 "      defined_class: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct rb_method_entry_struct *)NULL)), defined_class)\")],\n"
 "      def: [CType::Pointer.new { self.rb_method_definition_struct }, Primitive.cexpr!(\"OFFSETOF((*((struct rb_method_entry_struct *)NULL)), def)\")],\n"
 "      called_id: [self.ID, Primitive.cexpr!(\"OFFSETOF((*((struct rb_method_entry_struct *)NULL)), called_id)\")],\n"
 ,
-#line 1295 "rjit_c.rb"
+#line 1297 "rjit_c.rb"
 "      owner: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct rb_method_entry_struct *)NULL)), owner)\")],\n"
 "    )\n"
 "  end\n"
@@ -3336,7 +3569,7 @@ static const struct {
 "      \"rb_method_iseq_struct\", Primitive.cexpr!(\"SIZEOF(struct rb_method_iseq_struct)\"),\n"
 "      iseqptr: [CType::Pointer.new { self.rb_iseq_t }, Primitive.cexpr!(\"OFFSETOF((*((struct rb_method_iseq_struct *)NULL)), iseqptr)\")],\n"
 ,
-#line 1303 "rjit_c.rb"
+#line 1305 "rjit_c.rb"
 "      cref: [CType::Pointer.new { self.rb_cref_t }, Primitive.cexpr!(\"OFFSETOF((*((struct rb_method_iseq_struct *)NULL)), cref)\")],\n"
 "    )\n"
 "  end\n"
@@ -3346,7 +3579,7 @@ static const struct {
 "      \"rb_method_optimized\", Primitive.cexpr!(\"SIZEOF(struct rb_method_optimized)\"),\n"
 "      type: [self.method_optimized_type, Primitive.cexpr!(\"OFFSETOF((*((struct rb_method_optimized *)NULL)), type)\")],\n"
 ,
-#line 1311 "rjit_c.rb"
+#line 1313 "rjit_c.rb"
 "      index: [CType::Immediate.parse(\"unsigned int\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_method_optimized *)NULL)), index)\")],\n"
 "    )\n"
 "  end\n"
@@ -3364,20 +3597,20 @@ static const struct {
 "\n"
 "  def C.rb_rjit_options\n"
 ,
-#line 1327 "rjit_c.rb"
+#line 1329 "rjit_c.rb"
 "    @rb_rjit_options ||= CType::Struct.new(\n"
 "      \"rb_rjit_options\", Primitive.cexpr!(\"SIZEOF(struct rb_rjit_options)\"),\n"
 "      on: [self._Bool, Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_options *)NULL)), on)\")],\n"
 "      call_threshold: [CType::Immediate.parse(\"unsigned int\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_options *)NULL)), call_threshold)\")],\n"
 "      exec_mem_size: [CType::Immediate.parse(\"unsigned int\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_options *)NULL)), exec_mem_size)\")],\n"
 ,
-#line 1332 "rjit_c.rb"
+#line 1334 "rjit_c.rb"
 "      stats: [self._Bool, Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_options *)NULL)), stats)\")],\n"
 "      trace_exits: [self._Bool, Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_options *)NULL)), trace_exits)\")],\n"
 "      dump_disasm: [self._Bool, Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_options *)NULL)), dump_disasm)\")],\n"
 "      verify_ctx: [self._Bool, Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_options *)NULL)), verify_ctx)\")],\n"
 ,
-#line 1336 "rjit_c.rb"
+#line 1338 "rjit_c.rb"
 "      pause: [self._Bool, Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_options *)NULL)), pause)\")],\n"
 "    )\n"
 "  end\n"
@@ -3387,223 +3620,223 @@ static const struct {
 "      \"rb_rjit_runtime_counters\", Primitive.cexpr!(\"SIZEOF(struct rb_rjit_runtime_counters)\"),\n"
 "      vm_insns_count: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), vm_insns_count)\")],\n"
 ,
-#line 1344 "rjit_c.rb"
+#line 1346 "rjit_c.rb"
 "      rjit_insns_count: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), rjit_insns_count)\")],\n"
 "      send_args_splat_kw_splat: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_args_splat_kw_splat)\")],\n"
 "      send_args_splat: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_args_splat)\")],\n"
 ,
-#line 1347 "rjit_c.rb"
+#line 1349 "rjit_c.rb"
 "      send_args_splat_not_array: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_args_splat_not_array)\")],\n"
 "      send_args_splat_length_not_equal: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_args_splat_length_not_equal)\")],\n"
 ,
-#line 1349 "rjit_c.rb"
+#line 1351 "rjit_c.rb"
 "      send_args_splat_cfunc_var_args: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_args_splat_cfunc_var_args)\")],\n"
 "      send_args_splat_arity_error: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_args_splat_arity_error)\")],\n"
 ,
-#line 1351 "rjit_c.rb"
+#line 1353 "rjit_c.rb"
 "      send_args_splat_ruby2_hash: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_args_splat_ruby2_hash)\")],\n"
 "      send_args_splat_cfunc_zuper: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_args_splat_cfunc_zuper)\")],\n"
 ,
-#line 1353 "rjit_c.rb"
+#line 1355 "rjit_c.rb"
 "      send_args_splat_cfunc_ruby2_keywords: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_args_splat_cfunc_ruby2_keywords)\")],\n"
 "      send_kw_splat: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_kw_splat)\")],\n"
 "      send_kwarg: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_kwarg)\")],\n"
 ,
-#line 1356 "rjit_c.rb"
+#line 1358 "rjit_c.rb"
 "      send_klass_megamorphic: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_klass_megamorphic)\")],\n"
 "      send_missing_cme: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_missing_cme)\")],\n"
 "      send_private: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_private)\")],\n"
 ,
-#line 1359 "rjit_c.rb"
+#line 1361 "rjit_c.rb"
 "      send_protected_check_failed: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_protected_check_failed)\")],\n"
 "      send_tailcall: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_tailcall)\")],\n"
 "      send_notimplemented: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_notimplemented)\")],\n"
 ,
-#line 1362 "rjit_c.rb"
+#line 1364 "rjit_c.rb"
 "      send_missing: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_missing)\")],\n"
 "      send_bmethod: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_bmethod)\")],\n"
 "      send_alias: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_alias)\")],\n"
 ,
-#line 1365 "rjit_c.rb"
+#line 1367 "rjit_c.rb"
 "      send_undef: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_undef)\")],\n"
 "      send_zsuper: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_zsuper)\")],\n"
 "      send_refined: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_refined)\")],\n"
 ,
-#line 1368 "rjit_c.rb"
+#line 1370 "rjit_c.rb"
 "      send_stackoverflow: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_stackoverflow)\")],\n"
 "      send_arity: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_arity)\")],\n"
 "      send_c_tracing: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_c_tracing)\")],\n"
 ,
-#line 1371 "rjit_c.rb"
+#line 1373 "rjit_c.rb"
 "      send_is_a_class_mismatch: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_is_a_class_mismatch)\")],\n"
 "      send_instance_of_class_mismatch: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_instance_of_class_mismatch)\")],\n"
 "      send_keywords: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_keywords)\")],\n"
 ,
-#line 1374 "rjit_c.rb"
+#line 1376 "rjit_c.rb"
 "      send_blockiseq: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_blockiseq)\")],\n"
 "      send_block_handler: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_block_handler)\")],\n"
 "      send_block_setup: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_block_setup)\")],\n"
 ,
-#line 1377 "rjit_c.rb"
+#line 1379 "rjit_c.rb"
 "      send_block_not_nil: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_block_not_nil)\")],\n"
 "      send_block_not_proxy: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_block_not_proxy)\")],\n"
 "      send_block_arg: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_block_arg)\")],\n"
 ,
-#line 1380 "rjit_c.rb"
+#line 1382 "rjit_c.rb"
 "      send_iseq_kwparam: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_iseq_kwparam)\")],\n"
 "      send_iseq_accepts_no_kwarg: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_iseq_accepts_no_kwarg)\")],\n"
 "      send_iseq_has_opt: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_iseq_has_opt)\")],\n"
 ,
-#line 1383 "rjit_c.rb"
+#line 1385 "rjit_c.rb"
 "      send_iseq_has_kwrest: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_iseq_has_kwrest)\")],\n"
 "      send_iseq_ruby2_keywords: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_iseq_ruby2_keywords)\")],\n"
 ,
-#line 1385 "rjit_c.rb"
+#line 1387 "rjit_c.rb"
 "      send_iseq_has_rest_and_captured: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_iseq_has_rest_and_captured)\")],\n"
 "      send_iseq_has_rest_and_kw_supplied: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_iseq_has_rest_and_kw_supplied)\")],\n"
 ,
-#line 1387 "rjit_c.rb"
+#line 1389 "rjit_c.rb"
 "      send_iseq_has_no_kw: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_iseq_has_no_kw)\")],\n"
 "      send_iseq_zsuper: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_iseq_zsuper)\")],\n"
 "      send_iseq_materialized_block: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_iseq_materialized_block)\")],\n"
 ,
-#line 1390 "rjit_c.rb"
+#line 1392 "rjit_c.rb"
 "      send_iseq_has_rest: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_iseq_has_rest)\")],\n"
 "      send_iseq_block_arg0_splat: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_iseq_block_arg0_splat)\")],\n"
 "      send_iseq_kw_call: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_iseq_kw_call)\")],\n"
 ,
-#line 1393 "rjit_c.rb"
+#line 1395 "rjit_c.rb"
 "      send_iseq_splat: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_iseq_splat)\")],\n"
 "      send_iseq_has_rest_and_optional: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_iseq_has_rest_and_optional)\")],\n"
 "      send_iseq_arity_error: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_iseq_arity_error)\")],\n"
 ,
-#line 1396 "rjit_c.rb"
+#line 1398 "rjit_c.rb"
 "      send_iseq_missing_optional_kw: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_iseq_missing_optional_kw)\")],\n"
 "      send_iseq_too_many_kwargs: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_iseq_too_many_kwargs)\")],\n"
 ,
-#line 1398 "rjit_c.rb"
+#line 1400 "rjit_c.rb"
 "      send_iseq_kwargs_mismatch: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_iseq_kwargs_mismatch)\")],\n"
 "      send_iseq_splat_with_kw: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_iseq_splat_with_kw)\")],\n"
 ,
-#line 1400 "rjit_c.rb"
+#line 1402 "rjit_c.rb"
 "      send_iseq_splat_arity_error: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_iseq_splat_arity_error)\")],\n"
 "      send_iseq_has_rest_and_splat_not_equal: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_iseq_has_rest_and_splat_not_equal)\")],\n"
 ,
-#line 1402 "rjit_c.rb"
+#line 1404 "rjit_c.rb"
 "      send_cfunc_variadic: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_cfunc_variadic)\")],\n"
 "      send_cfunc_too_many_args: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_cfunc_too_many_args)\")],\n"
 "      send_cfunc_ruby_array_varg: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_cfunc_ruby_array_varg)\")],\n"
 ,
-#line 1405 "rjit_c.rb"
+#line 1407 "rjit_c.rb"
 "      send_cfunc_splat_with_kw: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_cfunc_splat_with_kw)\")],\n"
 "      send_cfunc_tracing: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_cfunc_tracing)\")],\n"
 "      send_cfunc_argc_mismatch: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_cfunc_argc_mismatch)\")],\n"
 ,
-#line 1408 "rjit_c.rb"
+#line 1410 "rjit_c.rb"
 "      send_cfunc_toomany_args: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_cfunc_toomany_args)\")],\n"
 "      send_attrset_splat: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_attrset_splat)\")],\n"
 "      send_attrset_kwarg: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_attrset_kwarg)\")],\n"
 ,
-#line 1411 "rjit_c.rb"
+#line 1413 "rjit_c.rb"
 "      send_attrset_method: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_attrset_method)\")],\n"
 "      send_ivar_splat: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_ivar_splat)\")],\n"
 "      send_ivar_opt_send: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_ivar_opt_send)\")],\n"
 ,
-#line 1414 "rjit_c.rb"
+#line 1416 "rjit_c.rb"
 "      send_optimized_send_no_args: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_optimized_send_no_args)\")],\n"
 "      send_optimized_send_not_sym_or_str: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_optimized_send_not_sym_or_str)\")],\n"
 ,
-#line 1416 "rjit_c.rb"
+#line 1418 "rjit_c.rb"
 "      send_optimized_send_mid_class_changed: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_optimized_send_mid_class_changed)\")],\n"
 "      send_optimized_send_mid_id_changed: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_optimized_send_mid_id_changed)\")],\n"
 ,
-#line 1418 "rjit_c.rb"
+#line 1420 "rjit_c.rb"
 "      send_optimized_send_null_mid: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_optimized_send_null_mid)\")],\n"
 "      send_optimized_send_send: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_optimized_send_send)\")],\n"
 ,
-#line 1420 "rjit_c.rb"
+#line 1422 "rjit_c.rb"
 "      send_optimized_call_block: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_optimized_call_block)\")],\n"
 "      send_optimized_call_kwarg: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_optimized_call_kwarg)\")],\n"
 ,
-#line 1422 "rjit_c.rb"
+#line 1424 "rjit_c.rb"
 "      send_optimized_call_splat: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_optimized_call_splat)\")],\n"
 "      send_optimized_struct_aref_error: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_optimized_struct_aref_error)\")],\n"
 ,
-#line 1424 "rjit_c.rb"
+#line 1426 "rjit_c.rb"
 "      send_optimized_block_call: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_optimized_block_call)\")],\n"
 "      send_optimized_struct_aset: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_optimized_struct_aset)\")],\n"
 ,
-#line 1426 "rjit_c.rb"
+#line 1428 "rjit_c.rb"
 "      send_bmethod_not_iseq: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_bmethod_not_iseq)\")],\n"
 "      send_bmethod_blockarg: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), send_bmethod_blockarg)\")],\n"
 "      invokesuper_me_changed: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), invokesuper_me_changed)\")],\n"
 ,
-#line 1429 "rjit_c.rb"
+#line 1431 "rjit_c.rb"
 "      invokesuper_block: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), invokesuper_block)\")],\n"
 "      invokeblock_none: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), invokeblock_none)\")],\n"
 "      invokeblock_symbol: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), invokeblock_symbol)\")],\n"
 ,
-#line 1432 "rjit_c.rb"
+#line 1434 "rjit_c.rb"
 "      invokeblock_proc: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), invokeblock_proc)\")],\n"
 "      invokeblock_tag_changed: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), invokeblock_tag_changed)\")],\n"
 "      invokeblock_iseq_block_changed: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), invokeblock_iseq_block_changed)\")],\n"
 ,
-#line 1435 "rjit_c.rb"
+#line 1437 "rjit_c.rb"
 "      invokeblock_iseq_arity: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), invokeblock_iseq_arity)\")],\n"
 "      invokeblock_iseq_arg0_splat: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), invokeblock_iseq_arg0_splat)\")],\n"
 ,
-#line 1437 "rjit_c.rb"
+#line 1439 "rjit_c.rb"
 "      invokeblock_ifunc_args_splat: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), invokeblock_ifunc_args_splat)\")],\n"
 "      invokeblock_ifunc_kw_splat: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), invokeblock_ifunc_kw_splat)\")],\n"
 ,
-#line 1439 "rjit_c.rb"
+#line 1441 "rjit_c.rb"
 "      invokeblock_iseq_arg0_args_splat: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), invokeblock_iseq_arg0_args_splat)\")],\n"
 "      invokeblock_iseq_arg0_has_kw: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), invokeblock_iseq_arg0_has_kw)\")],\n"
 ,
-#line 1441 "rjit_c.rb"
+#line 1443 "rjit_c.rb"
 "      getivar_megamorphic: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), getivar_megamorphic)\")],\n"
 "      getivar_not_heap: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), getivar_not_heap)\")],\n"
 "      getivar_special_const: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), getivar_special_const)\")],\n"
 ,
-#line 1444 "rjit_c.rb"
+#line 1446 "rjit_c.rb"
 "      getivar_too_complex: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), getivar_too_complex)\")],\n"
 "      optaref_arg_not_fixnum: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), optaref_arg_not_fixnum)\")],\n"
 "      optaref_argc_not_one: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), optaref_argc_not_one)\")],\n"
 ,
-#line 1447 "rjit_c.rb"
+#line 1449 "rjit_c.rb"
 "      optaref_recv_not_array: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), optaref_recv_not_array)\")],\n"
 "      optaref_recv_not_hash: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), optaref_recv_not_hash)\")],\n"
 "      optaref_send: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), optaref_send)\")],\n"
 ,
-#line 1450 "rjit_c.rb"
+#line 1452 "rjit_c.rb"
 "      optgetconst_not_cached: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), optgetconst_not_cached)\")],\n"
 "      optgetconst_cref: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), optgetconst_cref)\")],\n"
 "      optgetconst_cache_miss: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), optgetconst_cache_miss)\")],\n"
 ,
-#line 1453 "rjit_c.rb"
+#line 1455 "rjit_c.rb"
 "      setivar_frozen: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), setivar_frozen)\")],\n"
 "      setivar_not_heap: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), setivar_not_heap)\")],\n"
 "      setivar_megamorphic: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), setivar_megamorphic)\")],\n"
 ,
-#line 1456 "rjit_c.rb"
+#line 1458 "rjit_c.rb"
 "      setivar_too_complex: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), setivar_too_complex)\")],\n"
 "      expandarray_splat: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), expandarray_splat)\")],\n"
 "      expandarray_postarg: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), expandarray_postarg)\")],\n"
 ,
-#line 1459 "rjit_c.rb"
+#line 1461 "rjit_c.rb"
 "      expandarray_not_array: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), expandarray_not_array)\")],\n"
 "      expandarray_rhs_too_small: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), expandarray_rhs_too_small)\")],\n"
 ,
-#line 1461 "rjit_c.rb"
+#line 1463 "rjit_c.rb"
 "      getblockpp_block_param_modified: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), getblockpp_block_param_modified)\")],\n"
 "      getblockpp_block_handler_none: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), getblockpp_block_handler_none)\")],\n"
 ,
-#line 1463 "rjit_c.rb"
+#line 1465 "rjit_c.rb"
 "      getblockpp_not_gc_guarded: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), getblockpp_not_gc_guarded)\")],\n"
 "      getblockpp_not_iseq_block: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), getblockpp_not_iseq_block)\")],\n"
 "      compiled_block_count: [CType::Immediate.parse(\"size_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_rjit_runtime_counters *)NULL)), compiled_block_count)\")],\n"
 ,
-#line 1466 "rjit_c.rb"
+#line 1468 "rjit_c.rb"
 "    )\n"
 "  end\n"
 "\n"
@@ -3617,13 +3850,13 @@ static const struct {
 "      edges: [CType::Pointer.new { self.rb_id_table }, Primitive.cexpr!(\"OFFSETOF((*((struct rb_shape *)NULL)), edges)\")],\n"
 "      edge_name: [self.ID, Primitive.cexpr!(\"OFFSETOF((*((struct rb_shape *)NULL)), edge_name)\")],\n"
 ,
-#line 1478 "rjit_c.rb"
+#line 1480 "rjit_c.rb"
 "      next_iv_index: [self.attr_index_t, Primitive.cexpr!(\"OFFSETOF((*((struct rb_shape *)NULL)), next_iv_index)\")],\n"
 "      capacity: [CType::Immediate.parse(\"uint32_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_shape *)NULL)), capacity)\")],\n"
 "      type: [CType::Immediate.parse(\"uint8_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_shape *)NULL)), type)\")],\n"
 "      size_pool_index: [CType::Immediate.parse(\"uint8_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_shape *)NULL)), size_pool_index)\")],\n"
 ,
-#line 1482 "rjit_c.rb"
+#line 1484 "rjit_c.rb"
 "      parent_id: [self.shape_id_t, Primitive.cexpr!(\"OFFSETOF((*((struct rb_shape *)NULL)), parent_id)\")],\n"
 "    )\n"
 "  end\n"
@@ -3637,67 +3870,67 @@ static const struct {
 "      \"rb_thread_struct\", Primitive.cexpr!(\"SIZEOF(struct rb_thread_struct)\"),\n"
 "      lt_node: [self.ccan_list_node, Primitive.cexpr!(\"OFFSETOF((*((struct rb_thread_struct *)NULL)), lt_node)\")],\n"
 ,
-#line 1494 "rjit_c.rb"
+#line 1496 "rjit_c.rb"
 "      self: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct rb_thread_struct *)NULL)), self)\")],\n"
 "      ractor: [CType::Pointer.new { self.rb_ractor_t }, Primitive.cexpr!(\"OFFSETOF((*((struct rb_thread_struct *)NULL)), ractor)\")],\n"
 "      vm: [CType::Pointer.new { self.rb_vm_t }, Primitive.cexpr!(\"OFFSETOF((*((struct rb_thread_struct *)NULL)), vm)\")],\n"
 "      nt: [CType::Pointer.new { self.rb_native_thread }, Primitive.cexpr!(\"OFFSETOF((*((struct rb_thread_struct *)NULL)), nt)\")],\n"
 ,
-#line 1498 "rjit_c.rb"
+#line 1500 "rjit_c.rb"
 "      ec: [CType::Pointer.new { self.rb_execution_context_t }, Primitive.cexpr!(\"OFFSETOF((*((struct rb_thread_struct *)NULL)), ec)\")],\n"
 "      sched: [self.rb_thread_sched_item, Primitive.cexpr!(\"OFFSETOF((*((struct rb_thread_struct *)NULL)), sched)\")],\n"
 "      serial: [self.rb_atomic_t, Primitive.cexpr!(\"OFFSETOF((*((struct rb_thread_struct *)NULL)), serial)\")],\n"
 "      last_status: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct rb_thread_struct *)NULL)), last_status)\")],\n"
 ,
-#line 1502 "rjit_c.rb"
+#line 1504 "rjit_c.rb"
 "      calling: [CType::Pointer.new { self.rb_calling_info }, Primitive.cexpr!(\"OFFSETOF((*((struct rb_thread_struct *)NULL)), calling)\")],\n"
 "      top_self: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct rb_thread_struct *)NULL)), top_self)\")],\n"
 "      top_wrapper: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct rb_thread_struct *)NULL)), top_wrapper)\")],\n"
 "      priority: [CType::Immediate.parse(\"int8_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_thread_struct *)NULL)), priority)\")],\n"
 ,
-#line 1506 "rjit_c.rb"
+#line 1508 "rjit_c.rb"
 "      running_time_us: [CType::Immediate.parse(\"uint32_t\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_thread_struct *)NULL)), running_time_us)\")],\n"
 "      blocking_region_buffer: [CType::Pointer.new { CType::Immediate.parse(\"void\") }, Primitive.cexpr!(\"OFFSETOF((*((struct rb_thread_struct *)NULL)), blocking_region_buffer)\")],\n"
 "      thgroup: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct rb_thread_struct *)NULL)), thgroup)\")],\n"
 ,
-#line 1509 "rjit_c.rb"
+#line 1511 "rjit_c.rb"
 "      value: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct rb_thread_struct *)NULL)), value)\")],\n"
 "      pending_interrupt_queue: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct rb_thread_struct *)NULL)), pending_interrupt_queue)\")],\n"
 "      pending_interrupt_mask_stack: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct rb_thread_struct *)NULL)), pending_interrupt_mask_stack)\")],\n"
 ,
-#line 1512 "rjit_c.rb"
+#line 1514 "rjit_c.rb"
 "      interrupt_lock: [self.rb_nativethread_lock_t, Primitive.cexpr!(\"OFFSETOF((*((struct rb_thread_struct *)NULL)), interrupt_lock)\")],\n"
 "      unblock: [self.rb_unblock_callback, Primitive.cexpr!(\"OFFSETOF((*((struct rb_thread_struct *)NULL)), unblock)\")],\n"
 "      locking_mutex: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct rb_thread_struct *)NULL)), locking_mutex)\")],\n"
 ,
-#line 1515 "rjit_c.rb"
+#line 1517 "rjit_c.rb"
 "      keeping_mutexes: [CType::Pointer.new { self.rb_mutex_struct }, Primitive.cexpr!(\"OFFSETOF((*((struct rb_thread_struct *)NULL)), keeping_mutexes)\")],\n"
 "      join_list: [CType::Pointer.new { self.rb_waiting_list }, Primitive.cexpr!(\"OFFSETOF((*((struct rb_thread_struct *)NULL)), join_list)\")],\n"
 "      invoke_arg: [CType::Union.new(\n"
 "        \"\", Primitive.cexpr!(\"SIZEOF(((struct rb_thread_struct *)NULL)->invoke_arg)\"),\n"
 "        proc: CType::Struct.new(\n"
 ,
-#line 1520 "rjit_c.rb"
+#line 1522 "rjit_c.rb"
 "          \"\", Primitive.cexpr!(\"SIZEOF(((struct rb_thread_struct *)NULL)->invoke_arg.proc)\"),\n"
 "          proc: [self.VALUE, Primitive.cexpr!(\"OFFSETOF(((struct rb_thread_struct *)NULL)->invoke_arg.proc, proc)\")],\n"
 "          args: [self.VALUE, Primitive.cexpr!(\"OFFSETOF(((struct rb_thread_struct *)NULL)->invoke_arg.proc, args)\")],\n"
 "          kw_splat: [CType::Immediate.parse(\"int\"), Primitive.cexpr!(\"OFFSETOF(((struct rb_thread_struct *)NULL)->invoke_arg.proc, kw_splat)\")],\n"
 "        ),\n"
 ,
-#line 1525 "rjit_c.rb"
+#line 1527 "rjit_c.rb"
 "        func: CType::Struct.new(\n"
 "          \"\", Primitive.cexpr!(\"SIZEOF(((struct rb_thread_struct *)NULL)->invoke_arg.func)\"),\n"
 "          func: [CType::Immediate.parse(\"void *\"), Primitive.cexpr!(\"OFFSETOF(((struct rb_thread_struct *)NULL)->invoke_arg.func, func)\")],\n"
 "          arg: [CType::Pointer.new { CType::Immediate.parse(\"void\") }, Primitive.cexpr!(\"OFFSETOF(((struct rb_thread_struct *)NULL)->invoke_arg.func, arg)\")],\n"
 "        ),\n"
 ,
-#line 1530 "rjit_c.rb"
+#line 1532 "rjit_c.rb"
 "      ), Primitive.cexpr!(\"OFFSETOF((*((struct rb_thread_struct *)NULL)), invoke_arg)\")],\n"
 "      invoke_type: [self.thread_invoke_type, Primitive.cexpr!(\"OFFSETOF((*((struct rb_thread_struct *)NULL)), invoke_type)\")],\n"
 "      stat_insn_usage: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct rb_thread_struct *)NULL)), stat_insn_usage)\")],\n"
 "      root_fiber: [CType::Pointer.new { self.rb_fiber_t }, Primitive.cexpr!(\"OFFSETOF((*((struct rb_thread_struct *)NULL)), root_fiber)\")],\n"
 ,
-#line 1534 "rjit_c.rb"
+#line 1536 "rjit_c.rb"
 "      scheduler: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct rb_thread_struct *)NULL)), scheduler)\")],\n"
 "      blocking: [CType::Immediate.parse(\"unsigned int\"), Primitive.cexpr!(\"OFFSETOF((*((struct rb_thread_struct *)NULL)), blocking)\")],\n"
 "      name: [self.VALUE, Primitive.cexpr!(\"OFFSETOF((*((struct rb_thread_struct *)NULL)), name)\")],\n"
@@ -3707,7 +3940,7 @@ static const struct {
 "\n"
 "  def C.VALUE\n"
 ,
-#line 1542 "rjit_c.rb"
+#line 1544 "rjit_c.rb"
 "    @VALUE ||= CType::Immediate.find(Primitive.cexpr!(\"SIZEOF(VALUE)\"), Primitive.cexpr!(\"SIGNED_TYPE_P(VALUE)\"))\n"
 "  end\n"
 "\n"
@@ -3729,7 +3962,7 @@ static const struct {
 "\n"
 "  def C.vm_ifunc\n"
 ,
-#line 1562 "rjit_c.rb"
+#line 1564 "rjit_c.rb"
 "    CType::Stub.new(:vm_ifunc)\n"
 "  end\n"
 "\n"
@@ -3760,7 +3993,7 @@ static const struct {
 "  def C.rb_trace_arg_struct\n"
 "    CType::Stub.new(:rb_trace_arg_struct)\n"
 ,
-#line 1591 "rjit_c.rb"
+#line 1593 "rjit_c.rb"
 "  end\n"
 "\n"
 "  def C.rb_iseq_type\n"
@@ -3793,7 +4026,7 @@ static const struct {
 "\n"
 "  def C.rb_hook_list_struct\n"
 ,
-#line 1622 "rjit_c.rb"
+#line 1624 "rjit_c.rb"
 "    CType::Stub.new(:rb_hook_list_struct)\n"
 "  end\n"
 "\n"
@@ -3826,7 +4059,7 @@ static const struct {
 "  end\n"
 "\n"
 ,
-#line 1653 "rjit_c.rb"
+#line 1655 "rjit_c.rb"
 "  def C.rb_native_thread\n"
 "    CType::Stub.new(:rb_native_thread)\n"
 "  end\n"
@@ -3853,7 +4086,7 @@ static const struct {
 "\n"
 "  def C.rb_waiting_list\n"
 ,
-#line 1678 "rjit_c.rb"
+#line 1680 "rjit_c.rb"
 "    CType::Stub.new(:rb_waiting_list)\n"
 "  end\n"
 "\n"
@@ -3867,7 +4100,7 @@ static const struct {
 "\n"
 "\n"/* # RJIT bindgen end ### */
 "end if Primitive.rjit_enabled_p\n"
-#line 3871 "miniprelude.c"
+#line 4104 "miniprelude.c"
 };
 
 static const char prelude_name8[] = "<internal:pack>";
@@ -3906,21 +4139,19 @@ static const struct {
 "    Primitive.pack_unpack1(fmt, offset)\n"
 "  end\n"
 "end\n"
-#line 3910 "miniprelude.c"
+#line 4143 "miniprelude.c"
 };
 
 static const char prelude_name9[] = "<internal:trace_point>";
 static const struct {
-    char L0[508]; /* 1..238 */
-    char L238[506]; /* 239..328 */
-    char L328[495]; /* 329..402 */
-    char L402[215]; /* 403..420 */
+    char L0[508]; /* 1..236 */
+    char L236[506]; /* 237..326 */
+    char L326[495]; /* 327..400 */
+    char L400[215]; /* 401..418 */
 } prelude_code9 = {
 #line 1 "trace_point.rb"
 ""/* loaded from vm_trace.c */
 ""
-""/* Document-class: TracePoint */
-""/*  */
 ""/* A class that provides the functionality of Kernel#set_trace_func in a */
 ""/* nice Object-Oriented API. */
 ""/*  */
@@ -3929,7 +4160,7 @@ static const struct {
 ""/* We can use TracePoint to gather information specifically for exceptions: */
 ""/*  */
 ""/*     trace = TracePoint.new(:raise) do |tp| */
-""/* 	p [tp.lineno, tp.event, tp.raised_exception] */
+""/* \tp [tp.lineno, tp.event, tp.raised_exception] */
 ""/*     end */
 ""/*     #=> #<TracePoint:disabled> */
 ""/*  */
@@ -3969,7 +4200,7 @@ static const struct {
 ""/*  */
 "class TracePoint\n"
 "\n"/* call-seq: */
-"\n"/* TracePoint.new(*events) { |obj| block }	    -> obj */
+"\n"/* TracePoint.new(*events) { |obj| block }\t    -> obj */
 "\n"/*  */
 "\n"/* Returns a new TracePoint object, not enabled by default. */
 "\n"/*  */
@@ -3983,7 +4214,7 @@ static const struct {
 "\n"/* trace.enable */
 "\n"/* #=> false */
 "\n"/*  */
-"\n"/* puts "Hello, TracePoint!" */
+"\n"/* puts \"Hello, TracePoint!\" */
 "\n"/* # ... */
 "\n"/* # [48, IRB::Notifier::AbstractNotifier, :printf, :call] */
 "\n"/* # ... */
@@ -4040,7 +4271,7 @@ static const struct {
 "  end\n"
 "\n"
 "\n"/* call-seq: */
-"\n"/*    TracePoint.trace(*events) { |obj| block }	-> obj */
+"\n"/*    TracePoint.trace(*events) { |obj| block }\t-> obj */
 "\n"/*  */
 "\n"/* A convenience method for TracePoint.new, that activates the trace */
 "\n"/* automatically. */
@@ -4074,18 +4305,18 @@ static const struct {
 "\n"/*  */
 "\n"/*   line_handler = TracePoint.new(:line) do |tp| */
 "\n"/*     next if tp.path != __FILE__ # only work in this file */
-"\n"/*     puts "Line handler" */
-"\n"/*     binding.eval("class C; end") */
+"\n"/*     puts \"Line handler\" */
+"\n"/*     binding.eval(\"class C; end\") */
 "\n"/*   end.enable */
 "\n"/*  */
 "\n"/*   class_handler = TracePoint.new(:class) do |tp| */
-"\n"/*     puts "Class handler" */
+"\n"/*     puts \"Class handler\" */
 "\n"/*   end.enable */
 "\n"/*  */
 "\n"/*   class B */
 "\n"/*   end */
 "\n"/*  */
-"\n"/*   # This script will print "Class handler" only once: when inside :line */
+"\n"/*   # This script will print \"Class handler\" only once: when inside :line */
 "\n"/*   # handler, all other handlers are ignored */
 "\n"/*  */
 "\n"/*  */
@@ -4095,18 +4326,18 @@ static const struct {
 "\n"/*   line_handler = TracePoint.new(:line) do |tp| */
 "\n"/*     next if tp.path != __FILE__ # only work in this file */
 "\n"/*     next if (__LINE__..__LINE__+3).cover?(tp.lineno) # don't be invoked from itself */
-"\n"/*     puts "Line handler" */
-"\n"/*     TracePoint.allow_reentry { binding.eval("class C; end") } */
+"\n"/*     puts \"Line handler\" */
+"\n"/*     TracePoint.allow_reentry { binding.eval(\"class C; end\") } */
 "\n"/*   end.enable */
 "\n"/*  */
 "\n"/*   class_handler = TracePoint.new(:class) do |tp| */
-"\n"/*     puts "Class handler" */
+"\n"/*     puts \"Class handler\" */
 "\n"/*   end.enable */
 "\n"/*  */
 "\n"/*   class B */
 "\n"/*   end */
 "\n"/*  */
-"\n"/*   # This wil print "Class handler" twice: inside allow_reentry block in :line */
+"\n"/*   # This wil print \"Class handler\" twice: inside allow_reentry block in :line */
 "\n"/*   # handler, other handlers are enabled. */
 "\n"/*  */
 "\n"/* Note that the example shows the principal effect of the method, but its */
@@ -4156,7 +4387,7 @@ static const struct {
 "\n"/* an instruction sequence. */
 "\n"/*  */
 ,
-#line 239 "trace_point.rb"
+#line 237 "trace_point.rb"
 "\n"/*    t = TracePoint.new(:line) { |tp| p tp } */
 "\n"/*  */
 "\n"/*    def m1 */
@@ -4184,7 +4415,7 @@ static const struct {
 "  end\n"
 "\n"
 "\n"/* call-seq: */
-"\n"/* trace.disable		-> true or false */
+"\n"/* trace.disable\t\t-> true or false */
 "\n"/* trace.disable { block } -> obj */
 "\n"/*  */
 "\n"/* Deactivates the trace */
@@ -4192,10 +4423,10 @@ static const struct {
 "\n"/* Return true if trace was enabled. */
 "\n"/* Return false if trace was disabled. */
 "\n"/*  */
-"\n"/* trace.enabled?	#=> true */
-"\n"/* trace.disable	#=> true (previous status) */
-"\n"/* trace.enabled?	#=> false */
-"\n"/* trace.disable	#=> false */
+"\n"/* trace.enabled?\t#=> true */
+"\n"/* trace.disable\t#=> true (previous status) */
+"\n"/* trace.enabled?\t#=> false */
+"\n"/* trace.disable\t#=> false */
 "\n"/*  */
 "\n"/* If a block is given, the trace will only be disable within the scope of the */
 "\n"/* block. */
@@ -4220,7 +4451,7 @@ static const struct {
 "  end\n"
 "\n"
 "\n"/* call-seq: */
-"\n"/* trace.enabled?	    -> true or false */
+"\n"/* trace.enabled?\t    -> true or false */
 "\n"/*  */
 "\n"/* The current status of the trace */
 "  def enabled?\n"
@@ -4248,7 +4479,7 @@ static const struct {
 "\n"/* current hook belongs to. Format is the same as for Method#parameters */
 "  def parameters\n"
 ,
-#line 329 "trace_point.rb"
+#line 327 "trace_point.rb"
 "    Primitive.tracepoint_attr_parameters\n"
 "  end\n"
 "\n"
@@ -4265,21 +4496,21 @@ static const struct {
 "\n"/* Return class or module of the method being called. */
 "\n"/*  */
 "\n"/* class C; def foo; end; end */
-"\n"/* 	trace = TracePoint.new(:call) do |tp| */
-"\n"/* 	  p tp.defined_class #=> C */
-"\n"/* 	end.enable do */
-"\n"/* 	  C.new.foo */
-"\n"/* 	end */
+"\n"/* \ttrace = TracePoint.new(:call) do |tp| */
+"\n"/* \t  p tp.defined_class #=> C */
+"\n"/* \tend.enable do */
+"\n"/* \t  C.new.foo */
+"\n"/* \tend */
 "\n"/*  */
 "\n"/* If method is defined by a module, then that module is returned. */
 "\n"/*  */
 "\n"/* module M; def foo; end; end */
-"\n"/* 	class C; include M; end; */
-"\n"/* 	trace = TracePoint.new(:call) do |tp| */
-"\n"/* 	  p tp.defined_class #=> M */
-"\n"/* 	end.enable do */
-"\n"/* 	  C.new.foo */
-"\n"/* 	end */
+"\n"/* \tclass C; include M; end; */
+"\n"/* \ttrace = TracePoint.new(:call) do |tp| */
+"\n"/* \t  p tp.defined_class #=> M */
+"\n"/* \tend.enable do */
+"\n"/* \t  C.new.foo */
+"\n"/* \tend */
 "\n"/*  */
 "\n"/* <b>Note:</b> #defined_class returns singleton class. */
 "\n"/*  */
@@ -4289,11 +4520,11 @@ static const struct {
 "\n"/* <b>This is a difference between Kernel#set_trace_func and TracePoint.</b> */
 "\n"/*  */
 "\n"/* class C; def self.foo; end; end */
-"\n"/* 	trace = TracePoint.new(:call) do |tp| */
-"\n"/* 	  p tp.defined_class #=> #<Class:C> */
-"\n"/* 	end.enable do */
-"\n"/* 	  C.foo */
-"\n"/* 	end */
+"\n"/* \ttrace = TracePoint.new(:call) do |tp| */
+"\n"/* \t  p tp.defined_class #=> #<Class:C> */
+"\n"/* \tend.enable do */
+"\n"/* \t  C.foo */
+"\n"/* \tend */
 "  def defined_class\n"
 "    Primitive.tracepoint_attr_defined_class\n"
 "  end\n"
@@ -4324,7 +4555,7 @@ static const struct {
 "\n"/* Value from exception raised on the +:raise+ event */
 "  def raised_exception\n"
 ,
-#line 403 "trace_point.rb"
+#line 401 "trace_point.rb"
 "    Primitive.tracepoint_attr_raised_exception\n"
 "  end\n"
 "\n"
@@ -4342,7 +4573,7 @@ static const struct {
 "    Primitive.tracepoint_attr_instruction_sequence\n"
 "  end\n"
 "end\n"
-#line 4346 "miniprelude.c"
+#line 4577 "miniprelude.c"
 };
 
 static const char prelude_name10[] = "<internal:warning>";
@@ -4365,7 +4596,7 @@ static const struct {
 "\n"/* character to the string if the string does not end in a newline, */
 "\n"/* and calls Warning.warn with the string. */
 "\n"/*  */
-"\n"/*    warn("warning 1", "warning 2") */
+"\n"/*    warn(\"warning 1\", \"warning 2\") */
 "\n"/*  */
 "\n"/* <em>produces:</em> */
 "\n"/*  */
@@ -4378,7 +4609,7 @@ static const struct {
 "\n"/*  */
 "\n"/*    # In baz.rb */
 "\n"/*    def foo */
-"\n"/*      warn("invalid call to foo", uplevel: 1) */
+"\n"/*      warn(\"invalid call to foo\", uplevel: 1) */
 "\n"/*    end */
 "\n"/*  */
 "\n"/*    def bar */
@@ -4403,7 +4634,7 @@ static const struct {
 "    Primitive.rb_warn_m(msgs, uplevel, category)\n"
 "  end\n"
 "end\n"
-#line 4407 "miniprelude.c"
+#line 4638 "miniprelude.c"
 };
 
 static const char prelude_name11[] = "<internal:array>";
@@ -4454,7 +4685,7 @@ static const struct {
 "\n"/*    a.sample # => 8 */
 "\n"/* If +self+ is empty, returns +nil+. */
 "\n"/*  */
-"\n"/* When argument +n+ is given, returns a new \Array containing +n+ random */
+"\n"/* When argument +n+ is given, returns a new \\Array containing +n+ random */
 "\n"/* elements from +self+: */
 "\n"/*    a.sample(3) # => [8, 9, 2] */
 "\n"/*    a.sample(6) # => [9, 6, 10, 3, 1, 4] */
@@ -4466,7 +4697,7 @@ static const struct {
 "\n"/*    a.sample(a.size * 2) # => [1, 1, 3, 2, 1, 2] */
 "\n"/* The argument +n+ must be a non-negative numeric value. */
 "\n"/* The order of the result array is unrelated to the order of +self+. */
-"\n"/* Returns a new empty \Array if +self+ is empty. */
+"\n"/* Returns a new empty \\Array if +self+ is empty. */
 "\n"/*  */
 "\n"/* The optional +random+ argument will be used as the random number generator: */
 "\n"/*    a = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] */
@@ -4492,22 +4723,22 @@ static const struct {
 "\n"/*  */
 "\n"/*   a = [:foo, 'bar', 2] */
 "\n"/*   a.first # => :foo */
-"\n"/*   a # => [:foo, "bar", 2] */
+"\n"/*   a # => [:foo, \"bar\", 2] */
 "\n"/*  */
 "\n"/* If +self+ is empty, returns +nil+. */
 "\n"/*  */
-"\n"/* When non-negative \Integer argument +n+ is given, */
-"\n"/* returns the first +n+ elements in a new \Array: */
+"\n"/* When non-negative Integer argument +n+ is given, */
+"\n"/* returns the first +n+ elements in a new \\Array: */
 "\n"/*  */
 "\n"/*   a = [:foo, 'bar', 2] */
-"\n"/*   a.first(2) # => [:foo, "bar"] */
+"\n"/*   a.first(2) # => [:foo, \"bar\"] */
 "\n"/*  */
 "\n"/* If <tt>n >= array.size</tt>, returns all elements: */
 "\n"/*  */
 "\n"/*   a = [:foo, 'bar', 2] */
-"\n"/*   a.first(50) # => [:foo, "bar", 2] */
+"\n"/*   a.first(50) # => [:foo, \"bar\", 2] */
 "\n"/*  */
-"\n"/* If <tt>n == 0</tt> returns an new empty \Array: */
+"\n"/* If <tt>n == 0</tt> returns an new empty \\Array: */
 "\n"/*  */
 "\n"/*   a = [:foo, 'bar', 2] */
 "\n"/*   a.first(0) # [] */
@@ -4538,22 +4769,22 @@ static const struct {
 "\n"/*  */
 "\n"/*   a = [:foo, 'bar', 2] */
 "\n"/*   a.last # => 2 */
-"\n"/*   a # => [:foo, "bar", 2] */
+"\n"/*   a # => [:foo, \"bar\", 2] */
 "\n"/*  */
 "\n"/* If +self+ is empty, returns +nil+. */
 "\n"/*  */
-"\n"/* When non-negative \Integer argument +n+ is given, */
-"\n"/* returns the last +n+ elements in a new \Array: */
+"\n"/* When non-negative Integer argument +n+ is given, */
+"\n"/* returns the last +n+ elements in a new \\Array: */
 "\n"/*  */
 "\n"/*   a = [:foo, 'bar', 2] */
-"\n"/*   a.last(2) # => ["bar", 2] */
+"\n"/*   a.last(2) # => [\"bar\", 2] */
 "\n"/*  */
 "\n"/* If <tt>n >= array.size</tt>, returns all elements: */
 "\n"/*  */
 "\n"/*   a = [:foo, 'bar', 2] */
-"\n"/*   a.last(50) # => [:foo, "bar", 2] */
+"\n"/*   a.last(50) # => [:foo, \"bar\", 2] */
 "\n"/*  */
-"\n"/* If <tt>n == 0</tt>, returns an new empty \Array: */
+"\n"/* If <tt>n == 0</tt>, returns an new empty \\Array: */
 "\n"/*  */
 "\n"/*   a = [:foo, 'bar', 2] */
 "\n"/*   a.last(0) # [] */
@@ -4574,14 +4805,14 @@ static const struct {
 "    end\n"
 "  end\n"
 "end\n"
-#line 4578 "miniprelude.c"
+#line 4809 "miniprelude.c"
 };
 
 static const char prelude_name12[] = "<internal:kernel>";
 static const struct {
     char L0[437]; /* 1..121 */
     char L121[503]; /* 122..190 */
-    char L190[203]; /* 191..220 */
+    char L190[478]; /* 191..313 */
 } prelude_code12 = {
 #line 1 "kernel.rb"
 "module Kernel\n"
@@ -4596,9 +4827,9 @@ static const struct {
 "\n"/*     1.class      #=> Integer */
 "\n"/*     self.class   #=> Object */
 "\n"/* -- */
-"\n"/* Equivalent to \c Object\#class in Ruby. */
+"\n"/* Equivalent to \\c Object\\#class in Ruby. */
 "\n"/*  */
-"\n"/* Returns the class of \c obj, skipping singleton classes or module inclusions. */
+"\n"/* Returns the class of \\c obj, skipping singleton classes or module inclusions. */
 "\n"/* ++ */
 "\n"/*  */
 "  def class\n"
@@ -4620,11 +4851,11 @@ static const struct {
 "\n"/*        attr_accessor :str */
 "\n"/*     end */
 "\n"/*     s1 = Klass.new      #=> #<Klass:0x401b3a38> */
-"\n"/*     s1.str = "Hello"    #=> "Hello" */
-"\n"/*     s2 = s1.clone       #=> #<Klass:0x401b3998 @str="Hello"> */
-"\n"/*     s2.str[1,4] = "i"   #=> "i" */
-"\n"/*     s1.inspect          #=> "#<Klass:0x401b3a38 @str=\"Hi\">" */
-"\n"/*     s2.inspect          #=> "#<Klass:0x401b3998 @str=\"Hi\">" */
+"\n"/*     s1.str = \"Hello\"    #=> \"Hello\" */
+"\n"/*     s2 = s1.clone       #=> #<Klass:0x401b3998 @str=\"Hello\"> */
+"\n"/*     s2.str[1,4] = \"i\"   #=> \"i\" */
+"\n"/*     s1.inspect          #=> \"#<Klass:0x401b3a38 @str=\\\"Hi\\\">\" */
+"\n"/*     s2.inspect          #=> \"#<Klass:0x401b3998 @str=\\\"Hi\\\">\" */
 "\n"/*  */
 "\n"/*  This method may have class-specific behavior.  If so, that */
 "\n"/*  behavior will be documented under the #+initialize_copy+ method of */
@@ -4640,14 +4871,14 @@ static const struct {
 "\n"/*  */
 "\n"/*  Returns the freeze status of <i>obj</i>. */
 "\n"/*  */
-"\n"/*     a = [ "a", "b", "c" ] */
-"\n"/*     a.freeze    #=> ["a", "b", "c"] */
+"\n"/*     a = [ \"a\", \"b\", \"c\" ] */
+"\n"/*     a.freeze    #=> [\"a\", \"b\", \"c\"] */
 "\n"/*     a.frozen?   #=> true */
 "\n"/* -- */
-"\n"/* Determines if the object is frozen. Equivalent to \c Object\#frozen? in Ruby. */
-"\n"/* \param[in] obj  the object to be determines */
-"\n"/* \retval Qtrue if frozen */
-"\n"/* \retval Qfalse if not frozen */
+"\n"/* Determines if the object is frozen. Equivalent to \\c Object\\#frozen? in Ruby. */
+"\n"/* \\param[in] obj  the object to be determines */
+"\n"/* \\retval Qtrue if frozen */
+"\n"/* \\retval Qfalse if not frozen */
 "\n"/* ++ */
 "\n"/*  */
 "  def frozen?\n"
@@ -4660,16 +4891,16 @@ static const struct {
 "\n"/*     obj.tap {|x| block }    -> obj */
 "\n"/*  */
 "\n"/*  Yields self to the block, and then returns self. */
-"\n"/*  The primary purpose of this method is to "tap into" a method chain, */
+"\n"/*  The primary purpose of this method is to \"tap into\" a method chain, */
 "\n"/*  in order to perform operations on intermediate results within the chain. */
 "\n"/*  */
-"\n"/*     (1..10)                  .tap {|x| puts "original: #{x}" } */
-"\n"/*       .to_a                  .tap {|x| puts "array:    #{x}" } */
-"\n"/*       .select {|x| x.even? } .tap {|x| puts "evens:    #{x}" } */
-"\n"/*       .map {|x| x*x }        .tap {|x| puts "squares:  #{x}" } */
+"\n"/*     (1..10)                  .tap {|x| puts \"original: \#{x}\" } */
+"\n"/*       .to_a                  .tap {|x| puts \"array:    \#{x}\" } */
+"\n"/*       .select {|x| x.even? } .tap {|x| puts \"evens:    \#{x}\" } */
+"\n"/*       .map {|x| x*x }        .tap {|x| puts \"squares:  \#{x}\" } */
 "\n"/*  */
 "\n"/* -- */
-"\n"/* \private */
+"\n"/* \\private */
 "\n"/* ++ */
 "\n"/*  */
 "  def tap\n"
@@ -4683,7 +4914,7 @@ static const struct {
 "\n"/*  */
 "\n"/*  Yields self to the block and returns the result of the block. */
 "\n"/*  */
-"\n"/*     3.next.then {|x| x**x }.to_s             #=> "256" */
+"\n"/*     3.next.then {|x| x**x }.to_s             #=> \"256\" */
 "\n"/*  */
 "\n"/*  Good usage for +then+ is value piping in method chains: */
 "\n"/*  */
@@ -4718,7 +4949,7 @@ static const struct {
 "\n"/*  */
 "\n"/*  Yields self to the block and returns the result of the block. */
 "\n"/*  */
-"\n"/*     "my string".yield_self {|s| s.upcase }   #=> "MY STRING" */
+"\n"/*     \"my string\".yield_self {|s| s.upcase }   #=> \"MY STRING\" */
 "\n"/*  */
 "\n"/*  Good usage for +then+ is value piping in method chains: */
 "\n"/*  */
@@ -4747,18 +4978,18 @@ static const struct {
 "\n"/* If no block is given, an enumerator is returned instead. */
 "\n"/*  */
 "\n"/*    loop do */
-"\n"/*      print "Input: " */
+"\n"/*      print \"Input: \" */
 "\n"/*      line = gets */
 "\n"/*      break if !line or line =~ /^q/i */
 "\n"/*      # ... */
 "\n"/*    end */
 "\n"/*  */
 "\n"/* StopIteration raised in the block breaks the loop.  In this case, */
-"\n"/* loop returns the "result" value stored in the exception. */
+"\n"/* loop returns the \"result\" value stored in the exception. */
 "\n"/*  */
 "\n"/*    enum = Enumerator.new { |y| */
-"\n"/*      y << "one" */
-"\n"/*      y << "two" */
+"\n"/*      y << \"one\" */
+"\n"/*      y << \"two\" */
 "\n"/*      :ok */
 "\n"/*    } */
 "\n"/*  */
@@ -4794,10 +5025,10 @@ static const struct {
 "\n"/*  suppressed by passing <code>exception: false</code>. */
 "\n"/*  */
 "\n"/*     Float(1)                 #=> 1.0 */
-"\n"/*     Float("123.456")         #=> 123.456 */
-"\n"/*     Float("123.0_badstring") #=> ArgumentError: invalid value for Float(): "123.0_badstring" */
+"\n"/*     Float(\"123.456\")         #=> 123.456 */
+"\n"/*     Float(\"123.0_badstring\") #=> ArgumentError: invalid value for Float(): \"123.0_badstring\" */
 "\n"/*     Float(nil)               #=> TypeError: can't convert nil into Float */
-"\n"/*     Float("123.0_badstring", exception: false)  #=> nil */
+"\n"/*     Float(\"123.0_badstring\", exception: false)  #=> nil */
 "\n"/*  */
 "  def Float(arg, exception: true)\n"
 "    if Primitive.mandatory_only?\n"
@@ -4806,8 +5037,101 @@ static const struct {
 "      Primitive.rb_f_float(arg, exception)\n"
 "    end\n"
 "  end\n"
+"\n"
+"\n"/* call-seq: */
+"\n"/*   Integer(object, base = 0, exception: true) -> integer or nil */
+"\n"/*  */
+"\n"/* Returns an integer converted from +object+. */
+"\n"/*  */
+"\n"/* Tries to convert +object+ to an integer */
+"\n"/* using +to_int+ first and +to_i+ second; */
+"\n"/* see below for exceptions. */
+"\n"/*  */
+"\n"/* With a non-zero +base+, +object+ must be a string or convertible */
+"\n"/* to a string. */
+"\n"/*  */
+"\n"/* ==== numeric objects */
+"\n"/*  */
+"\n"/* With integer argument +object+ given, returns +object+: */
+"\n"/*  */
+"\n"/*   Integer(1)                # => 1 */
+"\n"/*   Integer(-1)               # => -1 */
+"\n"/*  */
+"\n"/* With floating-point argument +object+ given, */
+"\n"/* returns +object+ truncated to an integer: */
+"\n"/*  */
+"\n"/*   Integer(1.9)              # => 1  # Rounds toward zero. */
+"\n"/*   Integer(-1.9)             # => -1 # Rounds toward zero. */
+"\n"/*  */
+"\n"/* ==== string objects */
+"\n"/*  */
+"\n"/* With string argument +object+ and zero +base+ given, */
+"\n"/* returns +object+ converted to an integer in base 10: */
+"\n"/*  */
+"\n"/*   Integer('100')    # => 100 */
+"\n"/*   Integer('-100')   # => -100 */
+"\n"/*  */
+"\n"/* With +base+ zero, string +object+ may contain leading characters */
+"\n"/* to specify the actual base (radix indicator): */
+"\n"/*  */
+"\n"/*   Integer('0100')  # => 64  # Leading '0' specifies base 8. */
+"\n"/*   Integer('0b100') # => 4   # Leading '0b', specifies base 2. */
+"\n"/*   Integer('0x100') # => 256 # Leading '0x' specifies base 16. */
+"\n"/*  */
+"\n"/* With a positive +base+ (in range 2..36) given, returns +object+ */
+"\n"/* converted to an integer in the given base: */
+"\n"/*  */
+"\n"/*   Integer('100', 2)   # => 4 */
+"\n"/*   Integer('100', 8)   # => 64 */
+"\n"/*   Integer('-100', 16) # => -256 */
+"\n"/*  */
+"\n"/* With a negative +base+ (in range -36..-2) given, returns +object+ */
+"\n"/* converted to an integer in the radix indicator if exists or */
+"\n"/* +-base+: */
+"\n"/*  */
+"\n"/*   Integer('0x100', -2)   # => 256 */
+"\n"/*   Integer('100', -2)     # => 4 */
+"\n"/*   Integer('0b100', -8)   # => 4 */
+"\n"/*   Integer('100', -8)     # => 64 */
+"\n"/*   Integer('0o100', -10)  # => 64 */
+"\n"/*   Integer('100', -10)    # => 100 */
+"\n"/*  */
+"\n"/* +base+ -1 is equal the -10 case. */
+"\n"/*  */
+"\n"/* When converting strings, surrounding whitespace and embedded underscores */
+"\n"/* are allowed and ignored: */
+"\n"/*  */
+"\n"/*   Integer(' 100 ')      # => 100 */
+"\n"/*   Integer('-1_0_0', 16) # => -256 */
+"\n"/*  */
+"\n"/* ==== other classes */
+"\n"/*  */
+"\n"/* Examples with +object+ of various other classes: */
+"\n"/*  */
+"\n"/*   Integer(Rational(9, 10)) # => 0  # Rounds toward zero. */
+"\n"/*   Integer(Complex(2, 0))   # => 2  # Imaginary part must be zero. */
+"\n"/*   Integer(Time.now)        # => 1650974042 */
+"\n"/*  */
+"\n"/* ==== keywords */
+"\n"/*  */
+"\n"/* With optional keyword argument +exception+ given as +true+ (the default): */
+"\n"/*  */
+"\n"/* - Raises TypeError if +object+ does not respond to +to_int+ or +to_i+. */
+"\n"/* - Raises TypeError if +object+ is +nil+. */
+"\n"/* - Raise ArgumentError if +object+ is an invalid string. */
+"\n"/*  */
+"\n"/* With +exception+ given as +false+, an exception of any kind is suppressed */
+"\n"/* and +nil+ is returned. */
+"\n"
+"  def Integer(arg, base = 0, exception: true)\n"
+"    if Primitive.mandatory_only?\n"
+"      Primitive.rb_f_integer1(arg)\n"
+"    else\n"
+"      Primitive.rb_f_integer(arg, base, exception);\n"
+"    end\n"
+"  end\n"
 "end\n"
-#line 4811 "miniprelude.c"
+#line 5135 "miniprelude.c"
 };
 
 static const char prelude_name13[] = "<internal:ractor>";
@@ -4824,14 +5148,14 @@ static const struct {
     char L964[93]; /* 965..970 */
 } prelude_code13 = {
 #line 1 "ractor.rb"
-""/* \Ractor is an Actor-model abstraction for Ruby that provides thread-safe parallel execution. */
+""/* \\Ractor is an Actor-model abstraction for Ruby that provides thread-safe parallel execution. */
 ""/*  */
-""/* Ractor.new makes a new \Ractor, which can run in parallel. */
+""/* Ractor.new makes a new \\Ractor, which can run in parallel. */
 ""/*  */
 ""/*     # The simplest ractor */
-""/*     r = Ractor.new {puts "I am in Ractor!"} */
+""/*     r = Ractor.new {puts \"I am in Ractor!\"} */
 ""/*     r.take # wait for it to finish */
-""/*     # Here, "I am in Ractor!" is printed */
+""/*     # Here, \"I am in Ractor!\" is printed */
 ""/*  */
 ""/* Ractors do not share all objects with each other. There are two main benefits to this: across ractors, thread-safety */
 ""/* concerns such as data-races and race-conditions are not possible. The other benefit is parallelism. */
@@ -4841,13 +5165,13 @@ static const struct {
 ""/* available through variables in the outer scope are prohibited from being used across ractors. */
 ""/*  */
 ""/*     a = 1 */
-""/*     r = Ractor.new {puts "I am in Ractor! a=#{a}"} */
+""/*     r = Ractor.new {puts \"I am in Ractor! a=\#{a}\"} */
 ""/*     # fails immediately with */
 ""/*     # ArgumentError (can not isolate a Proc because it accesses outer variables (a).) */
 ""/*  */
 ""/* The object must be explicitly shared: */
 ""/*     a = 1 */
-""/*     r = Ractor.new(a) { |a1| puts "I am in Ractor! a=#{a1}"} */
+""/*     r = Ractor.new(a) { |a1| puts \"I am in Ractor! a=\#{a1}\"} */
 ""/*  */
 ""/* On CRuby (the default implementation), Global Virtual Machine Lock (GVL) is held per ractor, so */
 ""/* ractors can perform in parallel without locking each other. This is unlike the situation with threads */
@@ -4859,11 +5183,11 @@ static const struct {
 ""/*     a = 1 */
 ""/*     r = Ractor.new do */
 ""/*       a_in_ractor = receive # receive blocks until somebody passes a message */
-""/*       puts "I am in Ractor! a=#{a_in_ractor}" */
+""/*       puts \"I am in Ractor! a=\#{a_in_ractor}\" */
 ""/*     end */
 ""/*     r.send(a)  # pass it */
 ""/*     r.take */
-""/*     # Here, "I am in Ractor! a=1" is printed */
+""/*     # Here, \"I am in Ractor! a=1\" is printed */
 ""/*  */
 ""/* There are two pairs of methods for sending/receiving messages: */
 ""/*  */
@@ -4876,21 +5200,21 @@ static const struct {
 ""/*  */
 ""/* A little demonstration of a classic ping-pong: */
 ""/*  */
-""/*     server = Ractor.new(name: "server") do */
-""/*       puts "Server starts: #{self.inspect}" */
-""/*       puts "Server sends: ping" */
+""/*     server = Ractor.new(name: \"server\") do */
+""/*       puts \"Server starts: \#{self.inspect}\" */
+""/*       puts \"Server sends: ping\" */
 ""/*       Ractor.yield 'ping'                       # The server doesn't know the receiver and sends to whoever interested */
 ""/*       received = Ractor.receive                 # The server doesn't know the sender and receives from whoever sent */
-""/*       puts "Server received: #{received}" */
+""/*       puts \"Server received: \#{received}\" */
 ""/*     end */
 ""/*  */
 ""/*     client = Ractor.new(server) do |srv|        # The server is sent to the client, and available as srv */
-""/*       puts "Client starts: #{self.inspect}" */
+""/*       puts \"Client starts: \#{self.inspect}\" */
 ""/*       received = srv.take                       # The client takes a message from the server */
-""/*       puts "Client received from " \ */
-""/*            "#{srv.inspect}: #{received}" */
-""/*       puts "Client sends to " \ */
-""/*            "#{srv.inspect}: pong" */
+""/*       puts \"Client received from \" \\ */
+""/*            \"\#{srv.inspect}: \#{received}\" */
+""/*       puts \"Client sends to \" \\ */
+""/*            \"\#{srv.inspect}: pong\" */
 ""/*       srv.send 'pong'                           # The client sends a message to the server */
 ""/*     end */
 ""/*  */
@@ -4943,11 +5267,11 @@ static const struct {
 ""/*     data = ['foo', 'bar'.freeze] */
 ""/*     r = Ractor.new do */
 ""/*       data2 = Ractor.receive */
-""/*       puts "In ractor: #{data2.object_id}, #{data2[0].object_id}, #{data2[1].object_id}" */
+""/*       puts \"In ractor: \#{data2.object_id}, \#{data2[0].object_id}, \#{data2[1].object_id}\" */
 ""/*     end */
 ""/*     r.send(data) */
 ""/*     r.take */
-""/*     puts "Outside  : #{data.object_id}, #{data[0].object_id}, #{data[1].object_id}" */
+""/*     puts \"Outside  : \#{data.object_id}, \#{data[0].object_id}, \#{data[1].object_id}\" */
 ""/*  */
 ""/* This will output something like: */
 ""/*  */
@@ -4965,12 +5289,12 @@ static const struct {
 ""/*     data = ['foo', 'bar'] */
 ""/*     r = Ractor.new do */
 ""/*       data_in_ractor = Ractor.receive */
-""/*       puts "In ractor: #{data_in_ractor.object_id}, #{data_in_ractor[0].object_id}" */
+""/*       puts \"In ractor: \#{data_in_ractor.object_id}, \#{data_in_ractor[0].object_id}\" */
 ""/*     end */
 ""/*     r.send(data, move: true) */
 ""/*     r.take */
-""/*     puts "Outside: moved? #{Ractor::MovedObject === data}" */
-""/*     puts "Outside: #{data.inspect}" */
+""/*     puts \"Outside: moved? \#{Ractor::MovedObject === data}\" */
+""/*     puts \"Outside: \#{data.inspect}\" */
 ""/*  */
 ""/* This will output: */
 ""/*  */
@@ -4982,7 +5306,7 @@ static const struct {
 ""/* on a moved object. */
 ""/*  */
 ""/* Class and Module objects are shareable so the class/module definitions are shared between ractors. */
-""/* \Ractor objects are also shareable. All operations on shareable objects are thread-safe, so the thread-safety property */
+""/* \\Ractor objects are also shareable. All operations on shareable objects are thread-safe, so the thread-safety property */
 ""/* will be kept. We can not define mutable shareable objects in Ruby, but C extensions can introduce them. */
 ""/*  */
 ""/* It is prohibited to access (get) instance variables of shareable objects in other ractors if the values of the */
@@ -4996,26 +5320,26 @@ static const struct {
 ""/*       end */
 ""/*     end */
 ""/*  */
-""/*     C.tricky = "unshareable".dup */
+""/*     C.tricky = \"unshareable\".dup */
 ""/*  */
 ""/*     r = Ractor.new(C) do |cls| */
-""/*       puts "I see #{cls}" */
-""/*       puts "I can't see #{cls.tricky}" */
+""/*       puts \"I see \#{cls}\" */
+""/*       puts \"I can't see \#{cls.tricky}\" */
 ""/*       cls.tricky = true # doesn't get here, but this would also raise an error */
 ""/*     end */
 ""/*     r.take */
 ""/*     # I see C */
 ""/*     # can not access instance variables of classes/modules from non-main Ractors (RuntimeError) */
 ""/*  */
-""/* Ractors can access constants if they are shareable. The main \Ractor is the only one that can */
+""/* Ractors can access constants if they are shareable. The main \\Ractor is the only one that can */
 ""/* access non-shareable constants. */
 ""/*  */
 ""/*     GOOD = 'good'.freeze */
 ""/*     BAD = 'bad'.dup */
 ""/*  */
 ""/*     r = Ractor.new do */
-""/*       puts "GOOD=#{GOOD}" */
-""/*       puts "BAD=#{BAD}" */
+""/*       puts \"GOOD=\#{GOOD}\" */
+""/*       puts \"BAD=\#{BAD}\" */
 ""/*     end */
 ""/*     r.take */
 ""/*     # GOOD=good */
@@ -5024,8 +5348,8 @@ static const struct {
 ""/*     # Consider the same C class from above */
 ""/*  */
 ""/*     r = Ractor.new do */
-""/*       puts "I see #{C}" */
-""/*       puts "I can't see #{C.tricky}" */
+""/*       puts \"I see \#{C}\" */
+""/*       puts \"I can't see \#{C.tricky}\" */
 ""/*     end */
 ""/*     r.take */
 ""/*     # I see C */
@@ -5041,10 +5365,10 @@ static const struct {
 ""/*  */
 ""/*     r = Ractor.new do */
 ""/*       a = 1 */
-""/*       Thread.new {puts "Thread in ractor: a=#{a}"}.join */
+""/*       Thread.new {puts \"Thread in ractor: a=\#{a}\"}.join */
 ""/*     end */
 ""/*     r.take */
-""/*     # Here "Thread in ractor: a=1" will be printed */
+""/*     # Here \"Thread in ractor: a=1\" will be printed */
 ""/*  */
 ""/* == Note on code examples */
 ""/*  */
@@ -5067,23 +5391,23 @@ static const struct {
 "\n"/*  call-seq: */
 "\n"/*     Ractor.new(*args, name: nil) {|*args| block } -> ractor */
 "\n"/*  */
-"\n"/* Create a new \Ractor with args and a block. */
+"\n"/* Create a new \\Ractor with args and a block. */
 "\n"/*  */
 "\n"/* The given block (Proc) will be isolated (can't access any outer variables). +self+ */
-"\n"/* inside the block will refer to the current \Ractor. */
+"\n"/* inside the block will refer to the current \\Ractor. */
 "\n"/*  */
-"\n"/*    r = Ractor.new { puts "Hi, I am #{self.inspect}" } */
+"\n"/*    r = Ractor.new { puts \"Hi, I am \#{self.inspect}\" } */
 "\n"/*    r.take */
-"\n"/*    # Prints "Hi, I am #<Ractor:#2 test.rb:1 running>" */
+"\n"/*    # Prints \"Hi, I am #<Ractor:#2 test.rb:1 running>\" */
 "\n"/*  */
 "\n"/* Any +args+ passed are propagated to the block arguments by the same rules as */
 "\n"/* objects sent via #send/Ractor.receive. If an argument in +args+ is not shareable, it */
 "\n"/* will be copied (via deep cloning, which might be inefficient). */
 "\n"/*  */
 "\n"/*    arg = [1, 2, 3] */
-"\n"/*    puts "Passing: #{arg} (##{arg.object_id})" */
+"\n"/*    puts \"Passing: \#{arg} (#\#{arg.object_id})\" */
 "\n"/*    r = Ractor.new(arg) {|received_arg| */
-"\n"/*      puts "Received: #{received_arg} (##{received_arg.object_id})" */
+"\n"/*      puts \"Received: \#{received_arg} (#\#{received_arg.object_id})\" */
 "\n"/*    } */
 "\n"/*    r.take */
 "\n"/*    # Prints: */
@@ -5145,9 +5469,9 @@ static const struct {
 "\n"/*  */
 "\n"/*    r, obj = Ractor.select(r1, r2) */
 "\n"/*  */
-"\n"/*    puts "received #{obj.inspect} from #{r.inspect}" */
-"\n"/*    # Prints: received "from 1" from #<Ractor:#2 test.rb:1 running> */
-"\n"/*    # But could just as well print "from r2" here, either prints could be first. */
+"\n"/*    puts \"received \#{obj.inspect} from \#{r.inspect}\" */
+"\n"/*    # Prints: received \"from 1\" from #<Ractor:#2 test.rb:1 running> */
+"\n"/*    # But could just as well print \"from r2\" here, either prints could be first. */
 "\n"/*  */
 "\n"/* If one of the given ractors is the current ractor, and it is selected, +r+ will contain */
 "\n"/* the +:receive+ symbol instead of the ractor object. */
@@ -5161,20 +5485,20 @@ static const struct {
 "\n"/*    end */
 "\n"/*  */
 "\n"/*    r, obj = Ractor.select(r1, r2, Ractor.current) */
-"\n"/*    puts "received #{obj.inspect} from #{r.inspect}" */
-"\n"/*    # Could print: received "to main" from :receive */
+"\n"/*    puts \"received \#{obj.inspect} from \#{r.inspect}\" */
+"\n"/*    # Could print: received \"to main\" from :receive */
 "\n"/*  */
 "\n"/* If +yield_value+ is provided, that value may be yielded if another ractor is calling #take. */
 "\n"/* In this case, the pair <tt>[:yield, nil]</tt> is returned: */
 "\n"/*  */
 "\n"/*    r1 = Ractor.new(Ractor.current) do |main| */
-"\n"/*      puts "Received from main: #{main.take}" */
+"\n"/*      puts \"Received from main: \#{main.take}\" */
 "\n"/*    end */
 "\n"/*  */
-"\n"/*    puts "Trying to select" */
+"\n"/*    puts \"Trying to select\" */
 "\n"/*    r, obj = Ractor.select(r1, Ractor.current, yield_value: 123) */
 "\n"/*    wait */
-"\n"/*    puts "Received #{obj.inspect} from #{r.inspect}" */
+"\n"/*    puts \"Received \#{obj.inspect} from \#{r.inspect}\" */
 "\n"/*  */
 "\n"/* This will print: */
 "\n"/*  */
@@ -5326,36 +5650,36 @@ static const struct {
 "\n"/*  */
 "\n"/*     r = Ractor.new do */
 "\n"/*       v1 = Ractor.receive */
-"\n"/*       puts "Received: #{v1}" */
+"\n"/*       puts \"Received: \#{v1}\" */
 "\n"/*     end */
 "\n"/*     r.send('message1') */
 "\n"/*     r.take */
-"\n"/*     # Here will be printed: "Received: message1" */
+"\n"/*     # Here will be printed: \"Received: message1\" */
 "\n"/*  */
 "\n"/* Alternatively, the private instance method +receive+ may be used: */
 "\n"/*  */
 "\n"/*     r = Ractor.new do */
 "\n"/*       v1 = receive */
-"\n"/*       puts "Received: #{v1}" */
+"\n"/*       puts \"Received: \#{v1}\" */
 "\n"/*     end */
 "\n"/*     r.send('message1') */
 "\n"/*     r.take */
-"\n"/*     # This prints: "Received: message1" */
+"\n"/*     # This prints: \"Received: message1\" */
 "\n"/*  */
 "\n"/* The method blocks if the queue is empty. */
 "\n"/*  */
 "\n"/*     r = Ractor.new do */
-"\n"/*       puts "Before first receive" */
+"\n"/*       puts \"Before first receive\" */
 "\n"/*       v1 = Ractor.receive */
-"\n"/*       puts "Received: #{v1}" */
+"\n"/*       puts \"Received: \#{v1}\" */
 "\n"/*       v2 = Ractor.receive */
-"\n"/*       puts "Received: #{v2}" */
+"\n"/*       puts \"Received: \#{v2}\" */
 "\n"/*     end */
 "\n"/*     wait */
-"\n"/*     puts "Still not received" */
+"\n"/*     puts \"Still not received\" */
 "\n"/*     r.send('message1') */
 "\n"/*     wait */
-"\n"/*     puts "Still received only one" */
+"\n"/*     puts \"Still received only one\" */
 "\n"/*     r.send('message2') */
 "\n"/*     r.take */
 "\n"/*  */
@@ -5406,13 +5730,13 @@ static const struct {
 "\n"/* your ractor's incoming queue. */
 "\n"/*  */
 "\n"/*     r = Ractor.new do */
-"\n"/*       p Ractor.receive_if{|msg| msg.match?(/foo/)} #=> "foo3" */
-"\n"/*       p Ractor.receive_if{|msg| msg.match?(/bar/)} #=> "bar1" */
-"\n"/*       p Ractor.receive_if{|msg| msg.match?(/baz/)} #=> "baz2" */
+"\n"/*       p Ractor.receive_if{|msg| msg.match?(/foo/)} #=> \"foo3\" */
+"\n"/*       p Ractor.receive_if{|msg| msg.match?(/bar/)} #=> \"bar1\" */
+"\n"/*       p Ractor.receive_if{|msg| msg.match?(/baz/)} #=> \"baz2\" */
 "\n"/*     end */
-"\n"/*     r << "bar1" */
-"\n"/*     r << "baz2" */
-"\n"/*     r << "foo3" */
+"\n"/*     r << \"bar1\" */
+"\n"/*     r << \"baz2\" */
+"\n"/*     r << \"foo3\" */
 "\n"/*     r.take */
 "\n"/*  */
 "\n"/* This will output: */
@@ -5434,13 +5758,13 @@ static const struct {
 "\n"/*  */
 "\n"/*     r = Ractor.new do */
 "\n"/*       val = Ractor.receive_if{|msg| msg.is_a?(Array)} */
-"\n"/*       puts "Received successfully: #{val}" */
+"\n"/*       puts \"Received successfully: \#{val}\" */
 "\n"/*     end */
 "\n"/*  */
 "\n"/*     r.send(1) */
 "\n"/*     r.send('test') */
 "\n"/*     wait */
-"\n"/*     puts "2 non-matching sent, nothing received" */
+"\n"/*     puts \"2 non-matching sent, nothing received\" */
 "\n"/*     r.send([1, 2, 3]) */
 "\n"/*     wait */
 "\n"/*  */
@@ -5475,25 +5799,25 @@ static const struct {
 "\n"/*  */
 "\n"/*   r = Ractor.new do */
 "\n"/*     value = Ractor.receive */
-"\n"/*     puts "Received #{value}" */
+"\n"/*     puts \"Received \#{value}\" */
 "\n"/*   end */
 "\n"/*   r.send 'message' */
-"\n"/*   # Prints: "Received: message" */
+"\n"/*   # Prints: \"Received: message\" */
 "\n"/*  */
 "\n"/* The method is non-blocking (will return immediately even if the ractor is not ready */
 "\n"/* to receive anything): */
 "\n"/*  */
 "\n"/*    r = Ractor.new {sleep(5)} */
 "\n"/*    r.send('test') */
-"\n"/*    puts "Sent successfully" */
-"\n"/*    # Prints: "Sent successfully" immediately */
+"\n"/*    puts \"Sent successfully\" */
+"\n"/*    # Prints: \"Sent successfully\" immediately */
 "\n"/*  */
 "\n"/* An attempt to send to a ractor which already finished its execution will raise Ractor::ClosedError. */
 "\n"/*  */
 "\n"/*   r = Ractor.new {} */
 "\n"/*   r.take */
 "\n"/*   p r */
-"\n"/*   # "#<Ractor:#6 (irb):23 terminated>" */
+"\n"/*   # \"#<Ractor:#6 (irb):23 terminated>\" */
 "\n"/*   r.send('test') */
 "\n"/*   # Ractor::ClosedError (The incoming-port is already closed) */
 "\n"/*  */
@@ -5512,7 +5836,7 @@ static const struct {
 "\n"/* If <tt>move: true</tt> is passed, the object is _moved_ into the receiving ractor and becomes */
 "\n"/* inaccessible to the sender. */
 "\n"/*  */
-"\n"/*    r = Ractor.new {puts "Received: #{receive}"} */
+"\n"/*    r = Ractor.new {puts \"Received: \#{receive}\"} */
 "\n"/*    msg = 'message' */
 "\n"/*    r.send(msg, move: true) */
 "\n"/*    r.take */
@@ -5525,7 +5849,7 @@ static const struct {
 "\n"/*  */
 "\n"/* All references to the object and its parts will become invalid to the sender. */
 "\n"/*  */
-"\n"/*    r = Ractor.new {puts "Received: #{receive}"} */
+"\n"/*    r = Ractor.new {puts \"Received: \#{receive}\"} */
 "\n"/*    s = 'message' */
 "\n"/*    ary = [s] */
 "\n"/*    copy = ary.dup */
@@ -5543,10 +5867,10 @@ static const struct {
 "\n"/*  */
 "\n"/* If the object is shareable, <tt>move: true</tt> has no effect on it: */
 "\n"/*  */
-"\n"/*    r = Ractor.new {puts "Received: #{receive}"} */
+"\n"/*    r = Ractor.new {puts \"Received: \#{receive}\"} */
 "\n"/*    s = 'message'.freeze */
 "\n"/*    r.send(s, move: true) */
-"\n"/*    s.inspect #=> "message", still available */
+"\n"/*    s.inspect #=> \"message\", still available */
 "\n"/*  */
 "  def send(obj, move: false)\n"
 "    __builtin_cexpr! %q{\n"
@@ -5563,17 +5887,17 @@ static const struct {
 "\n"/*  */
 "\n"/*    r = Ractor.new {Ractor.yield 'Hello from ractor'} */
 "\n"/*    puts r.take */
-"\n"/*    # Prints: "Hello from ractor" */
+"\n"/*    # Prints: \"Hello from ractor\" */
 "\n"/*  */
 "\n"/* This method is blocking, and will return only when somebody consumes the */
 "\n"/* sent message. */
 "\n"/*  */
 "\n"/*    r = Ractor.new do */
 "\n"/*      Ractor.yield 'Hello from ractor' */
-"\n"/*      puts "Ractor: after yield" */
+"\n"/*      puts \"Ractor: after yield\" */
 "\n"/*    end */
 "\n"/*    wait */
-"\n"/*    puts "Still not taken" */
+"\n"/*    puts \"Still not taken\" */
 "\n"/*    puts r.take */
 "\n"/*  */
 "\n"/* This will print: */
@@ -5616,7 +5940,7 @@ static const struct {
 "\n"/*   puts r.take # Ractor::ClosedError (The outgoing-port is already closed) */
 "\n"/*  */
 "\n"/* The fact that the last value is also sent to the outgoing port means that +take+ can be used */
-"\n"/* as an analog of Thread#join ("just wait until ractor finishes"). However, it will raise if */
+"\n"/* as an analog of Thread#join (\"just wait until ractor finishes\"). However, it will raise if */
 "\n"/* somebody has already consumed that message. */
 "\n"/*  */
 "\n"/* If the outgoing port was closed with #close_outgoing, the method will raise Ractor::ClosedError. */
@@ -5633,7 +5957,7 @@ static const struct {
 "\n"/* If an uncaught exception is raised in the Ractor, it is propagated by take as a */
 "\n"/* Ractor::RemoteError. */
 "\n"/*  */
-"\n"/*   r = Ractor.new {raise "Something weird happened"} */
+"\n"/*   r = Ractor.new {raise \"Something weird happened\"} */
 "\n"/*  */
 "\n"/*   begin */
 "\n"/*     r.take */
@@ -5647,12 +5971,12 @@ static const struct {
 "\n"/* out of any loops that receive this message without propagating the error: */
 "\n"/*  */
 "\n"/*     r = Ractor.new do */
-"\n"/*       3.times {|i| Ractor.yield "message #{i}"} */
-"\n"/*       "finishing" */
+"\n"/*       3.times {|i| Ractor.yield \"message \#{i}\"} */
+"\n"/*       \"finishing\" */
 "\n"/*     end */
 "\n"/*  */
-"\n"/*     loop {puts "Received: " + r.take} */
-"\n"/*     puts "Continue successfully" */
+"\n"/*     loop {puts \"Received: \" + r.take} */
+"\n"/*     puts \"Continue successfully\" */
 "\n"/*  */
 "\n"/* This will print: */
 "\n"/*  */
@@ -5736,7 +6060,7 @@ static const struct {
 "\n"/*     Ractor.shareable?('foo')        #=> false, unless the string is frozen due to # frozen_string_literal: true */
 "\n"/*     Ractor.shareable?('foo'.freeze) #=> true */
 "\n"/*  */
-"\n"/* See also the "Shareable and unshareable objects" section in the \Ractor class docs. */
+"\n"/* See also the \"Shareable and unshareable objects\" section in the \\Ractor class docs. */
 "  def self.shareable? obj\n"
 ,
 #line 901 "ractor.rb"
@@ -5762,7 +6086,7 @@ static const struct {
 "\n"/*  */
 "\n"/*   obj = ['test'] */
 "\n"/*   Ractor.shareable?(obj)     #=> false */
-"\n"/*   Ractor.make_shareable(obj) #=> ["test"] */
+"\n"/*   Ractor.make_shareable(obj) #=> [\"test\"] */
 "\n"/*   Ractor.shareable?(obj)     #=> true */
 "\n"/*   obj.frozen?                #=> true */
 "\n"/*   obj[0].frozen?             #=> true */
@@ -5779,7 +6103,7 @@ static const struct {
 "\n"/*   obj2s.object_id == obj2.object_id   #=> false */
 "\n"/*   obj2s[0].object_id == obj2[0].object_id #=> false */
 "\n"/*  */
-"\n"/* See also the "Shareable and unshareable objects" section in the Ractor class docs. */
+"\n"/* See also the \"Shareable and unshareable objects\" section in the Ractor class docs. */
 "  def self.make_shareable obj, copy: false\n"
 "    if copy\n"
 "      __builtin_cexpr! %q{\n"
@@ -5811,7 +6135,7 @@ static const struct {
 "    }\n"
 "  end\n"
 "end\n"
-#line 5815 "miniprelude.c"
+#line 6139 "miniprelude.c"
 };
 
 static const char prelude_name14[] = "<internal:symbol>";
@@ -5832,7 +6156,7 @@ static const struct {
 "\n"
 "  alias intern to_sym\n"
 "end\n"
-#line 5836 "miniprelude.c"
+#line 6160 "miniprelude.c"
 };
 
 static const char prelude_name15[] = "<internal:timev>";
@@ -5842,7 +6166,7 @@ static const struct {
     char L401[78]; /* 402..405 */
 } prelude_code15 = {
 #line 1 "timev.rb"
-""/* A \Time object represents a date and time: */
+""/* A \\Time object represents a date and time: */
 ""/*  */
 ""/*   Time.new(2000, 1, 1, 0, 0, 0) # => 2000-01-01 00:00:00 -0600 */
 ""/*  */
@@ -5883,9 +6207,9 @@ static const struct {
 ""/* Other retrieval methods such as Time#to_i and Time#to_f */
 ""/* may return a value that rounds or truncates subseconds. */
 ""/*  */
-""/* == \Time Resolution */
+""/* == \\Time Resolution */
 ""/*  */
-""/* A \Time object derived from the system clock */
+""/* A \\Time object derived from the system clock */
 ""/* (for example, by method Time.now) */
 ""/* has the resolution supported by the system. */
 ""/*  */
@@ -5893,7 +6217,7 @@ static const struct {
 ""/*  */
 ""/* All of these examples were done using the EST timezone which is GMT-5. */
 ""/*  */
-""/* === Creating a New \Time Instance */
+""/* === Creating a New \\Time Instance */
 ""/*  */
 ""/* You can create a new instance of Time with Time.new. This will use the */
 ""/* current system time. Time.now is an alias for this. You can also */
@@ -5908,11 +6232,11 @@ static const struct {
 ""/*  */
 ""/* You can pass a UTC offset: */
 ""/*  */
-""/*   Time.new(2002, 10, 31, 2, 2, 2, "+02:00") #=> 2002-10-31 02:02:02 +0200 */
+""/*   Time.new(2002, 10, 31, 2, 2, 2, \"+02:00\") #=> 2002-10-31 02:02:02 +0200 */
 ""/*  */
 ""/* Or a timezone object: */
 ""/*  */
-""/*   zone = timezone("Europe/Athens")      # Eastern European Time, UTC+2 */
+""/*   zone = timezone(\"Europe/Athens\")      # Eastern European Time, UTC+2 */
 ""/*   Time.new(2002, 10, 31, 2, 2, 2, zone) #=> 2002-10-31 02:02:02 +0200 */
 ""/*  */
 ""/* You can also use Time.local and Time.utc to infer */
@@ -5925,13 +6249,13 @@ static const struct {
 ""/*  */
 ""/*   Time.at(628232400) #=> 1989-11-28 00:00:00 -0500 */
 ""/*  */
-""/* === Working with an Instance of \Time */
+""/* === Working with an Instance of \\Time */
 ""/*  */
 ""/* Once you have an instance of Time there is a multitude of things you can */
 ""/* do with it. Below are some examples. For all of the following examples, we */
 ""/* will work on the assumption that you have done the following: */
 ""/*  */
-""/*   t = Time.new(1993, 02, 24, 12, 0, 0, "+09:00") */
+""/*   t = Time.new(1993, 02, 24, 12, 0, 0, \"+09:00\") */
 ""/*  */
 ""/* Was that a monday? */
 ""/*  */
@@ -5967,19 +6291,19 @@ static const struct {
 ""/*  */
 ""/* == What's Here */
 ""/*  */
-""/* First, what's elsewhere. \Class \Time: */
+""/* First, what's elsewhere. \\Class \\Time: */
 ""/*  */
 ""/* - Inherits from {class Object}[rdoc-ref:Object@What-27s+Here]. */
 ""/* - Includes {module Comparable}[rdoc-ref:Comparable@What-27s+Here]. */
 ""/*  */
-""/* Here, class \Time provides methods that are useful for: */
+""/* Here, class \\Time provides methods that are useful for: */
 ""/*  */
-""/* - {Creating \Time objects}[rdoc-ref:Time@Methods+for+Creating]. */
-""/* - {Fetching \Time values}[rdoc-ref:Time@Methods+for+Fetching]. */
-""/* - {Querying a \Time object}[rdoc-ref:Time@Methods+for+Querying]. */
-""/* - {Comparing \Time objects}[rdoc-ref:Time@Methods+for+Comparing]. */
-""/* - {Converting a \Time object}[rdoc-ref:Time@Methods+for+Converting]. */
-""/* - {Rounding a \Time}[rdoc-ref:Time@Methods+for+Rounding]. */
+""/* - {Creating \\Time objects}[rdoc-ref:Time@Methods+for+Creating]. */
+""/* - {Fetching \\Time values}[rdoc-ref:Time@Methods+for+Fetching]. */
+""/* - {Querying a \\Time object}[rdoc-ref:Time@Methods+for+Querying]. */
+""/* - {Comparing \\Time objects}[rdoc-ref:Time@Methods+for+Comparing]. */
+""/* - {Converting a \\Time object}[rdoc-ref:Time@Methods+for+Converting]. */
+""/* - {Rounding a \\Time}[rdoc-ref:Time@Methods+for+Rounding]. */
 ""/*  */
 ""/* === Methods for Creating */
 ""/*  */
@@ -6056,7 +6380,7 @@ static const struct {
 ""/* For the forms of argument +zone+, see */
 ""/* {Timezone Specifiers}[rdoc-ref:timezones.rdoc]. */
 "class Time\n"
-"\n"/* Creates a new \Time object from the current system time. */
+"\n"/* Creates a new \\Time object from the current system time. */
 "\n"/* This is the same as Time.new without arguments. */
 "\n"/*  */
 "\n"/*    Time.now               # => 2009-06-24 12:39:54 +0900 */
@@ -6068,11 +6392,11 @@ static const struct {
 "    Primitive.time_s_now(Primitive.arg!(:in))\n"
 "  end\n"
 "\n"
-"\n"/* Returns a new \Time object based on the given arguments. */
+"\n"/* Returns a new \\Time object based on the given arguments. */
 "\n"/*  */
 "\n"/* Required argument +time+ may be either of: */
 "\n"/*  */
-"\n"/* - A \Time object, whose value is the basis for the returned time; */
+"\n"/* - A \\Time object, whose value is the basis for the returned time; */
 "\n"/*   also influenced by optional keyword argument +in:+ (see below). */
 "\n"/* - A numeric number of */
 "\n"/*   {Epoch seconds}[rdoc-ref:Time@Epoch+Seconds] */
@@ -6131,7 +6455,7 @@ static const struct {
 "    end\n"
 "  end\n"
 "\n"
-"\n"/* Returns a new \Time object based on the given arguments, */
+"\n"/* Returns a new \\Time object based on the given arguments, */
 "\n"/* by default in the local timezone. */
 "\n"/*  */
 "\n"/* With no positional arguments, returns the value of Time.now: */
@@ -6139,7 +6463,7 @@ static const struct {
 "\n"/*   Time.new # => 2021-04-24 17:27:46.0512465 -0500 */
 "\n"/*  */
 "\n"/* With one string argument that represents a time, returns a new */
-"\n"/* \Time object based on the given argument, in the local timezone. */
+"\n"/* \\Time object based on the given argument, in the local timezone. */
 "\n"/*  */
 "\n"/*   Time.new('2000-12-31 23:59:59.5')              # => 2000-12-31 23:59:59.5 -0600 */
 "\n"/*   Time.new('2000-12-31 23:59:59.5 +0900')        # => 2000-12-31 23:59:59.5 +0900 */
@@ -6147,7 +6471,7 @@ static const struct {
 "\n"/*   Time.new('2000-12-31 23:59:59.5')              # => 2000-12-31 23:59:59.5 -0600 */
 "\n"/*   Time.new('2000-12-31 23:59:59.56789', precision: 3) # => 2000-12-31 23:59:59.567 -0600 */
 "\n"/*  */
-"\n"/* With one to six arguments, returns a new \Time object */
+"\n"/* With one to six arguments, returns a new \\Time object */
 "\n"/* based on the given arguments, in the local timezone. */
 "\n"/*  */
 "\n"/*   Time.new(2000, 1, 2, 3, 4, 5) # => 2000-01-02 03:04:05 -0600 */
@@ -6203,14 +6527,14 @@ static const struct {
 "\n"/*     Time.new(Float(0.0), Rational(1, 1), 1.0, 0.0, 0.0, 0.0) */
 "\n"/*     # => 0000-01-01 00:00:00 -0600 */
 "\n"/*  */
-"\n"/* - \String integers: */
+"\n"/* - String integers: */
 "\n"/*  */
 "\n"/*     a = %w[0 1 1 0 0 0] */
-"\n"/*     # => ["0", "1", "1", "0", "0", "0"] */
+"\n"/*     # => [\"0\", \"1\", \"1\", \"0\", \"0\", \"0\"] */
 "\n"/*     Time.new(*a) # => 0000-01-01 00:00:00 -0600 */
 "\n"/*  */
 "\n"/* When positional argument +zone+ or keyword argument +in:+ is given, */
-"\n"/* the new \Time object is in the specified timezone. */
+"\n"/* the new \\Time object is in the specified timezone. */
 "\n"/* For the forms of argument +zone+, see */
 "\n"/* {Timezone Specifiers}[rdoc-ref:timezones.rdoc]: */
 "\n"/*  */
@@ -6222,7 +6546,7 @@ static const struct {
 "\n"/*   # => 2022-08-23 08:49:26.1941467 -1200 */
 "\n"/*  */
 "\n"/* - +precision+: maximum effective digits in sub-second part, default is 9. */
-"\n"/*   More digits will be truncated, as other operations of \Time. */
+"\n"/*   More digits will be truncated, as other operations of \\Time. */
 "\n"/*   Ignored unless the first argument is a string. */
 "\n"/*  */
 ,
@@ -6250,7 +6574,7 @@ static const struct {
 "    Primitive.time_init_args(year, mon, mday, hour, min, sec, zone)\n"
 "  end\n"
 "end\n"
-#line 6254 "miniprelude.c"
+#line 6578 "miniprelude.c"
 };
 
 static const char prelude_name16[] = "<internal:thread_sync>";
@@ -6329,7 +6653,7 @@ static const struct {
 "    alias_method :<<, :push\n"
 "  end\n"
 "end\n"
-#line 6333 "miniprelude.c"
+#line 6657 "miniprelude.c"
 };
 
 static const char prelude_name17[] = "<internal:nilclass>";
@@ -6362,7 +6686,7 @@ static const struct {
 "    return 0.0\n"
 "  end\n"
 "end\n"
-#line 6366 "miniprelude.c"
+#line 6690 "miniprelude.c"
 };
 
 static const char prelude_name18[] = "<internal:prelude>";
@@ -6401,13 +6725,13 @@ static const struct {
 "    klass.new(self, *args, &block)\n"
 "  end unless instance_methods.include?(:to_set)\n"/* RJIT could already load this from builtin prelude */
 "end\n"
-#line 6405 "miniprelude.c"
+#line 6729 "miniprelude.c"
 };
 
 static const char prelude_name19[] = "<internal:gem_prelude>";
 static const struct {
-    char L0[490]; /* 1..24 */
-    char L24[32]; /* 25..27 */
+    char L0[478]; /* 1..25 */
+    char L25[74]; /* 26..29 */
 } prelude_code19 = {
 #line 1 "gem_prelude.rb"
 "begin\n"
@@ -6416,6 +6740,8 @@ static const struct {
 "  raise unless e.path == 'rubygems'\n"
 "\n"
 "  warn \"`RubyGems' were not loaded.\"\n"
+"else\n"
+"  require 'bundled_gems'\n"
 "end if defined?(Gem)\n"
 "\n"
 "begin\n"
@@ -6433,12 +6759,12 @@ static const struct {
 "begin\n"
 "  require 'syntax_suggest/core_ext'\n"
 "rescue LoadError\n"
-"  warn \"`syntax_suggest' was not loaded.\"\n"
 ,
-#line 25 "gem_prelude.rb"
+#line 26 "gem_prelude.rb"
+"  warn \"`syntax_suggest' was not loaded.\"\n"
 "end if defined?(SyntaxSuggest)\n"
 "\n"
-#line 6442 "miniprelude.c"
+#line 6768 "miniprelude.c"
 };
 
 static const char prelude_name20[] = "<internal:yjit>";
@@ -6449,28 +6775,32 @@ static const struct {
     char L86[462]; /* 87..102 */
     char L102[459]; /* 103..147 */
     char L147[488]; /* 148..167 */
-    char L167[506]; /* 168..184 */
-    char L184[508]; /* 185..218 */
-    char L218[464]; /* 219..243 */
-    char L243[499]; /* 244..250 */
-    char L250[449]; /* 251..255 */
-    char L255[448]; /* 256..263 */
-    char L263[486]; /* 264..270 */
-    char L270[443]; /* 271..275 */
-    char L275[486]; /* 276..280 */
-    char L280[474]; /* 281..286 */
-    char L286[494]; /* 287..293 */
-    char L293[463]; /* 294..298 */
-    char L298[487]; /* 299..303 */
-    char L303[452]; /* 304..308 */
-    char L308[482]; /* 309..315 */
-    char L315[478]; /* 316..329 */
-    char L329[494]; /* 330..341 */
-    char L341[473]; /* 342..355 */
-    char L355[488]; /* 356..372 */
-    char L372[495]; /* 373..385 */
-    char L385[506]; /* 386..400 */
-    char L400[4]; /* 401..402 */
+    char L167[488]; /* 168..187 */
+    char L187[493]; /* 188..218 */
+    char L218[458]; /* 219..244 */
+    char L244[475]; /* 245..256 */
+    char L256[503]; /* 257..261 */
+    char L261[499]; /* 262..266 */
+    char L266[423]; /* 267..270 */
+    char L270[459]; /* 271..279 */
+    char L279[501]; /* 280..284 */
+    char L284[480]; /* 285..290 */
+    char L290[479]; /* 291..296 */
+    char L296[447]; /* 297..301 */
+    char L301[409]; /* 302..306 */
+    char L306[433]; /* 307..311 */
+    char L311[467]; /* 312..318 */
+    char L318[443]; /* 319..323 */
+    char L323[495]; /* 324..329 */
+    char L329[432]; /* 330..334 */
+    char L334[433]; /* 335..339 */
+    char L339[474]; /* 340..352 */
+    char L352[490]; /* 353..364 */
+    char L364[465]; /* 365..378 */
+    char L378[486]; /* 379..395 */
+    char L395[491]; /* 396..408 */
+    char L408[506]; /* 409..423 */
+    char L423[4]; /* 424..425 */
 } prelude_code20 = {
 #line 1 "yjit.rb"
 ""/* frozen_string_literal: true */
@@ -6602,7 +6932,7 @@ static const struct {
 "\n"/* Usage: */
 "\n"/*  */
 "\n"/* If `--yjit-exit-locations` is passed, a file named */
-"\n"/* "yjit_exit_locations.dump" will automatically be generated. */
+"\n"/* \"yjit_exit_locations.dump\" will automatically be generated. */
 "\n"/*  */
 "\n"/* If you want to collect traces manually, call `dump_exit_locations` */
 "\n"/* directly. */
@@ -6614,7 +6944,7 @@ static const struct {
 "\n"/* In a script call: */
 "\n"/*  */
 "\n"/*   at_exit do */
-"\n"/*     RubyVM::YJIT.dump_exit_locations("my_file.dump") */
+"\n"/*     RubyVM::YJIT.dump_exit_locations(\"my_file.dump\") */
 "\n"/*   end */
 "\n"/*  */
 "\n"/* Then run the file with the following options: */
@@ -6647,21 +6977,18 @@ static const struct {
 "\n"
 "\n"/* Number of instructions that finish executing in YJIT. */
 "\n"/* See :count-placement: about the subtraction. */
-"    retired_in_yjit = stats[:exec_instruction] - side_exits\n"
+"    retired_in_yjit = stats[:yjit_insns_count] - side_exits\n"
 "\n"
 "\n"/* Average length of instruction sequences executed by YJIT */
 ,
 #line 168 "yjit.rb"
 "    avg_len_in_yjit = total_exits > 0 ? retired_in_yjit.to_f / total_exits : 0\n"
 "\n"
-"\n"/* This only available on yjit stats builds */
-"    if stats.key?(:vm_insns_count)\n"
 "\n"/* Proportion of instructions that retire in YJIT */
-"      total_insns_count = retired_in_yjit + stats[:vm_insns_count]\n"
-"      yjit_ratio_pct = 100.0 * retired_in_yjit.to_f / total_insns_count\n"
-"      stats[:total_insns_count] = total_insns_count\n"
-"      stats[:ratio_in_yjit] = yjit_ratio_pct\n"
-"    end\n"
+"    total_insns_count = retired_in_yjit + stats[:vm_insns_count]\n"
+"    yjit_ratio_pct = 100.0 * retired_in_yjit.to_f / total_insns_count\n"
+"    stats[:total_insns_count] = total_insns_count\n"
+"    stats[:ratio_in_yjit] = yjit_ratio_pct\n"
 "\n"
 "\n"/* Make those stats available in RubyVM::YJIT.runtime_stats as well */
 "    stats[:side_exit_count]  = side_exits\n"
@@ -6669,8 +6996,18 @@ static const struct {
 "    stats[:avg_len_in_yjit]  = avg_len_in_yjit\n"
 "\n"
 "    stats\n"
+"  end\n"
+"\n"
+"\n"/* Format and print out counters as a String. This returns a non-empty */
+"\n"/* content only when --yjit-stats is enabled. */
+"  def self.stats_string\n"
+"\n"/* Lazily require StringIO to avoid breaking miniruby */
 ,
-#line 185 "yjit.rb"
+#line 188 "yjit.rb"
+"    require 'stringio'\n"
+"    strio = StringIO.new\n"
+"    _print_stats(out: strio)\n"
+"    strio.string\n"
 "  end\n"
 "\n"
 "\n"/* Produce disassembly for an iseq */
@@ -6698,6 +7035,8 @@ static const struct {
 "\n"
 "\n"/* Free and recompile all existing JIT code */
 "  def self.code_gc\n"
+,
+#line 219 "yjit.rb"
 "    Primitive.rb_yjit_code_gc\n"
 "  end\n"
 "\n"
@@ -6705,12 +7044,12 @@ static const struct {
 "    Primitive.rb_yjit_simulate_oom_bang\n"
 "  end\n"
 "\n"
-,
-#line 219 "yjit.rb"
 "\n"/* Avoid calling a method here to not interfere with compilation tests */
 "  if Primitive.rb_yjit_stats_enabled_p\n"
 "    at_exit do\n"
-"      _print_stats\n"
+"      if Primitive.rb_yjit_print_stats_p\n"
+"        _print_stats\n"
+"      end\n"
 "      _dump_locations\n"
 "    end\n"
 "  end\n"
@@ -6724,120 +7063,142 @@ static const struct {
 "      filename = \"yjit_exit_locations.dump\"\n"
 "      dump_exit_locations(filename)\n"
 "\n"
+,
+#line 245 "yjit.rb"
 "      $stderr.puts(\"YJIT exit locations dumped to `#{filename}`.\")\n"
 "    end\n"
 "\n"
 "\n"/* Format and print out counters */
-"    def _print_stats\n"/* :nodoc: */
+"    def _print_stats(out: $stderr)\n"/* :nodoc: */
 "      stats = runtime_stats(context: true)\n"
-"      return unless stats\n"
+"      return unless Primitive.rb_yjit_stats_enabled_p\n"
 "\n"
-,
-#line 244 "yjit.rb"
-"      $stderr.puts(\"***YJIT: Printing YJIT statistics on exit***\")\n"
+"      out.puts(\"***YJIT: Printing YJIT statistics on exit***\")\n"
 "\n"
-"      print_counters(stats, prefix: 'send_', prompt: 'method call exit reasons: ')\n"
-"      print_counters(stats, prefix: 'invokeblock_', prompt: 'invokeblock exit reasons: ')\n"
-"      print_counters(stats, prefix: 'invokesuper_', prompt: 'invokesuper exit reasons: ')\n"
-"      print_counters(stats, prefix: 'leave_', prompt: 'leave exit reasons: ')\n"
-"      print_counters(stats, prefix: 'gbpp_', prompt: 'getblockparamproxy exit reasons: ')\n"
+"      print_counters(stats, out: out, prefix: 'send_', prompt: 'method call fallback reasons: ')\n"
+"      print_counters(stats, out: out, prefix: 'invokeblock_', prompt: 'invokeblock fallback reasons: ')\n"
 ,
-#line 251 "yjit.rb"
-"      print_counters(stats, prefix: 'getivar_', prompt: 'getinstancevariable exit reasons:')\n"
-"      print_counters(stats, prefix: 'setivar_', prompt: 'setinstancevariable exit reasons:')\n"
-"      print_counters(stats, prefix: 'definedivar_', prompt: 'definedivar exit reasons:')\n"
-"      print_counters(stats, prefix: 'opt_aref_', prompt: 'opt_aref exit reasons: ')\n"
-"      print_counters(stats, prefix: 'expandarray_', prompt: 'expandarray exit reasons: ')\n"
+#line 257 "yjit.rb"
+"      print_counters(stats, out: out, prefix: 'invokesuper_', prompt: 'invokesuper fallback reasons: ')\n"
+"      print_counters(stats, out: out, prefix: 'guard_send_', prompt: 'method call exit reasons: ')\n"
+"      print_counters(stats, out: out, prefix: 'guard_invokeblock_', prompt: 'invokeblock exit reasons: ')\n"
+"      print_counters(stats, out: out, prefix: 'guard_invokesuper_', prompt: 'invokesuper exit reasons: ')\n"
+"      print_counters(stats, out: out, prefix: 'leave_', prompt: 'leave exit reasons: ')\n"
 ,
-#line 256 "yjit.rb"
-"      print_counters(stats, prefix: 'opt_getinlinecache_', prompt: 'opt_getinlinecache exit reasons: ')\n"
-"      print_counters(stats, prefix: 'invalidate_', prompt: 'invalidation reasons: ')\n"
+#line 262 "yjit.rb"
+"      print_counters(stats, out: out, prefix: 'gbpp_', prompt: 'getblockparamproxy exit reasons: ')\n"
+"      print_counters(stats, out: out, prefix: 'getivar_', prompt: 'getinstancevariable exit reasons:')\n"
+"      print_counters(stats, out: out, prefix: 'setivar_', prompt: 'setinstancevariable exit reasons:')\n"
+"      print_counters(stats, out: out, prefix: 'definedivar_', prompt: 'definedivar exit reasons:')\n"
+"      print_counters(stats, out: out, prefix: 'opt_aref_', prompt: 'opt_aref exit reasons: ')\n"
+,
+#line 267 "yjit.rb"
+"      print_counters(stats, out: out, prefix: 'opt_aref_with_', prompt: 'opt_aref_with exit reasons: ')\n"
+"      print_counters(stats, out: out, prefix: 'expandarray_', prompt: 'expandarray exit reasons: ')\n"
+"      print_counters(stats, out: out, prefix: 'lshift_', prompt: 'left shift (ltlt) exit reasons: ')\n"
+"      print_counters(stats, out: out, prefix: 'opt_getconstant_path_', prompt: 'opt_getconstant_path exit reasons: ')\n"
+,
+#line 271 "yjit.rb"
+"      print_counters(stats, out: out, prefix: 'invalidate_', prompt: 'invalidation reasons: ')\n"
 "\n"
 "\n"/* Number of failed compiler invocations */
 "      compilation_failure = stats[:compilation_failure]\n"
 "\n"
-"      $stderr.puts \"num_send:              \" + format_number(13, stats[:num_send])\n"
-"      $stderr.puts \"num_send_known_class:  \" + format_number_pct(13, stats[:num_send_known_class], stats[:num_send])\n"
+"      code_region_overhead = stats[:code_region_size] - (stats[:inline_code_size] + stats[:outlined_code_size])\n"
+"\n"
+"      out.puts \"num_send:              \" + format_number(13, stats[:num_send])\n"
+"      out.puts \"num_send_known_class:  \" + format_number_pct(13, stats[:num_send_known_class], stats[:num_send])\n"
 ,
-#line 264 "yjit.rb"
-"      $stderr.puts \"num_send_polymorphic:  \" + format_number_pct(13, stats[:num_send_polymorphic], stats[:num_send])\n"
+#line 280 "yjit.rb"
+"      out.puts \"num_send_polymorphic:  \" + format_number_pct(13, stats[:num_send_polymorphic], stats[:num_send])\n"
+"      out.puts \"num_send_megamorphic:  \" + format_number_pct(13, stats[:num_send_megamorphic], stats[:num_send])\n"
+"      out.puts \"num_send_dynamic:      \" + format_number_pct(13, stats[:num_send_dynamic], stats[:num_send])\n"
 "      if stats[:num_send_x86_rel32] != 0 || stats[:num_send_x86_reg] != 0\n"
-"        $stderr.puts \"num_send_x86_rel32:    \" + format_number(13,  stats[:num_send_x86_rel32])\n"
-"        $stderr.puts \"num_send_x86_reg:      \" + format_number(13, stats[:num_send_x86_reg])\n"
+"        out.puts \"num_send_x86_rel32:    \" + format_number(13,  stats[:num_send_x86_rel32])\n"
+,
+#line 285 "yjit.rb"
+"        out.puts \"num_send_x86_reg:      \" + format_number(13, stats[:num_send_x86_reg])\n"
 "      end\n"
+"      out.puts \"num_getivar_megamorphic: \" + format_number(13, stats[:num_getivar_megamorphic])\n"
+"      out.puts \"num_setivar_megamorphic: \" + format_number(13, stats[:num_setivar_megamorphic])\n"
+"      out.puts \"num_throw:             \" + format_number(13, stats[:num_throw])\n"
+"      out.puts \"num_throw_break:       \" + format_number_pct(13, stats[:num_throw_break], stats[:num_throw])\n"
+,
+#line 291 "yjit.rb"
+"      out.puts \"num_throw_retry:       \" + format_number_pct(13, stats[:num_throw_retry], stats[:num_throw])\n"
+"      out.puts \"num_throw_return:      \" + format_number_pct(13, stats[:num_throw_return], stats[:num_throw])\n"
 "\n"
-"      $stderr.puts \"iseq_stack_too_large:  \" + format_number(13, stats[:iseq_stack_too_large])\n"
+"      out.puts \"iseq_stack_too_large:  \" + format_number(13, stats[:iseq_stack_too_large])\n"
+"      out.puts \"iseq_too_long:         \" + format_number(13, stats[:iseq_too_long])\n"
+"      out.puts \"temp_reg_opnd:         \" + format_number(13, stats[:temp_reg_opnd])\n"
 ,
-#line 271 "yjit.rb"
-"      $stderr.puts \"iseq_too_long:         \" + format_number(13, stats[:iseq_too_long])\n"
-"      $stderr.puts \"temp_reg_opnd:         \" + format_number(13, stats[:temp_reg_opnd])\n"
-"      $stderr.puts \"temp_mem_opnd:         \" + format_number(13, stats[:temp_mem_opnd])\n"
-"      $stderr.puts \"temp_spill:            \" + format_number(13, stats[:temp_spill])\n"
-"      $stderr.puts \"bindings_allocations:  \" + format_number(13, stats[:binding_allocations])\n"
+#line 297 "yjit.rb"
+"      out.puts \"temp_mem_opnd:         \" + format_number(13, stats[:temp_mem_opnd])\n"
+"      out.puts \"temp_spill:            \" + format_number(13, stats[:temp_spill])\n"
+"      out.puts \"bindings_allocations:  \" + format_number(13, stats[:binding_allocations])\n"
+"      out.puts \"bindings_set:          \" + format_number(13, stats[:binding_set])\n"
+"      out.puts \"compilation_failure:   \" + format_number(13, compilation_failure) if compilation_failure != 0\n"
 ,
-#line 276 "yjit.rb"
-"      $stderr.puts \"bindings_set:          \" + format_number(13, stats[:binding_set])\n"
-"      $stderr.puts \"compilation_failure:   \" + format_number(13, compilation_failure) if compilation_failure != 0\n"
-"      $stderr.puts \"compiled_iseq_count:   \" + format_number(13, stats[:compiled_iseq_count])\n"
-"      $stderr.puts \"compiled_blockid_count:\" + format_number(13, stats[:compiled_blockid_count])\n"
-"      $stderr.puts \"compiled_block_count:  \" + format_number(13, stats[:compiled_block_count])\n"
-,
-#line 281 "yjit.rb"
+#line 302 "yjit.rb"
+"      out.puts \"compiled_iseq_entry:   \" + format_number(13, stats[:compiled_iseq_entry])\n"
+"      out.puts \"compiled_iseq_count:   \" + format_number(13, stats[:compiled_iseq_count])\n"
+"      out.puts \"compiled_blockid_count:\" + format_number(13, stats[:compiled_blockid_count])\n"
+"      out.puts \"compiled_block_count:  \" + format_number(13, stats[:compiled_block_count])\n"
 "      if stats[:compiled_blockid_count] != 0\n"
-"        $stderr.puts \"versions_per_block:    \" + format_number(13, \"%4.3f\" % (stats[:compiled_block_count].fdiv(stats[:compiled_blockid_count])))\n"
+,
+#line 307 "yjit.rb"
+"        out.puts \"versions_per_block:    \" + format_number(13, \"%4.3f\" % (stats[:compiled_block_count].fdiv(stats[:compiled_blockid_count])))\n"
 "      end\n"
-"      $stderr.puts \"compiled_branch_count: \" + format_number(13, stats[:compiled_branch_count])\n"
-"      $stderr.puts \"block_next_count:      \" + format_number(13, stats[:block_next_count])\n"
-"      $stderr.puts \"defer_count:           \" + format_number(13, stats[:defer_count])\n"
+"      out.puts \"compiled_branch_count: \" + format_number(13, stats[:compiled_branch_count])\n"
+"      out.puts \"compile_time_ms:       \" + format_number(13, stats[:compile_time_ns] / (1000 * 1000))\n"
+"      out.puts \"block_next_count:      \" + format_number(13, stats[:block_next_count])\n"
 ,
-#line 287 "yjit.rb"
-"      $stderr.puts \"defer_empty_count:     \" + format_number(13, stats[:defer_empty_count])\n"
+#line 312 "yjit.rb"
+"      out.puts \"defer_count:           \" + format_number(13, stats[:defer_count])\n"
+"      out.puts \"defer_empty_count:     \" + format_number(13, stats[:defer_empty_count])\n"
 "\n"
-"      $stderr.puts \"branch_insn_count:     \" + format_number(13, stats[:branch_insn_count])\n"
-"      $stderr.puts \"branch_known_count:    \" + format_number_pct(13, stats[:branch_known_count], stats[:branch_insn_count])\n"
+"      out.puts \"branch_insn_count:     \" + format_number(13, stats[:branch_insn_count])\n"
+"      out.puts \"branch_known_count:    \" + format_number_pct(13, stats[:branch_known_count], stats[:branch_insn_count])\n"
 "\n"
-"      $stderr.puts \"freed_iseq_count:      \" + format_number(13, stats[:freed_iseq_count])\n"
-"      $stderr.puts \"invalidation_count:    \" + format_number(13, stats[:invalidation_count])\n"
+"      out.puts \"freed_iseq_count:      \" + format_number(13, stats[:freed_iseq_count])\n"
 ,
-#line 294 "yjit.rb"
-"      $stderr.puts \"constant_state_bumps:  \" + format_number(13, stats[:constant_state_bumps])\n"
-"      $stderr.puts \"get_ivar_max_depth:    \" + format_number(13, stats[:get_ivar_max_depth])\n"
-"      $stderr.puts \"inline_code_size:      \" + format_number(13, stats[:inline_code_size])\n"
-"      $stderr.puts \"outlined_code_size:    \" + format_number(13, stats[:outlined_code_size])\n"
-"      $stderr.puts \"code_region_size:      \" + format_number(13, stats[:code_region_size])\n"
+#line 319 "yjit.rb"
+"      out.puts \"invalidation_count:    \" + format_number(13, stats[:invalidation_count])\n"
+"      out.puts \"constant_state_bumps:  \" + format_number(13, stats[:constant_state_bumps])\n"
+"      out.puts \"inline_code_size:      \" + format_number(13, stats[:inline_code_size])\n"
+"      out.puts \"outlined_code_size:    \" + format_number(13, stats[:outlined_code_size])\n"
+"      out.puts \"code_region_size:      \" + format_number(13, stats[:code_region_size])\n"
 ,
-#line 299 "yjit.rb"
-"      $stderr.puts \"freed_code_size:       \" + format_number(13, stats[:freed_code_size])\n"
-"      $stderr.puts \"yjit_alloc_size:       \" + format_number(13, stats[:yjit_alloc_size]) if stats.key?(:yjit_alloc_size)\n"
-"      $stderr.puts \"live_context_size:     \" + format_number(13, stats[:live_context_size])\n"
-"      $stderr.puts \"live_context_count:    \" + format_number(13, stats[:live_context_count])\n"
-"      $stderr.puts \"live_page_count:       \" + format_number(13, stats[:live_page_count])\n"
-,
-#line 304 "yjit.rb"
-"      $stderr.puts \"freed_page_count:      \" + format_number(13, stats[:freed_page_count])\n"
-"      $stderr.puts \"code_gc_count:         \" + format_number(13, stats[:code_gc_count])\n"
-"      $stderr.puts \"num_gc_obj_refs:       \" + format_number(13, stats[:num_gc_obj_refs])\n"
-"      $stderr.puts \"object_shape_count:    \" + format_number(13, stats[:object_shape_count])\n"
-"      $stderr.puts \"side_exit_count:       \" + format_number(13, stats[:side_exit_count])\n"
-,
-#line 309 "yjit.rb"
-"      $stderr.puts \"total_exit_count:      \" + format_number(13, stats[:total_exit_count])\n"
-"      $stderr.puts \"total_insns_count:     \" + format_number(13, stats[:total_insns_count]) if stats.key?(:total_insns_count)\n"
-"      if stats.key?(:vm_insns_count)\n"
-"        $stderr.puts \"vm_insns_count:        \" + format_number(13, stats[:vm_insns_count])\n"
-"      end\n"
-"      $stderr.puts \"yjit_insns_count:      \" + format_number(13, stats[:exec_instruction])\n"
-"      if stats.key?(:ratio_in_yjit)\n"
-,
-#line 316 "yjit.rb"
-"        $stderr.puts \"ratio_in_yjit:         \" + (\"%12.1f\" % stats[:ratio_in_yjit]) + \"%\"\n"
-"      end\n"
-"      $stderr.puts \"avg_len_in_yjit:       \" + (\"%13.1f\" % stats[:avg_len_in_yjit])\n"
+#line 324 "yjit.rb"
+"      out.puts \"code_region_overhead:  \" + format_number_pct(13, code_region_overhead, stats[:code_region_size])\n"
 "\n"
-"      print_sorted_exit_counts(stats, prefix: \"exit_\")\n"
+"      out.puts \"freed_code_size:       \" + format_number(13, stats[:freed_code_size])\n"
+"      out.puts \"yjit_alloc_size:       \" + format_number(13, stats[:yjit_alloc_size]) if stats.key?(:yjit_alloc_size)\n"
+"      out.puts \"live_context_size:     \" + format_number(13, stats[:live_context_size])\n"
+"      out.puts \"live_context_count:    \" + format_number(13, stats[:live_context_count])\n"
+,
+#line 330 "yjit.rb"
+"      out.puts \"live_page_count:       \" + format_number(13, stats[:live_page_count])\n"
+"      out.puts \"freed_page_count:      \" + format_number(13, stats[:freed_page_count])\n"
+"      out.puts \"code_gc_count:         \" + format_number(13, stats[:code_gc_count])\n"
+"      out.puts \"num_gc_obj_refs:       \" + format_number(13, stats[:num_gc_obj_refs])\n"
+"      out.puts \"object_shape_count:    \" + format_number(13, stats[:object_shape_count])\n"
+,
+#line 335 "yjit.rb"
+"      out.puts \"side_exit_count:       \" + format_number(13, stats[:side_exit_count])\n"
+"      out.puts \"total_exit_count:      \" + format_number(13, stats[:total_exit_count])\n"
+"      out.puts \"total_insns_count:     \" + format_number(13, stats[:total_insns_count])\n"
+"      out.puts \"vm_insns_count:        \" + format_number(13, stats[:vm_insns_count])\n"
+"      out.puts \"yjit_insns_count:      \" + format_number(13, stats[:yjit_insns_count])\n"
+,
+#line 340 "yjit.rb"
+"      out.puts \"ratio_in_yjit:         \" + (\"%12.1f\" % stats[:ratio_in_yjit]) + \"%\"\n"
+"      out.puts \"avg_len_in_yjit:       \" + (\"%13.1f\" % stats[:avg_len_in_yjit])\n"
+"\n"
+"      print_sorted_exit_counts(stats, out: out, prefix: \"exit_\")\n"
 "    end\n"
 "\n"
-"    def print_sorted_exit_counts(stats, prefix:, how_many: 20, left_pad: 4)\n"/* :nodoc: */
+"    def print_sorted_exit_counts(stats, out:, prefix:, how_many: 20, left_pad: 4)\n"/* :nodoc: */
 "      total_exits = total_exit_count(stats)\n"
 "\n"
 "      if total_exits > 0\n"
@@ -6845,7 +7206,7 @@ static const struct {
 "        stats.each do |k, v|\n"
 "          if k.start_with?(prefix)\n"
 ,
-#line 330 "yjit.rb"
+#line 353 "yjit.rb"
 "            exits.push [k.to_s.delete_prefix(prefix), v]\n"
 "          end\n"
 "        end\n"
@@ -6855,19 +7216,19 @@ static const struct {
 "        top_n_total = exits.sum { |name, count| count }\n"
 "        top_n_exit_pct = 100.0 * top_n_total / total_exits\n"
 "\n"
-"        $stderr.puts \"Top-#{exits.size} most frequent exit ops (#{\"%.1f\" % top_n_exit_pct}% of exits):\"\n"
+"        out.puts \"Top-#{exits.size} most frequent exit ops (#{\"%.1f\" % top_n_exit_pct}% of exits):\"\n"
 "\n"
 "        longest_insn_name_len = exits.max_by { |name, count| name.length }.first.length\n"
 ,
-#line 342 "yjit.rb"
+#line 365 "yjit.rb"
 "        exits.each do |name, count|\n"
 "          padding = longest_insn_name_len + left_pad\n"
 "          padded_name = \"%#{padding}s\" % name\n"
 "          padded_count = format_number_pct(10, count, total_exits)\n"
-"          $stderr.puts(\"#{padded_name}: #{padded_count}\")\n"
+"          out.puts(\"#{padded_name}: #{padded_count}\")\n"
 "        end\n"
 "      else\n"
-"        $stderr.puts \"total_exits:           \" + format_number(10, total_exits)\n"
+"        out.puts \"total_exits:           \" + format_number(10, total_exits)\n"
 "      end\n"
 "    end\n"
 "\n"
@@ -6875,26 +7236,26 @@ static const struct {
 "      total = 0\n"
 "      stats.each do |k,v|\n"
 ,
-#line 356 "yjit.rb"
+#line 379 "yjit.rb"
 "        total += v if k.start_with?(prefix)\n"
 "      end\n"
 "      total\n"
 "    end\n"
 "\n"
-"    def print_counters(counters, prefix:, prompt:)\n"/* :nodoc: */
-"      $stderr.puts(prompt)\n"
+"    def print_counters(counters, out:, prefix:, prompt:)\n"/* :nodoc: */
+"      out.puts(prompt)\n"
 "      counters = counters.filter { |key, _| key.start_with?(prefix) }\n"
 "      counters.filter! { |_, value| value != 0 }\n"
 "      counters.transform_keys! { |key| key.to_s.delete_prefix(prefix) }\n"
 "\n"
 "      if counters.empty?\n"
-"        $stderr.puts(\"    (all relevant counters are zero)\")\n"
+"        out.puts(\"    (all relevant counters are zero)\")\n"
 "        return\n"
 "      end\n"
 "\n"
 "      counters = counters.to_a\n"
 ,
-#line 373 "yjit.rb"
+#line 396 "yjit.rb"
 "      counters.sort_by! { |(_, counter_value)| counter_value }\n"
 "      longest_name_length = counters.max_by { |(name, _)| name.length }.first.length\n"
 "      total = counters.sum { |(_, counter_value)| counter_value }\n"
@@ -6902,14 +7263,14 @@ static const struct {
 "      counters.reverse_each do |(name, value)|\n"
 "        padded_name = name.rjust(longest_name_length, ' ')\n"
 "        padded_count = format_number_pct(10, value, total)\n"
-"        $stderr.puts(\"    #{padded_name}: #{padded_count}\")\n"
+"        out.puts(\"    #{padded_name}: #{padded_count}\")\n"
 "      end\n"
 "    end\n"
 "\n"
 "\n"/* Format large numbers with comma separators for readability */
 "    def format_number(pad, number)\n"
 ,
-#line 386 "yjit.rb"
+#line 409 "yjit.rb"
 "      integer, decimal = number.to_s.split(\".\")\n"
 "      d_groups = integer.chars.to_a.reverse.each_slice(3)\n"
 "      with_commas = d_groups.map(&:join).join(',').reverse\n"
@@ -6926,9 +7287,9 @@ static const struct {
 "    end\n"
 "  end\n"
 ,
-#line 401 "yjit.rb"
+#line 424 "yjit.rb"
 "end\n"
-#line 6932 "miniprelude.c"
+#line 7293 "miniprelude.c"
 };
 
 COMPILER_WARNING_POP
@@ -6960,7 +7321,7 @@ rb_builtin_ast(const char *feature_name, VALUE *name_str)
     rb_ast_t *ast = 0;
 
     if ((ast = PRELUDE_AST(0, *name_str, 20)) != 0) return ast;
-    if ((ast = PRELUDE_AST(1, *name_str, 83)) != 0) return ast;
+    if ((ast = PRELUDE_AST(1, *name_str, 158)) != 0) return ast;
     if ((ast = PRELUDE_AST(2, *name_str, 11)) != 0) return ast;
     if ((ast = PRELUDE_AST(3, *name_str, 1)) != 0) return ast;
     if ((ast = PRELUDE_AST(4, *name_str, 1)) != 0) return ast;
@@ -6968,7 +7329,7 @@ rb_builtin_ast(const char *feature_name, VALUE *name_str)
     if ((ast = PRELUDE_AST(6, *name_str, 1)) != 0) return ast;
     if ((ast = PRELUDE_AST(7, *name_str, 4)) != 0) return ast;
     if ((ast = PRELUDE_AST(8, *name_str, 1)) != 0) return ast;
-    if ((ast = PRELUDE_AST(9, *name_str, 51)) != 0) return ast;
+    if ((ast = PRELUDE_AST(9, *name_str, 49)) != 0) return ast;
     if ((ast = PRELUDE_AST(10, *name_str, 4)) != 0) return ast;
     if ((ast = PRELUDE_AST(11, *name_str, 1)) != 0) return ast;
     if ((ast = PRELUDE_AST(12, *name_str, 1)) != 0) return ast;
