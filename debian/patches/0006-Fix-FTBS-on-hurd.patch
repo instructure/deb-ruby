@@ -12,7 +12,7 @@ Signed-off-by: Samuel Thibault <samuel.thibault@ens-lyon.org>
 
 --- a/io.c
 +++ b/io.c
-@@ -2214,7 +2214,11 @@
+@@ -2213,7 +2213,11 @@
  
      for (i = 0; i < argc; i += cnt) {
  #ifdef HAVE_WRITEV

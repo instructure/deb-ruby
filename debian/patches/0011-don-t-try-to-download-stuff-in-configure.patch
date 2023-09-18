@@ -8,9 +8,9 @@ Subject: don't try to download stuff in configure
 
 --- a/defs/gmake.mk
 +++ b/defs/gmake.mk
-@@ -305,9 +305,7 @@
- bundled-gem-gemspec = $(srcdir)/gems/src/$(1)/$(1).gemspec
+@@ -328,9 +328,7 @@
  bundled-gem-extracted = $(srcdir)/.bundle/gems/$(1)-$(2)
+ bundled-gem-revision = $(srcdir)/.bundle/.timestamp/$(1).revision
  
 -update-gems: | $(patsubst %,$(srcdir)/gems/%.gem,$(bundled-gems))
 -update-gems: | $(call foreach-bundled-gems-rev,bundled-gem-gemfile)

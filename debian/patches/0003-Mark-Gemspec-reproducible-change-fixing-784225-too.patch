@@ -13,7 +13,7 @@ Signed-off-by: Christian Hofstaedtler <zeha@debian.org>
 
 --- a/lib/rubygems/specification.rb
 +++ b/lib/rubygems/specification.rb
-@@ -1750,7 +1750,9 @@
+@@ -1768,7 +1768,9 @@
                  raise(Gem::InvalidSpecificationException,
                        "invalid date format in specification: #{date.inspect}")
                end
