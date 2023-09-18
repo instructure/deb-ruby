@@ -1,3 +1,11 @@
+ruby3.3 (3.3.0~preview2-1ppa5) focal; urgency=medium
+
+  [ Jacob Burroughs ]
+  * New upstream version 3.3.0~preview2
+  * Restore auto-upload
+
+ -- Ubuntu <ubuntu@focal>  Mon, 18 Sep 2023 13:23:33 -0500
+
 ruby3.3 (3.3.0~preview1-1ppa5) focal; urgency=medium
 
   * Don't bump dependencies that didn't change
