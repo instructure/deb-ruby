@@ -1,3 +1,9 @@
+ruby3.3 (3.3.0~preview2-1ppa3) focal; urgency=medium
+
+  * Remove removed symbols
+
+ -- Jacob Burroughs <maths22@gmail.com>  Mon, 18 Sep 2023 14:51:21 -0500
+
 ruby3.3 (3.3.0~preview2-1ppa2) focal; urgency=medium
 
   * Refresh patches
