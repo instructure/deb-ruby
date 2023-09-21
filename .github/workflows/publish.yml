@@ -20,7 +20,7 @@ jobs:
       - name: Publish PPA
         uses: maths22/publish-ppa-package@main
         with:
-          repository: 'ppa:maths22/ruby-testing'
+          repository: 'ppa:instructure/ruby-testing'
           gpg_private_key: ${{ secrets.PPA_GPG_PRIVATE_KEY }}
           gpg_passphrase: ${{ secrets.PPA_GPG_PASSPHRASE }}
           series: 'focal jammy'
