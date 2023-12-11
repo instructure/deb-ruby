@@ -4,7 +4,7 @@ ruby3.3 (3.3.0~rc1-1ppa1) focal; urgency=medium
   * New upstream version 3.3.0~rc1
   * Restore auto-upload
 
- -- Jacob Burroughs <jburroughs@instructure.com>  Mon, 11 Dec 2023 09:04:39 -0600
+ -- Jacob Burroughs <jburroughs@instructure.com>  Mon, 11 Dec 2023 09:04:40 -0600
 
 ruby3.3 (3.3.0~preview2-1ppa3) focal; urgency=medium
 
