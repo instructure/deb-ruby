@@ -1,3 +1,9 @@
+ruby3.3 (3.3.0~rc1-1ppa2) focal; urgency=medium
+
+  * Update symbols
+
+ -- Jacob Burroughs <jburroughs@instructure.com>  Mon, 11 Dec 2023 09:40:35 -0600
+
 ruby3.3 (3.3.0~rc1-1ppa1) focal; urgency=medium
 
   * Update target repository
