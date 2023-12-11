@@ -86,14 +86,14 @@ module IRB
         when nil
           if STDIN.tty? && IRB.conf[:PROMPT_MODE] != :INF_RUBY && !use_singleline?
             # Both of multiline mode and singleline mode aren't specified.
-            @io = RelineInputMethod.new
+            @io = RelineInputMethod.new(build_completor)
           else
             @io = nil
           end
         when false
           @io = nil
         when true
-          @io = RelineInputMethod.new
+          @io = RelineInputMethod.new(build_completor)
         end
         unless @io
           case use_singleline?
@@ -146,7 +146,52 @@ module IRB
         @newline_before_multiline_output = true
       end
 
-      @command_aliases = IRB.conf[:COMMAND_ALIASES]
+      @user_aliases = IRB.conf[:COMMAND_ALIASES].dup
+      @command_aliases = @user_aliases.merge(KEYWORD_ALIASES)
+    end
+
+    # because all input will eventually be evaluated as Ruby code,
+    # command names that conflict with Ruby keywords need special workaround
+    # we can remove them once we implemented a better command system for IRB
+    KEYWORD_ALIASES = {
+      :break => :irb_break,
+      :catch => :irb_catch,
+      :next => :irb_next,
+    }.freeze
+
+    private_constant :KEYWORD_ALIASES
+
+    private def build_completor
+      completor_type = IRB.conf[:COMPLETOR]
+      case completor_type
+      when :regexp
+        return RegexpCompletor.new
+      when :type
+        completor = build_type_completor
+        return completor if completor
+      else
+        warn "Invalid value for IRB.conf[:COMPLETOR]: #{completor_type}"
+      end
+      # Fallback to RegexpCompletor
+      RegexpCompletor.new
+    end
+
+    private def build_type_completor
+      if RUBY_ENGINE == 'truffleruby'
+        # Avoid SynatxError. truffleruby does not support endless method definition yet.
+        warn 'TypeCompletor is not supported on TruffleRuby yet'
+        return
+      end
+
+      begin
+        require 'repl_type_completor'
+      rescue LoadError => e
+        warn "TypeCompletor requires `gem repl_type_completor`: #{e.message}"
+        return
+      end
+
+      ReplTypeCompletor.preload_rbs
+      TypeCompletor.new(self)
     end
 
     def save_history=(val)

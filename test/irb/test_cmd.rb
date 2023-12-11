@@ -37,6 +37,7 @@ module TestIRB
       IRB.init_config(nil)
       IRB.conf[:VERBOSE] = false
       IRB.conf[:PROMPT_MODE] = :SIMPLE
+      IRB.conf[:USE_PAGER] = false
       IRB.conf.merge!(conf)
       input = TestInputMethod.new(lines)
       irb = IRB::Irb.new(IRB::WorkSpace.new(main), input)
@@ -86,6 +87,7 @@ module TestIRB
         Ruby\sversion:\s.+\n
         IRB\sversion:\sirb\s.+\n
         InputMethod:\sAbstract\sInputMethod\n
+        Completion: .+\n
         \.irbrc\spath:\s.+\n
         RUBY_PLATFORM:\s.+\n
         East\sAsian\sAmbiguous\sWidth:\s\d\n
@@ -109,6 +111,7 @@ module TestIRB
         Ruby\sversion:\s.+\n
         IRB\sversion:\sirb\s.+\n
         InputMethod:\sAbstract\sInputMethod\n
+        Completion: .+\n
         \.irbrc\spath:\s.+\n
         RUBY_PLATFORM:\s.+\n
         East\sAsian\sAmbiguous\sWidth:\s\d\n
@@ -135,6 +138,7 @@ module TestIRB
         Ruby\sversion:\s.+\n
         IRB\sversion:\sirb\s.+\n
         InputMethod:\sAbstract\sInputMethod\n
+        Completion: .+\n
         RUBY_PLATFORM:\s.+\n
         East\sAsian\sAmbiguous\sWidth:\s\d\n
         #{@is_win ? 'Code\spage:\s\d+\n' : ''}
@@ -164,6 +168,7 @@ module TestIRB
         Ruby\sversion:\s.+\n
         IRB\sversion:\sirb\s.+\n
         InputMethod:\sAbstract\sInputMethod\n
+        Completion: .+\n
         RUBY_PLATFORM:\s.+\n
         East\sAsian\sAmbiguous\sWidth:\s\d\n
         #{@is_win ? 'Code\spage:\s\d+\n' : ''}
@@ -192,6 +197,7 @@ module TestIRB
         Ruby\sversion: .+\n
         IRB\sversion:\sirb .+\n
         InputMethod:\sAbstract\sInputMethod\n
+        Completion: .+\n
         \.irbrc\spath: .+\n
         RUBY_PLATFORM: .+\n
         LANG\senv:\sja_JP\.UTF-8\n
@@ -443,96 +449,6 @@ module TestIRB
     end
   end
 
-  class ShowSourceTest < CommandTestCase
-    def test_show_source
-      out, err = execute_lines(
-        "show_source IRB.conf\n",
-      )
-      assert_empty err
-      assert_match(%r[/irb\.rb], out)
-    end
-
-    def test_show_source_method
-      out, err = execute_lines(
-        "p show_source('IRB.conf')\n",
-      )
-      assert_empty err
-      assert_match(%r[/irb\.rb], out)
-    end
-
-    def test_show_source_string
-      out, err = execute_lines(
-        "show_source 'IRB.conf'\n",
-      )
-      assert_empty err
-      assert_match(%r[/irb\.rb], out)
-    end
-
-    def test_show_source_alias
-      out, err = execute_lines(
-        "$ 'IRB.conf'\n",
-        conf: { COMMAND_ALIASES: { :'$' => :show_source } }
-      )
-      assert_empty err
-      assert_match(%r[/irb\.rb], out)
-    end
-
-    def test_show_source_end_finder
-      eval(code = <<-EOS, binding, __FILE__, __LINE__ + 1)
-        def show_source_test_method
-          unless true
-          end
-        end unless defined?(show_source_test_method)
-      EOS
-
-      out, err = execute_lines(
-        "show_source '#{self.class.name}#show_source_test_method'\n",
-      )
-
-      assert_empty err
-      assert_include(out, code)
-    end
-
-    def test_show_source_private_instance
-      eval(code = <<-EOS, binding, __FILE__, __LINE__ + 1)
-        class PrivateInstanceTest
-          private def show_source_test_method
-            unless true
-            end
-          end unless private_method_defined?(:show_source_test_method)
-        end
-      EOS
-
-      out, err = execute_lines(
-        "show_source '#{self.class.name}::PrivateInstanceTest#show_source_test_method'\n",
-      )
-
-      assert_empty err
-      assert_include(out, code.lines[1..-2].join)
-    end
-
-
-    def test_show_source_private
-      eval(code = <<-EOS, binding, __FILE__, __LINE__ + 1)
-        class PrivateTest
-          private def show_source_test_method
-            unless true
-            end
-          end unless private_method_defined?(:show_source_test_method)
-        end
-
-        Instance = PrivateTest.new unless defined?(Instance)
-      EOS
-
-      out, err = execute_lines(
-        "show_source '#{self.class.name}::Instance.show_source_test_method'\n",
-      )
-
-      assert_empty err
-      assert_include(out, code.lines[1..-4].join)
-    end
-  end
-
   class WorkspaceCommandTestCase < CommandTestCase
     def setup
       super
@@ -665,16 +581,6 @@ module TestIRB
 
 
   class ShowCmdsTest < CommandTestCase
-    def setup
-      STDIN.singleton_class.define_method :tty? do
-        false
-      end
-    end
-
-    def teardown
-      STDIN.singleton_class.remove_method :tty?
-    end
-
     def test_show_cmds
       out, err = execute_lines(
         "show_cmds\n"
@@ -684,19 +590,19 @@ module TestIRB
       assert_match(/List all available commands and their description/, out)
       assert_match(/Start the debugger of debug\.gem/, out)
     end
+
+    def test_show_cmds_list_user_aliases
+      out, err = execute_lines(
+        "show_cmds\n"
+      )
+
+      assert_empty err
+      assert_match(/\$\s+Alias for `show_source`/, out)
+      assert_match(/@\s+Alias for `whereami`/, out)
+    end
   end
 
   class LsTest < CommandTestCase
-    def setup
-      STDIN.singleton_class.define_method :tty? do
-        false
-      end
-    end
-
-    def teardown
-      STDIN.singleton_class.remove_method :tty?
-    end
-
     def test_ls
       out, err = execute_lines(
         "class P\n",
@@ -982,4 +888,68 @@ module TestIRB
       assert_match("command: ': code2'", out)
     end
   end
+
+  class HistoryCmdTest < CommandTestCase
+    def teardown
+      TestInputMethod.send(:remove_const, "HISTORY") if defined?(TestInputMethod::HISTORY)
+      super
+    end
+
+    def test_history
+      TestInputMethod.const_set("HISTORY", %w[foo bar baz])
+
+      out, err = without_rdoc do
+        execute_lines("history")
+      end
+
+      assert_include(out, <<~EOF)
+        2: baz
+        1: bar
+        0: foo
+      EOF
+      assert_empty err
+    end
+
+    def test_multiline_history_with_truncation
+      TestInputMethod.const_set("HISTORY", ["foo", "bar", <<~INPUT])
+        [].each do |x|
+          puts x
+        end
+      INPUT
+
+      out, err = without_rdoc do
+        execute_lines("hist")
+      end
+
+      assert_include(out, <<~EOF)
+        2: [].each do |x|
+             puts x
+           ...
+        1: bar
+        0: foo
+      EOF
+      assert_empty err
+    end
+
+    def test_history_grep
+      TestInputMethod.const_set("HISTORY", ["foo", "bar", <<~INPUT])
+        [].each do |x|
+          puts x
+        end
+      INPUT
+
+      out, err = without_rdoc do
+        execute_lines("hist -g each\n")
+      end
+
+      assert_include(out, <<~EOF)
+        2: [].each do |x|
+             puts x
+           ...
+      EOF
+      assert_empty err
+    end
+
+  end
+
 end

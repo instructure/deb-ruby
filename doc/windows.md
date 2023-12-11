@@ -2,9 +2,9 @@
 
 Ruby supports a few native build platforms for Windows.
 
-* mswin: Build using Microsoft Visual C++ compiler
+* mswin: Build using Microsoft Visual C++ compiler with vcruntimeXXX.dll
 * mingw-msvcrt: Build using compiler for Mingw with msvcrtXX.dll
-* mingw-ucrt: Build using compiler for Mingw with vcruntime.dll
+* mingw-ucrt: Build using compiler for Mingw with Windows Universal CRT
 
 ## Building Ruby using Mingw with UCRT
 
@@ -19,7 +19,7 @@ Ruby core development can be done either in Windows `cmd` like:
 ```
 ridk enable ucrt64
 
-pacman -S --needed %MINGW_PACKAGE_PREFIX%-openssl %MINGW_PACKAGE_PREFIX%-libyaml
+pacman -S --needed %MINGW_PACKAGE_PREFIX%-openssl %MINGW_PACKAGE_PREFIX%-libyaml %MINGW_PACKAGE_PREFIX%-libffi
 
 cd c:\
 mkdir work
@@ -38,7 +38,7 @@ or in MSYS2 `bash` like:
 ridk enable ucrt64
 bash
 
-pacman -S --needed $MINGW_PACKAGE_PREFIX-openssl $MINGW_PACKAGE_PREFIX-libyaml
+pacman -S --needed $MINGW_PACKAGE_PREFIX-openssl $MINGW_PACKAGE_PREFIX-libyaml $MINGW_PACKAGE_PREFIX-libffi
 
 cd /c/
 mkdir work

@@ -29,7 +29,7 @@ module Bundler
 
       Bundler.ui.info "Resolving dependencies...", true
 
-      solve_versions(:root => root, :logger => logger)
+      solve_versions(root: root, logger: logger)
     end
 
     def setup_solver
@@ -77,7 +77,7 @@ module Bundler
     end
 
     def solve_versions(root:, logger:)
-      solver = PubGrub::VersionSolver.new(:source => self, :root => root, :logger => logger)
+      solver = PubGrub::VersionSolver.new(source: self, root: root, logger: logger)
       result = solver.solve
       result.map {|package, version| version.to_specs(package) }.flatten.uniq
     rescue PubGrub::SolveFailure => e
@@ -131,7 +131,7 @@ module Bundler
 
           if base_requirements[name]
             names_to_unlock << name
-          elsif package.ignores_prereleases?
+          elsif package.ignores_prereleases? && @all_specs[name].any? {|s| s.version.prerelease? }
             names_to_allow_prereleases_for << name
           end
 
@@ -152,7 +152,7 @@ module Bundler
         requirement_to_range(dependency)
       end
 
-      PubGrub::VersionConstraint.new(package, :range => range)
+      PubGrub::VersionConstraint.new(package, range: range)
     end
 
     def versions_for(package, range=VersionRange.any)
@@ -181,7 +181,7 @@ module Bundler
         extended_explanation = other_specs_matching_message(specs_matching_other_platforms, label) if specs_matching_other_platforms.any?
       end
 
-      Incompatibility.new([unsatisfied_term], :cause => cause, :custom_explanation => custom_explanation, :extended_explanation => extended_explanation)
+      Incompatibility.new([unsatisfied_term], cause: cause, custom_explanation: custom_explanation, extended_explanation: extended_explanation)
     end
 
     def debug?
@@ -220,9 +220,9 @@ module Bundler
             sorted_versions[high]
           end
 
-        range = PubGrub::VersionRange.new(:min => low, :max => high, :include_min => true)
+        range = PubGrub::VersionRange.new(min: low, max: high, include_min: true)
 
-        self_constraint = PubGrub::VersionConstraint.new(package, :range => range)
+        self_constraint = PubGrub::VersionConstraint.new(package, range: range)
 
         dep_term = PubGrub::Term.new(dep_constraint, false)
         self_term = PubGrub::Term.new(self_constraint, true)
@@ -231,7 +231,7 @@ module Bundler
           "current #{dep_package} version is #{dep_constraint.constraint_string}"
         end
 
-        PubGrub::Incompatibility.new([self_term, dep_term], :cause => :dependency, :custom_explanation => custom_explanation)
+        PubGrub::Incompatibility.new([self_term, dep_term], cause: :dependency, custom_explanation: custom_explanation)
       end
     end
 
@@ -248,15 +248,29 @@ module Bundler
       results = filter_matching_specs(results, locked_requirement) if locked_requirement
 
       versions = results.group_by(&:version).reduce([]) do |groups, (version, specs)|
-        platform_specs = package.platforms.flat_map {|platform| select_best_platform_match(specs, platform) }
-        next groups if platform_specs.empty?
+        platform_specs = package.platforms.map {|platform| select_best_platform_match(specs, platform) }
+
+        # If package is a top-level dependency,
+        #   candidate is only valid if there are matching versions for all resolution platforms.
+        #
+        # If package is not a top-level deependency,
+        #   then it's not necessary that it has matching versions for all platforms, since it may have been introduced only as
+        #   a dependency for a platform specific variant, so it will only need to have a valid version for that platform.
+        #
+        if package.top_level?
+          next groups if platform_specs.any?(&:empty?)
+        else
+          next groups if platform_specs.all?(&:empty?)
+        end
+
+        platform_specs.flatten!
 
         ruby_specs = select_best_platform_match(specs, Gem::Platform::RUBY)
-        groups << Resolver::Candidate.new(version, :specs => ruby_specs) if ruby_specs.any?
+        groups << Resolver::Candidate.new(version, specs: ruby_specs) if ruby_specs.any?
 
         next groups if platform_specs == ruby_specs || package.force_ruby_platform?
 
-        groups << Resolver::Candidate.new(version, :specs => platform_specs)
+        groups << Resolver::Candidate.new(version, specs: platform_specs)
 
         groups
       end
@@ -295,15 +309,21 @@ module Bundler
                         end
       specs_matching_requirement = filter_matching_specs(specs, package.dependency.requirement)
 
-      if specs_matching_requirement.any?
+      not_found_message = if specs_matching_requirement.any?
         specs = specs_matching_requirement
         matching_part = requirement_label
         platforms = package.platforms
-        platform_label = platforms.size == 1 ? "platform '#{platforms.first}" : "platforms '#{platforms.join("', '")}"
-        requirement_label = "#{requirement_label}' with #{platform_label}"
+
+        if platforms.size == 1
+          "Could not find gem '#{requirement_label}' with platform '#{platforms.first}'"
+        else
+          "Could not find gems matching '#{requirement_label}' valid for all resolution platforms (#{platforms.join(", ")})"
+        end
+      else
+        "Could not find gem '#{requirement_label}'"
       end
 
-      message = String.new("Could not find gem '#{requirement_label}' in #{source}#{cache_message}.\n")
+      message = String.new("#{not_found_message} in #{source}#{cache_message}.\n")
 
       if specs.any?
         message << "\n#{other_specs_matching_message(specs, matching_part)}"
@@ -388,19 +408,19 @@ module Bundler
         when "~>"
           name = "~> #{ver}"
           bump = Resolver::Candidate.new(version.bump.to_s + ".A")
-          PubGrub::VersionRange.new(:name => name, :min => ver, :max => bump, :include_min => true)
+          PubGrub::VersionRange.new(name: name, min: ver, max: bump, include_min: true)
         when ">"
-          PubGrub::VersionRange.new(:min => platform_ver)
+          PubGrub::VersionRange.new(min: platform_ver)
         when ">="
-          PubGrub::VersionRange.new(:min => ver, :include_min => true)
+          PubGrub::VersionRange.new(min: ver, include_min: true)
         when "<"
-          PubGrub::VersionRange.new(:max => ver)
+          PubGrub::VersionRange.new(max: ver)
         when "<="
-          PubGrub::VersionRange.new(:max => platform_ver, :include_max => true)
+          PubGrub::VersionRange.new(max: platform_ver, include_max: true)
         when "="
-          PubGrub::VersionRange.new(:min => ver, :max => platform_ver, :include_min => true, :include_max => true)
+          PubGrub::VersionRange.new(min: ver, max: platform_ver, include_min: true, include_max: true)
         when "!="
-          PubGrub::VersionRange.new(:min => ver, :max => platform_ver, :include_min => true, :include_max => true).invert
+          PubGrub::VersionRange.new(min: ver, max: platform_ver, include_min: true, include_max: true).invert
         else
           raise "bad version specifier: #{op}"
         end

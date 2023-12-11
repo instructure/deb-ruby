@@ -538,7 +538,7 @@ static VALUE rb_reg_str_with_term(VALUE re, int term);
  *
  *  The returned string may be used as an argument to Regexp.new,
  *  or as interpolated text for a
- *  {Regexp interpolation}[rdoc-ref:regexp.rdoc@Interpolation+Mode]:
+ *  {Regexp interpolation}[rdoc-ref:Regexp@Interpolation+Mode]:
  *
  *    r1 = Regexp.new(s0) # => /(?ix-m:ab+c)/
  *    r2 = /#{s0}/        # => /(?ix-m:ab+c)/
@@ -2390,7 +2390,7 @@ match_named_captures(int argc, VALUE *argv, VALUE match)
  *    m.deconstruct_keys([:hours, :minutes]) # => {:hours => "18", :minutes => "37"}
  *    m.deconstruct_keys(nil) # => {:hours => "18", :minutes => "37", :seconds => "22"}
  *
- *  Returns an empty hash of no named captures were defined:
+ *  Returns an empty hash if no named captures were defined:
  *
  *    m = /(\d{2}):(\d{2}):(\d{2})/.match("18:37:22")
  *    m.deconstruct_keys(nil) # => {}
@@ -2489,10 +2489,10 @@ match_inspect_name_iter(const OnigUChar *name, const OnigUChar *name_end,
 }
 
 /*
- * call-seq:
- *   inspect -> string
+ *  call-seq:
+ *    inspect -> string
  *
- * Returns a string representation of +self+:
+ *  Returns a string representation of +self+:
  *
  *    m = /.$/.match("foo")
  *    # => #<MatchData "o">
@@ -2507,7 +2507,6 @@ match_inspect_name_iter(const OnigUChar *name, const OnigUChar *name_end,
  *    m.inspect # => "#<MatchData \"fo\" 1:\"f\" 2:nil 3:\"o\">"
  *
  *  Related: MatchData#to_s.
- *
  */
 
 static VALUE
@@ -3854,6 +3853,8 @@ reg_copy(VALUE copy, VALUE orig)
     RB_OBJ_WRITE(copy, &RREGEXP(copy)->src, RREGEXP(orig)->src);
     RREGEXP_PTR(copy)->timelimit = RREGEXP_PTR(orig)->timelimit;
     rb_enc_copy(copy, orig);
+    FL_SET_RAW(copy, FL_TEST_RAW(orig, KCODE_FIXED|REG_ENCODING_NONE));
+
     return copy;
 }
 
@@ -4693,7 +4694,7 @@ rb_reg_timeout_get(VALUE re)
 /*
  *  Document-class: Regexp
  *
- *  :include: doc/regexp.rdoc
+ *  :include: doc/_regexp.rdoc
  */
 
 void

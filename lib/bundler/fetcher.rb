@@ -81,7 +81,7 @@ module Bundler
                   :HTTPRequestURITooLong, :HTTPUnauthorized, :HTTPUnprocessableEntity,
                   :HTTPUnsupportedMediaType, :HTTPVersionNotSupported].freeze
     FAIL_ERRORS = begin
-      fail_errors = [AuthenticationRequiredError, BadAuthenticationError, AuthenticationForbiddenError, FallbackError]
+      fail_errors = [AuthenticationRequiredError, BadAuthenticationError, AuthenticationForbiddenError, FallbackError, SecurityError]
       fail_errors << Gem::Requirement::BadRequirementError
       fail_errors.concat(NET_ERRORS.map {|e| Net.const_get(e) })
     end.freeze
@@ -95,6 +95,7 @@ module Bundler
     self.max_retries    = Bundler.settings[:retry] # How many retries for the API call
 
     def initialize(remote)
+      @cis = nil
       @remote = remote
 
       Socket.do_not_reverse_lookup = true
@@ -111,7 +112,7 @@ module Bundler
       spec_file_name = "#{spec.join "-"}.gemspec"
 
       uri = Bundler::URI.parse("#{remote_uri}#{Gem::MARSHAL_SPEC_DIR}#{spec_file_name}.rz")
-      if uri.scheme == "file"
+      spec = if uri.scheme == "file"
         path = Bundler.rubygems.correct_for_windows_path(uri.path)
         Bundler.safe_load_marshal Bundler.rubygems.inflate(Gem.read_binary(path))
       elsif cached_spec_path = gemspec_cached_path(spec_file_name)
@@ -119,6 +120,8 @@ module Bundler
       else
         Bundler.safe_load_marshal Bundler.rubygems.inflate(downloader.fetch(uri).body)
       end
+      raise MarshalError, "is #{spec.inspect}" unless spec.is_a?(Gem::Specification)
+      spec
     rescue MarshalError
       raise HTTPError, "Gemspec #{spec} contained invalid data.\n" \
         "Your network or your gem server is probably having issues right now."
@@ -137,7 +140,9 @@ module Bundler
 
       fetch_specs(gem_names).each do |name, version, platform, dependencies, metadata|
         spec = if dependencies
-          EndpointSpecification.new(name, version, platform, self, dependencies, metadata)
+          EndpointSpecification.new(name, version, platform, self, dependencies, metadata).tap do |es|
+            source.checksum_store.replace(es, es.checksum)
+          end
         else
           RemoteSpecification.new(name, version, platform, self)
         end
@@ -200,6 +205,16 @@ module Bundler
       fetchers.first.api_fetcher?
     end
 
+    def gem_remote_fetcher
+      @gem_remote_fetcher ||= begin
+        require_relative "fetcher/gem_remote_fetcher"
+        fetcher = GemRemoteFetcher.new Gem.configuration[:http_proxy]
+        fetcher.headers["User-Agent"] = user_agent
+        fetcher.headers["X-Gemfile-Source"] = @remote.original_uri.to_s if @remote.original_uri
+        fetcher
+      end
+    end
+
     private
 
     def available_fetchers
@@ -214,7 +229,7 @@ module Bundler
     end
 
     def fetchers
-      @fetchers ||= available_fetchers.map {|f| f.new(downloader, @remote, uri) }.drop_while {|f| !f.available? }
+      @fetchers ||= available_fetchers.map {|f| f.new(downloader, @remote, uri, gem_remote_fetcher) }.drop_while {|f| !f.available? }
     end
 
     def fetch_specs(gem_names)
@@ -228,20 +243,7 @@ module Bundler
     end
 
     def cis
-      env_cis = {
-        "TRAVIS" => "travis",
-        "CIRCLECI" => "circle",
-        "SEMAPHORE" => "semaphore",
-        "JENKINS_URL" => "jenkins",
-        "BUILDBOX" => "buildbox",
-        "GO_SERVER_URL" => "go",
-        "SNAP_CI" => "snap",
-        "GITLAB_CI" => "gitlab",
-        "GITHUB_ACTIONS" => "github",
-        "CI_NAME" => ENV["CI_NAME"],
-        "CI" => "ci",
-      }
-      env_cis.find_all {|env, _| ENV[env] }.map {|_, ci| ci }
+      @cis ||= Bundler::CIDetector.ci_strings
     end
 
     def connection
@@ -251,7 +253,7 @@ module Bundler
                     Bundler.settings[:ssl_client_cert]
         raise SSLError if needs_ssl && !defined?(OpenSSL::SSL)
 
-        con = PersistentHTTP.new :name => "bundler", :proxy => :ENV
+        con = PersistentHTTP.new name: "bundler", proxy: :ENV
         if gem_proxy = Gem.configuration[:http_proxy]
           con.proxy = Bundler::URI.parse(gem_proxy) if gem_proxy != :no_proxy
         end

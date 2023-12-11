@@ -227,6 +227,7 @@ __attribute__((__alloc_align__(1)))
 RUBY_ATTR_MALLOC void *rb_aligned_malloc(size_t, size_t) RUBY_ATTR_ALLOC_SIZE((2));
 size_t rb_size_mul_or_raise(size_t, size_t, VALUE); /* used in compile.c */
 size_t rb_size_mul_add_or_raise(size_t, size_t, size_t, VALUE); /* used in iseq.h */
+size_t rb_malloc_grow_capa(size_t current_capacity, size_t type_size);
 RUBY_ATTR_MALLOC void *rb_xmalloc_mul_add(size_t, size_t, size_t);
 RUBY_ATTR_MALLOC void *rb_xcalloc_mul_add(size_t, size_t, size_t);
 void *rb_xrealloc_mul_add(const void *, size_t, size_t, size_t);
@@ -248,6 +249,8 @@ void rb_gc_mark_and_move(VALUE *ptr);
 
 void rb_gc_mark_weak(VALUE *ptr);
 void rb_gc_remove_weak(VALUE parent_obj, VALUE *ptr);
+
+void rb_gc_ref_update_table_values_only(st_table *tbl);
 
 #define rb_gc_mark_and_move_ptr(ptr) do { \
     VALUE _obj = (VALUE)*(ptr); \

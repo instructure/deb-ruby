@@ -32,17 +32,14 @@ module IRB
           end
           DEBUGGER__::CONFIG.set_config
           configure_irb_for_debugger(irb)
-          thread = Thread.current
 
-          DEBUGGER__.initialize_session{ IRB::Debug::UI.new(thread, irb) }
+          DEBUGGER__.initialize_session{ IRB::Debug::UI.new(irb) }
         end
 
         # When debug session was previously started but not by IRB
         if defined?(DEBUGGER__::SESSION) && !irb.context.with_debugger
           configure_irb_for_debugger(irb)
-          thread = Thread.current
-
-          DEBUGGER__::SESSION.reset_ui(IRB::Debug::UI.new(thread, irb))
+          DEBUGGER__::SESSION.reset_ui(IRB::Debug::UI.new(irb))
         end
 
         # Apply patches to debug gem so it skips IRB frames
@@ -58,6 +55,24 @@ module IRB
           end
 
           DEBUGGER__::ThreadClient.prepend(SkipPathHelperForIRB)
+        end
+
+        if !@output_modifier_defined && !DEBUGGER__::CONFIG[:no_hint]
+          irb_output_modifier_proc = Reline.output_modifier_proc
+
+          Reline.output_modifier_proc = proc do |output, complete:|
+            unless output.strip.empty?
+              cmd = output.split(/\s/, 2).first
+
+              if !complete && DEBUGGER__.commands.key?(cmd)
+                output = output.sub(/\n$/, " # debug command\n")
+              end
+            end
+
+            irb_output_modifier_proc.call(output, complete: complete)
+          end
+
+          @output_modifier_defined = true
         end
 
         true

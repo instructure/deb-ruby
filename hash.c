@@ -685,9 +685,8 @@ ar_find_entry(VALUE hash, st_hash_t hash_value, st_data_t key)
     return ar_find_entry_hint(hash, hint, key);
 }
 
-//old one
 static inline void
-ar_free_and_clear_table(VALUE hash)
+hash_ar_free_and_clear_table(VALUE hash)
 {
     RHASH_AR_TABLE_CLEAR(hash);
 
@@ -715,7 +714,7 @@ ar_try_convert_table(VALUE hash)
         st_add_direct(new_tab, pair->key, pair->val);
     }
 
-    ar_free_and_clear_table(hash);
+    hash_ar_free_and_clear_table(hash);
     RHASH_ST_TABLE_SET(hash, new_tab);
 }
 
@@ -742,7 +741,7 @@ ar_force_convert_table(VALUE hash, const char *file, int line)
             ar_table_pair *pair = RHASH_AR_TABLE_REF(hash, i);
             st_add_direct(new_tab, pair->key, pair->val);
         }
-        ar_free_and_clear_table(hash);
+        hash_ar_free_and_clear_table(hash);
     }
 
     RHASH_ST_TABLE_SET(hash, new_tab);
@@ -812,6 +811,14 @@ ar_add_direct_with_hash(VALUE hash, st_data_t key, st_data_t val, st_hash_t hash
     }
 }
 
+static void
+ensure_ar_table(VALUE hash)
+{
+    if (!RHASH_AR_TABLE_P(hash)) {
+        rb_raise(rb_eRuntimeError, "hash representation was changed during iteration");
+    }
+}
+
 static int
 ar_general_foreach(VALUE hash, st_foreach_check_callback_func *func, st_update_callback_func *replace, st_data_t arg)
 {
@@ -823,6 +830,7 @@ ar_general_foreach(VALUE hash, st_foreach_check_callback_func *func, st_update_c
 
             ar_table_pair *pair = RHASH_AR_TABLE_REF(hash, i);
             enum st_retval retval = (*func)(pair->key, pair->val, arg, 0);
+            ensure_ar_table(hash);
             /* pair may be not valid here because of theap */
 
             switch (retval) {
@@ -897,6 +905,7 @@ ar_foreach_check(VALUE hash, st_foreach_check_callback_func *func, st_data_t arg
             hint = ar_hint(hash, i);
 
             retval = (*func)(key, pair->val, arg, 0);
+            ensure_ar_table(hash);
             hash_verify(hash);
 
             switch (retval) {
@@ -957,6 +966,7 @@ ar_update(VALUE hash, st_data_t key,
     old_key = key;
     retval = (*func)(&key, &value, arg, existing);
     /* pair can be invalid here because of theap */
+    ensure_ar_table(hash);
 
     switch (retval) {
       case ST_CONTINUE:
@@ -1161,16 +1171,30 @@ ar_clear(VALUE hash)
 }
 
 static void
-st_free_and_clear_table(VALUE hash)
+hash_st_free(VALUE hash)
 {
     HASH_ASSERT(RHASH_ST_TABLE_P(hash));
 
     st_table *tab = RHASH_ST_TABLE(hash);
 
-    free(tab->bins);
-    free(tab->entries);
+    xfree(tab->bins);
+    xfree(tab->entries);
+}
+
+static void
+hash_st_free_and_clear_table(VALUE hash)
+{
+    hash_st_free(hash);
 
     RHASH_ST_CLEAR(hash);
+}
+
+void
+rb_hash_free(VALUE hash)
+{
+    if (RHASH_ST_TABLE_P(hash)) {
+        hash_st_free(hash);
+    }
 }
 
 typedef int st_foreach_func(st_data_t, st_data_t, st_data_t);
@@ -1261,78 +1285,79 @@ hash_foreach_iter(st_data_t key, st_data_t value, st_data_t argp, int error)
     return hash_iter_status_check(status);
 }
 
-static int
+static unsigned long
 iter_lev_in_ivar(VALUE hash)
 {
     VALUE levval = rb_ivar_get(hash, id_hash_iter_lev);
     HASH_ASSERT(FIXNUM_P(levval));
-    return FIX2INT(levval);
+    long lev = FIX2LONG(levval);
+    HASH_ASSERT(lev >= 0);
+    return (unsigned long)lev;
 }
 
 void rb_ivar_set_internal(VALUE obj, ID id, VALUE val);
 
 static void
-iter_lev_in_ivar_set(VALUE hash, int lev)
+iter_lev_in_ivar_set(VALUE hash, unsigned long lev)
 {
-    rb_ivar_set_internal(hash, id_hash_iter_lev, INT2FIX(lev));
+    HASH_ASSERT(lev >= RHASH_LEV_MAX);
+    HASH_ASSERT(POSFIXABLE(lev)); /* POSFIXABLE means fitting to long */
+    rb_ivar_set_internal(hash, id_hash_iter_lev, LONG2FIX((long)lev));
 }
 
-static inline int
+static inline unsigned long
 iter_lev_in_flags(VALUE hash)
 {
-    unsigned int u = (unsigned int)((RBASIC(hash)->flags >> RHASH_LEV_SHIFT) & RHASH_LEV_MAX);
-    return (int)u;
+    return (unsigned long)((RBASIC(hash)->flags >> RHASH_LEV_SHIFT) & RHASH_LEV_MAX);
 }
 
 static inline void
-iter_lev_in_flags_set(VALUE hash, int lev)
+iter_lev_in_flags_set(VALUE hash, unsigned long lev)
 {
+    HASH_ASSERT(lev <= RHASH_LEV_MAX);
     RBASIC(hash)->flags = ((RBASIC(hash)->flags & ~RHASH_LEV_MASK) | ((VALUE)lev << RHASH_LEV_SHIFT));
 }
 
-static int
-RHASH_ITER_LEV(VALUE hash)
+static inline bool
+hash_iterating_p(VALUE hash)
 {
-    int lev = iter_lev_in_flags(hash);
-
-    if (lev == RHASH_LEV_MAX) {
-        return iter_lev_in_ivar(hash);
-    }
-    else {
-        return lev;
-    }
+    return iter_lev_in_flags(hash) > 0;
 }
 
 static void
 hash_iter_lev_inc(VALUE hash)
 {
-    int lev = iter_lev_in_flags(hash);
+    unsigned long lev = iter_lev_in_flags(hash);
     if (lev == RHASH_LEV_MAX) {
-        lev = iter_lev_in_ivar(hash);
-        iter_lev_in_ivar_set(hash, lev+1);
+        lev = iter_lev_in_ivar(hash) + 1;
+        if (!POSFIXABLE(lev)) { /* paranoiac check */
+            rb_raise(rb_eRuntimeError, "too much nested iterations");
+        }
     }
     else {
         lev += 1;
         iter_lev_in_flags_set(hash, lev);
-        if (lev == RHASH_LEV_MAX) {
-            iter_lev_in_ivar_set(hash, lev);
-        }
+        if (lev < RHASH_LEV_MAX) return;
     }
+    iter_lev_in_ivar_set(hash, lev);
 }
 
 static void
 hash_iter_lev_dec(VALUE hash)
 {
-    int lev = iter_lev_in_flags(hash);
+    unsigned long lev = iter_lev_in_flags(hash);
     if (lev == RHASH_LEV_MAX) {
         lev = iter_lev_in_ivar(hash);
-        HASH_ASSERT(lev > 0);
-        iter_lev_in_ivar_set(hash, lev-1);
+        if (lev > RHASH_LEV_MAX) {
+            iter_lev_in_ivar_set(hash, lev-1);
+            return;
+        }
+        rb_attr_delete(hash, id_hash_iter_lev);
     }
-    else {
-        HASH_ASSERT(lev > 0);
-        iter_lev_in_flags_set(hash, lev - 1);
+    else if (lev == 0) {
+        rb_raise(rb_eRuntimeError, "iteration level underflow");
     }
+    iter_lev_in_flags_set(hash, lev - 1);
 }
 
 static VALUE
@@ -1408,6 +1433,16 @@ rb_hash_foreach(VALUE hash, rb_foreach_func *func, VALUE farg)
         rb_ensure(hash_foreach_call, (VALUE)&arg, hash_foreach_ensure, hash);
     }
     hash_verify(hash);
+}
+
+void rb_st_compact_table(st_table *tab);
+
+static void
+compact_after_delete(VALUE hash)
+{
+    if (!hash_iterating_p(hash) && RHASH_ST_TABLE_P(hash)) {
+        rb_st_compact_table(RHASH_ST_TABLE(hash));
+    }
 }
 
 static VALUE
@@ -1660,14 +1695,14 @@ tbl_update(VALUE hash, VALUE key, tbl_update_func func, st_data_t optional_arg)
     return ret;
 }
 
-#define UPDATE_CALLBACK(iter_lev, func) ((iter_lev) > 0 ? func##_noinsert : func##_insert)
+#define UPDATE_CALLBACK(iter_p, func) ((iter_p) ? func##_noinsert : func##_insert)
 
-#define RHASH_UPDATE_ITER(h, iter_lev, key, func, a) do {                        \
-    tbl_update((h), (key), UPDATE_CALLBACK((iter_lev), func), (st_data_t)(a)); \
+#define RHASH_UPDATE_ITER(h, iter_p, key, func, a) do { \
+    tbl_update((h), (key), UPDATE_CALLBACK(iter_p, func), (st_data_t)(a)); \
 } while (0)
 
 #define RHASH_UPDATE(hash, key, func, arg) \
-    RHASH_UPDATE_ITER(hash, RHASH_ITER_LEV(hash), key, func, arg)
+    RHASH_UPDATE_ITER(hash, hash_iterating_p(hash), key, func, arg)
 
 static void
 set_proc_default(VALUE hash, VALUE proc)
@@ -1955,14 +1990,15 @@ rb_hash_rehash(VALUE hash)
     VALUE tmp;
     st_table *tbl;
 
-    if (RHASH_ITER_LEV(hash) > 0) {
+    if (hash_iterating_p(hash)) {
         rb_raise(rb_eRuntimeError, "rehash during iteration");
     }
     rb_hash_modify_check(hash);
     if (RHASH_AR_TABLE_P(hash)) {
         tmp = hash_alloc(0);
         rb_hash_foreach(hash, rb_hash_rehash_i, (VALUE)tmp);
-        ar_free_and_clear_table(hash);
+
+        hash_ar_free_and_clear_table(hash);
         ar_copy(hash, tmp);
     }
     else if (RHASH_ST_TABLE_P(hash)) {
@@ -1974,6 +2010,7 @@ rb_hash_rehash(VALUE hash)
 
         rb_hash_foreach(hash, rb_hash_rehash_i, (VALUE)tmp);
 
+        hash_st_free(hash);
         RHASH_ST_TABLE_SET(hash, tbl);
         RHASH_ST_CLEAR(tmp);
     }
@@ -2382,6 +2419,7 @@ rb_hash_delete_m(VALUE hash, VALUE key)
     val = rb_hash_delete_entry(hash, key);
 
     if (!UNDEF_P(val)) {
+        compact_after_delete(hash);
         return val;
     }
     else {
@@ -2431,7 +2469,7 @@ rb_hash_shift(VALUE hash)
     rb_hash_modify_check(hash);
     if (RHASH_AR_TABLE_P(hash)) {
         var.key = Qundef;
-        if (RHASH_ITER_LEV(hash) == 0) {
+        if (!hash_iterating_p(hash)) {
             if (ar_shift(hash, &var.key, &var.val)) {
                 return rb_assoc_new(var.key, var.val);
             }
@@ -2446,7 +2484,7 @@ rb_hash_shift(VALUE hash)
     }
     if (RHASH_ST_TABLE_P(hash)) {
         var.key = Qundef;
-        if (RHASH_ITER_LEV(hash) == 0) {
+        if (!hash_iterating_p(hash)) {
             if (st_shift(RHASH_ST_TABLE(hash), &var.key, &var.val)) {
                 return rb_assoc_new(var.key, var.val);
             }
@@ -2502,6 +2540,7 @@ rb_hash_delete_if(VALUE hash)
     rb_hash_modify_check(hash);
     if (!RHASH_TABLE_EMPTY_P(hash)) {
         rb_hash_foreach(hash, delete_if_i, hash);
+        compact_after_delete(hash);
     }
     return hash;
 }
@@ -2565,6 +2604,7 @@ rb_hash_reject(VALUE hash)
     result = hash_dup_with_compare_by_id(hash);
     if (!RHASH_EMPTY_P(hash)) {
         rb_hash_foreach(result, delete_if_i, result);
+        compact_after_delete(result);
     }
     return result;
 }
@@ -2624,6 +2664,7 @@ rb_hash_except(int argc, VALUE *argv, VALUE hash)
         key = argv[i];
         rb_hash_delete(result, key);
     }
+    compact_after_delete(result);
 
     return result;
 }
@@ -2719,6 +2760,7 @@ rb_hash_select(VALUE hash)
     result = hash_dup_with_compare_by_id(hash);
     if (!RHASH_EMPTY_P(hash)) {
         rb_hash_foreach(result, keep_if_i, result);
+        compact_after_delete(result);
     }
     return result;
 }
@@ -2800,7 +2842,7 @@ rb_hash_clear(VALUE hash)
 {
     rb_hash_modify_check(hash);
 
-    if (RHASH_ITER_LEV(hash) > 0) {
+    if (hash_iterating_p(hash)) {
         rb_hash_foreach(hash, clear_i, 0);
     }
     else if (RHASH_AR_TABLE_P(hash)) {
@@ -2808,6 +2850,7 @@ rb_hash_clear(VALUE hash)
     }
     else {
         st_clear(RHASH_ST_TABLE(hash));
+        compact_after_delete(hash);
     }
 
     return hash;
@@ -2870,15 +2913,15 @@ NOINSERT_UPDATE_CALLBACK(hash_aset_str)
 VALUE
 rb_hash_aset(VALUE hash, VALUE key, VALUE val)
 {
-    int iter_lev = RHASH_ITER_LEV(hash);
+    bool iter_p = hash_iterating_p(hash);
 
     rb_hash_modify(hash);
 
     if (RHASH_TYPE(hash) == &identhash || rb_obj_class(key) != rb_cString) {
-        RHASH_UPDATE_ITER(hash, iter_lev, key, hash_aset, val);
+        RHASH_UPDATE_ITER(hash, iter_p, key, hash_aset, val);
     }
     else {
-        RHASH_UPDATE_ITER(hash, iter_lev, key, hash_aset_str, val);
+        RHASH_UPDATE_ITER(hash, iter_p, key, hash_aset_str, val);
     }
     return val;
 }
@@ -2898,7 +2941,7 @@ rb_hash_replace(VALUE hash, VALUE hash2)
 {
     rb_hash_modify_check(hash);
     if (hash == hash2) return hash;
-    if (RHASH_ITER_LEV(hash) > 0) {
+    if (hash_iterating_p(hash)) {
         rb_raise(rb_eRuntimeError, "can't replace hash during iteration");
     }
     hash2 = to_hash(hash2);
@@ -2906,10 +2949,10 @@ rb_hash_replace(VALUE hash, VALUE hash2)
     COPY_DEFAULT(hash, hash2);
 
     if (RHASH_AR_TABLE_P(hash)) {
-        ar_free_and_clear_table(hash);
+        hash_ar_free_and_clear_table(hash);
     }
     else {
-        st_free_and_clear_table(hash);
+        hash_st_free_and_clear_table(hash);
     }
 
     hash_copy(hash, hash2);
@@ -3238,6 +3281,7 @@ rb_hash_transform_keys_bang(int argc, VALUE *argv, VALUE hash)
         rb_ary_clear(pairs);
         rb_hash_clear(new_keys);
     }
+    compact_after_delete(hash);
     return hash;
 }
 
@@ -3288,6 +3332,7 @@ rb_hash_transform_values(VALUE hash)
 
     if (!RHASH_EMPTY_P(hash)) {
         rb_hash_stlike_foreach_with_replace(result, transform_values_foreach_func, transform_values_foreach_replace, result);
+        compact_after_delete(result);
     }
 
     return result;
@@ -4035,24 +4080,17 @@ assoc_cmp(VALUE a, VALUE b)
     return !RTEST(rb_equal(a, b));
 }
 
-static VALUE
-lookup2_call(VALUE arg)
-{
-    VALUE *args = (VALUE *)arg;
-    return rb_hash_lookup2(args[0], args[1], Qundef);
-}
-
-struct reset_hash_type_arg {
-    VALUE hash;
-    const struct st_hash_type *orighash;
+struct assoc_arg {
+    st_table *tbl;
+    st_data_t key;
 };
 
 static VALUE
-reset_hash_type(VALUE arg)
+assoc_lookup(VALUE arg)
 {
-    struct reset_hash_type_arg *p = (struct reset_hash_type_arg *)arg;
-    HASH_ASSERT(RHASH_ST_TABLE_P(p->hash));
-    RHASH_ST_TABLE(p->hash)->type = p->orighash;
+    struct assoc_arg *p = (struct assoc_arg*)arg;
+    st_data_t data;
+    if (st_lookup(p->tbl, p->key, &data)) return (VALUE)data;
     return Qundef;
 }
 
@@ -4082,30 +4120,30 @@ assoc_i(VALUE key, VALUE val, VALUE arg)
 static VALUE
 rb_hash_assoc(VALUE hash, VALUE key)
 {
-    st_table *table;
-    const struct st_hash_type *orighash;
     VALUE args[2];
 
     if (RHASH_EMPTY_P(hash)) return Qnil;
 
-    ar_force_convert_table(hash, __FILE__, __LINE__);
-    HASH_ASSERT(RHASH_ST_TABLE_P(hash));
-    table = RHASH_ST_TABLE(hash);
-    orighash = table->type;
+    if (RHASH_ST_TABLE_P(hash) && RHASH_ST_TABLE(hash)->type != &identhash) {
+        VALUE value = Qundef;
+        st_table assoctable = *RHASH_ST_TABLE(hash);
+        assoctable.type = &(struct st_hash_type){
+            .compare = assoc_cmp,
+            .hash = assoctable.type->hash,
+        };
+        VALUE arg = (VALUE)&(struct assoc_arg){
+            .tbl = &assoctable,
+            .key = (st_data_t)key,
+        };
 
-    if (orighash != &identhash) {
-        VALUE value;
-        struct reset_hash_type_arg ensure_arg;
-        struct st_hash_type assochash;
-
-        assochash.compare = assoc_cmp;
-        assochash.hash = orighash->hash;
-        table->type = &assochash;
-        args[0] = hash;
-        args[1] = key;
-        ensure_arg.hash = hash;
-        ensure_arg.orighash = orighash;
-        value = rb_ensure(lookup2_call, (VALUE)&args, reset_hash_type, (VALUE)&ensure_arg);
+        if (RB_OBJ_FROZEN(hash)) {
+            value = assoc_lookup(arg);
+        }
+        else {
+            hash_iter_lev_inc(hash);
+            value = rb_ensure(assoc_lookup, arg, hash_foreach_ensure, hash);
+        }
+        hash_verify(hash);
         if (!UNDEF_P(value)) return rb_assoc_new(key, value);
     }
 
@@ -4252,6 +4290,7 @@ rb_hash_compact(VALUE hash)
     VALUE result = rb_hash_dup(hash);
     if (!RHASH_EMPTY_P(hash)) {
         rb_hash_foreach(result, delete_if_nil, result);
+        compact_after_delete(result);
     }
     else if (rb_hash_compare_by_id_p(hash)) {
         result = rb_hash_compare_by_id(result);
@@ -4321,6 +4360,9 @@ rb_hash_compare_by_id(VALUE hash)
     if (rb_hash_compare_by_id_p(hash)) return hash;
 
     rb_hash_modify_check(hash);
+    if (hash_iterating_p(hash)) {
+        rb_raise(rb_eRuntimeError, "compare_by_identity during iteration");
+    }
     ar_force_convert_table(hash, __FILE__, __LINE__);
     HASH_ASSERT(RHASH_ST_TABLE_P(hash));
 
@@ -6812,7 +6854,7 @@ static const rb_data_type_t env_data_type = {
  *      alias eql? ==
  *
  *      def hash
- *        @author.hash ^ @title.hash # XOR
+ *        [self.class, @author, @title].hash
  *      end
  *    end
  *
@@ -6984,7 +7026,7 @@ static const rb_data_type_t env_data_type = {
  *  - #key: Returns the key for the first-found entry with a given value.
  *  - #keys: Returns an array containing all keys in +self+.
  *  - #rassoc: Returns a 2-element array consisting of the key and value
-      of the first-found entry having a given value.
+ *    of the first-found entry having a given value.
  *  - #values: Returns an array containing all values in +self+/
  *  - #values_at: Returns an array containing values for given keys.
  *

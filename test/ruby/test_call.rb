@@ -100,6 +100,12 @@ class TestCall < Test::Unit::TestCase
     }
   end
 
+  def test_frozen_splat_and_keywords
+   a = [1, 2].freeze
+   def self.f(*a); a end
+   assert_equal([1, 2, {kw: 3}], f(*a, kw: 3))
+  end
+
   def test_call_bmethod_proc
     pr = proc{|sym| sym}
     define_singleton_method(:a, &pr)
@@ -130,6 +136,52 @@ class TestCall < Test::Unit::TestCase
     assert_equal([1, 2, b], aaa(*ary, &ary.pop), bug16504)
     ary = [1, 2, b]
     assert_equal([0, 1, 2, b], aaa(0, *ary, &ary.pop), bug16504)
+  end
+
+  def test_call_args_splat_with_nonhash_keyword_splat
+    o = Object.new
+    def o.to_hash; {a: 1} end
+    def self.f(*a, **kw)
+      kw
+    end
+    assert_equal Hash, f(*[], **o).class
+  end
+
+  def test_kwsplat_block_order
+    o = Object.new
+    ary = []
+    o.define_singleton_method(:to_a) {ary << :to_a; []}
+    o.define_singleton_method(:to_hash) {ary << :to_hash; {}}
+    o.define_singleton_method(:to_proc) {ary << :to_proc; lambda{}}
+
+    def self.t(...) end
+
+    t(**o, &o)
+    assert_equal([:to_hash, :to_proc], ary)
+
+    ary.clear
+    t(*o, **o, &o)
+    assert_equal([:to_a, :to_hash, :to_proc], ary)
+  end
+
+  def test_kwsplat_block_order_super
+    def self.t(splat)
+      o = Object.new
+      ary = []
+      o.define_singleton_method(:to_a) {ary << :to_a; []}
+      o.define_singleton_method(:to_hash) {ary << :to_hash; {}}
+      o.define_singleton_method(:to_proc) {ary << :to_proc; lambda{}}
+      if splat
+        super(*o, **o, &o)
+      else
+        super(**o, &o)
+      end
+      ary
+    end
+    extend Module.new{def t(...) end}
+
+    assert_equal([:to_hash, :to_proc], t(false))
+    assert_equal([:to_a, :to_hash, :to_proc], t(true))
   end
 
   OVER_STACK_LEN = (ENV['RUBY_OVER_STACK_LEN'] || 150).to_i # Greater than VM_ARGC_STACK_MAX

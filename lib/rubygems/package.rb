@@ -384,7 +384,7 @@ EOM
   def extract_files(destination_dir, pattern = "*")
     verify unless @spec
 
-    FileUtils.mkdir_p destination_dir, :mode => dir_mode && 0o755
+    FileUtils.mkdir_p destination_dir, mode: dir_mode && 0o755
 
     @gem.with_read_io do |io|
       reader = Gem::Package::TarReader.new io
@@ -512,7 +512,6 @@ EOM
     raise Gem::Package::PathError.new(destination, destination_dir) unless
       normalize_path(destination).start_with? normalize_path(destination_dir + "/")
 
-    destination.tap(&Gem::UNTAINT)
     destination
   end
 

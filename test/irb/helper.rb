@@ -93,6 +93,10 @@ module TestIRB
       if ruby_core?
         omit "This test works only under ruby/irb"
       end
+
+      write_rc <<~RUBY
+        IRB.conf[:USE_PAGER] = false
+      RUBY
     end
 
     def teardown
@@ -109,6 +113,11 @@ module TestIRB
       lines = []
 
       yield
+
+      # Test should not depend on user's irbrc file
+      @envs["HOME"] ||= tmp_dir
+      @envs["XDG_CONFIG_HOME"] ||= tmp_dir
+      @envs["IRBRC"] = nil unless @envs.key?("IRBRC")
 
       PTY.spawn(@envs.merge("TERM" => "dumb"), *cmd) do |read, write, pid|
         Timeout.timeout(TIMEOUT_SEC) do
@@ -192,8 +201,14 @@ module TestIRB
     end
 
     def write_rc(content)
-      @irbrc = Tempfile.new('irbrc')
-      @tmpfiles << @irbrc
+      # Append irbrc content if a tempfile for it already exists
+      if @irbrc
+        @irbrc = File.open(@irbrc, "a")
+      else
+        @irbrc = Tempfile.new('irbrc')
+        @tmpfiles << @irbrc
+      end
+
       @irbrc.write(content)
       @irbrc.close
       @envs['IRBRC'] = @irbrc.path

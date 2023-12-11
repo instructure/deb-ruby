@@ -11,6 +11,18 @@ RSpec.describe "bundle lock" do
       gem "foo"
     G
 
+    checksums = checksums_section_when_existing do |c|
+      c.checksum repo, "actionmailer", "2.3.2"
+      c.checksum repo, "actionpack", "2.3.2"
+      c.checksum repo, "activerecord", "2.3.2"
+      c.checksum repo, "activeresource", "2.3.2"
+      c.checksum repo, "activesupport", "2.3.2"
+      c.checksum repo, "foo", "1.0"
+      c.checksum repo, "rails", "2.3.2"
+      c.checksum repo, "rake", "13.0.1"
+      c.checksum repo, "weakling", "0.0.3"
+    end
+
     @lockfile = <<~L
       GEM
         remote: #{file_uri_for(repo)}/
@@ -41,7 +53,7 @@ RSpec.describe "bundle lock" do
         foo
         rails
         weakling
-
+      #{checksums}
       BUNDLED WITH
          #{Bundler::VERSION}
     L
@@ -50,15 +62,23 @@ RSpec.describe "bundle lock" do
   it "prints a lockfile when there is no existing lockfile with --print" do
     bundle "lock --print"
 
-    expect(out).to eq(@lockfile.strip)
+    expect(out).to eq(@lockfile.chomp)
   end
 
   it "prints a lockfile when there is an existing lockfile with --print" do
+    lockfile remove_checksums_section_from_lockfile(@lockfile)
+
+    bundle "lock --print"
+
+    expect(out).to eq(remove_checksums_section_from_lockfile(@lockfile).chomp)
+  end
+
+  it "prints a lockfile when there is an existing checksums lockfile with --print" do
     lockfile @lockfile
 
     bundle "lock --print"
 
-    expect(out).to eq(@lockfile.strip)
+    expect(out).to eq(@lockfile.chomp)
   end
 
   it "writes a lockfile when there is no existing lockfile" do
@@ -67,7 +87,23 @@ RSpec.describe "bundle lock" do
     expect(read_lockfile).to eq(@lockfile)
   end
 
+  it "prints a lockfile without fetching new checksums if the existing lockfile had no checksums" do
+    lockfile remove_checksums_from_lockfile(@lockfile)
+
+    bundle "lock --print"
+
+    expect(out).to eq(remove_checksums_from_lockfile(@lockfile).chomp)
+  end
+
   it "writes a lockfile when there is an outdated lockfile using --update" do
+    lockfile remove_checksums_from_lockfile(@lockfile.gsub("2.3.2", "2.3.1"), " (2.3.1)")
+
+    bundle "lock --update"
+
+    expect(read_lockfile).to eq(remove_checksums_from_lockfile(@lockfile))
+  end
+
+  it "writes a lockfile with checksums on --update when checksums exist" do
     lockfile @lockfile.gsub("2.3.2", "2.3.1")
 
     bundle "lock --update"
@@ -75,10 +111,27 @@ RSpec.describe "bundle lock" do
     expect(read_lockfile).to eq(@lockfile)
   end
 
+  it "writes a lockfile when there is an outdated lockfile and bundle is frozen" do
+    lockfile @lockfile.gsub("2.3.2", "2.3.1")
+
+    bundle "lock --update", env: { "BUNDLE_FROZEN" => "true" }
+
+    expect(read_lockfile).to eq(@lockfile)
+  end
+
   it "does not fetch remote specs when using the --local option" do
-    bundle "lock --update --local", :raise_on_error => false
+    bundle "lock --update --local", raise_on_error: false
 
     expect(err).to match(/locally installed gems/)
+  end
+
+  it "does not fetch remote checksums with --local" do
+    lockfile remove_checksums_from_lockfile(@lockfile)
+
+    bundle "lock --print --local"
+
+    # No checksums because --local prevents fetching them
+    expect(out).to eq(remove_checksums_from_lockfile(@lockfile).chomp)
   end
 
   it "works with --gemfile flag" do
@@ -86,6 +139,10 @@ RSpec.describe "bundle lock" do
       source "#{file_uri_for(repo)}"
       gem "foo"
     G
+    checksums = checksums_section_when_existing do |c|
+      c.no_checksum "foo", "1.0"
+    end
+
     lockfile = <<~L
       GEM
         remote: #{file_uri_for(repo)}/
@@ -97,7 +154,7 @@ RSpec.describe "bundle lock" do
 
       DEPENDENCIES
         foo
-
+      #{checksums}
       BUNDLED WITH
          #{Bundler::VERSION}
     L
@@ -112,7 +169,7 @@ RSpec.describe "bundle lock" do
     bundle "lock --lockfile=lock"
 
     expect(out).to match(/Writing lockfile to.+lock/)
-    expect(read_lockfile("lock")).to eq(@lockfile)
+    expect(read_lockfile("lock")).to eq(remove_checksums_from_lockfile(@lockfile))
     expect { read_lockfile }.to raise_error(Errno::ENOENT)
   end
 
@@ -120,8 +177,55 @@ RSpec.describe "bundle lock" do
     bundle "install"
     bundle "lock --lockfile=lock"
 
+    checksums = checksums_section_when_existing do |c|
+      c.checksum repo, "actionmailer", "2.3.2"
+      c.checksum repo, "actionpack", "2.3.2"
+      c.checksum repo, "activerecord", "2.3.2"
+      c.checksum repo, "activeresource", "2.3.2"
+      c.checksum repo, "activesupport", "2.3.2"
+      c.checksum repo, "foo", "1.0"
+      c.checksum repo, "rails", "2.3.2"
+      c.checksum repo, "rake", "13.0.1"
+      c.checksum repo, "weakling", "0.0.3"
+    end
+
+    lockfile = <<~L
+      GEM
+        remote: #{file_uri_for(repo)}/
+        specs:
+          actionmailer (2.3.2)
+            activesupport (= 2.3.2)
+          actionpack (2.3.2)
+            activesupport (= 2.3.2)
+          activerecord (2.3.2)
+            activesupport (= 2.3.2)
+          activeresource (2.3.2)
+            activesupport (= 2.3.2)
+          activesupport (2.3.2)
+          foo (1.0)
+          rails (2.3.2)
+            actionmailer (= 2.3.2)
+            actionpack (= 2.3.2)
+            activerecord (= 2.3.2)
+            activeresource (= 2.3.2)
+            rake (= 13.0.1)
+          rake (13.0.1)
+          weakling (0.0.3)
+
+      PLATFORMS
+        #{lockfile_platforms}
+
+      DEPENDENCIES
+        foo
+        rails
+        weakling
+      #{checksums}
+      BUNDLED WITH
+         #{Bundler::VERSION}
+    L
+
     expect(out).to match(/Writing lockfile to.+lock/)
-    expect(read_lockfile("lock")).to eq(@lockfile)
+    expect(read_lockfile("lock")).to eq(lockfile)
   end
 
   it "update specific gems using --update" do
@@ -129,7 +233,17 @@ RSpec.describe "bundle lock" do
 
     bundle "lock --update rails rake"
 
-    expect(read_lockfile).to eq(@lockfile)
+    expect(read_lockfile).to eq(remove_checksums_from_lockfile(@lockfile, "(2.3.2)", "(13.0.1)"))
+  end
+
+  it "preserves unknown checksum algorithms" do
+    lockfile @lockfile.gsub(/(sha256=[a-f0-9]+)$/, "constant=true,\\1,xyz=123")
+
+    previous_lockfile = read_lockfile
+
+    bundle "lock"
+
+    expect(read_lockfile).to eq(previous_lockfile)
   end
 
   it "does not unlock git sources when only uri shape changes" do
@@ -141,7 +255,7 @@ RSpec.describe "bundle lock" do
     G
 
     # Change uri format to end with "/" and reinstall
-    install_gemfile <<-G, :verbose => true
+    install_gemfile <<-G, verbose: true
       source "#{file_uri_for(gem_repo1)}"
       gem "foo", :git => "#{file_uri_for(lib_path("foo-1.0"))}/"
     G
@@ -191,7 +305,7 @@ RSpec.describe "bundle lock" do
   it "errors when updating a missing specific gems using --update" do
     lockfile @lockfile
 
-    bundle "lock --update blahblah", :raise_on_error => false
+    bundle "lock --update blahblah", raise_on_error: false
     expect(err).to eq("Could not find gem 'blahblah'.")
 
     expect(read_lockfile).to eq(@lockfile)
@@ -206,7 +320,7 @@ RSpec.describe "bundle lock" do
     G
     bundle "config set without test"
     bundle "config set path vendor/bundle"
-    bundle "lock"
+    bundle "lock", verbose: true
     expect(bundled_app("vendor/bundle")).not_to exist
   end
 
@@ -289,26 +403,67 @@ RSpec.describe "bundle lock" do
     end
   end
 
+  context "conservative updates when minor update adds a new dependency" do
+    before do
+      build_repo4 do
+        build_gem "sequel", "5.71.0"
+        build_gem "sequel", "5.72.0" do |s|
+          s.add_dependency "bigdecimal", ">= 0"
+        end
+        build_gem "bigdecimal", %w[1.4.4 99.1.4]
+      end
+
+      gemfile <<~G
+        source "#{file_uri_for(gem_repo4)}"
+        gem 'sequel'
+      G
+
+      lockfile <<~L
+        GEM
+          remote: #{file_uri_for(gem_repo4)}/
+          specs:
+            sequel (5.71.0)
+
+        PLATFORMS
+          ruby
+
+        DEPENDENCIES
+          sequel
+
+        BUNDLED WITH
+           #{Bundler::VERSION}
+      L
+
+      allow(Bundler::SharedHelpers).to receive(:find_gemfile).and_return(bundled_app_gemfile)
+    end
+
+    it "adds the latest version of the new dependency" do
+      bundle "lock --minor --update sequel"
+
+      expect(the_bundle.locked_gems.specs.map(&:full_name)).to eq(%w[sequel-5.72.0 bigdecimal-99.1.4].sort)
+    end
+  end
+
   it "updates the bundler version in the lockfile to the latest bundler version" do
     build_repo4 do
       build_gem "bundler", "55"
     end
 
-    system_gems "bundler-55", :gem_repo => gem_repo4
+    system_gems "bundler-55", gem_repo: gem_repo4
 
-    install_gemfile <<-G, :artifice => "compact_index", :env => { "BUNDLER_SPEC_GEM_REPO" => gem_repo4.to_s }
+    install_gemfile <<-G, artifice: "compact_index", env: { "BUNDLER_SPEC_GEM_REPO" => gem_repo4.to_s }
       source "https://gems.repo4"
     G
     lockfile lockfile.sub(/(^\s*)#{Bundler::VERSION}($)/, '\11.0.0\2')
 
-    bundle "lock --update --bundler --verbose", :artifice => "compact_index", :env => { "BUNDLER_SPEC_GEM_REPO" => gem_repo4.to_s }
+    bundle "lock --update --bundler --verbose", artifice: "compact_index", env: { "BUNDLER_SPEC_GEM_REPO" => gem_repo4.to_s }
     expect(lockfile).to end_with("BUNDLED WITH\n   55\n")
 
     update_repo4 do
       build_gem "bundler", "99"
     end
 
-    bundle "lock --update --bundler --verbose", :artifice => "compact_index", :env => { "BUNDLER_SPEC_GEM_REPO" => gem_repo4.to_s }
+    bundle "lock --update --bundler --verbose", artifice: "compact_index", env: { "BUNDLER_SPEC_GEM_REPO" => gem_repo4.to_s }
     expect(lockfile).to end_with("BUNDLED WITH\n   99\n")
   end
 
@@ -317,7 +472,7 @@ RSpec.describe "bundle lock" do
 
     allow(Bundler::SharedHelpers).to receive(:find_gemfile).and_return(bundled_app_gemfile)
     lockfile = Bundler::LockfileParser.new(read_lockfile)
-    expect(lockfile.platforms).to match_array([java, x86_mingw32, local_platform].uniq)
+    expect(lockfile.platforms).to match_array(default_platform_list(java, x86_mingw32))
   end
 
   it "supports adding new platforms with force_ruby_platform = true" do
@@ -349,7 +504,7 @@ RSpec.describe "bundle lock" do
 
     allow(Bundler::SharedHelpers).to receive(:find_gemfile).and_return(bundled_app_gemfile)
     lockfile = Bundler::LockfileParser.new(read_lockfile)
-    expect(lockfile.platforms).to match_array(["ruby", local_platform].uniq)
+    expect(lockfile.platforms).to match_array(default_platform_list("ruby"))
   end
 
   it "warns when adding an unknown platform" do
@@ -362,12 +517,12 @@ RSpec.describe "bundle lock" do
 
     allow(Bundler::SharedHelpers).to receive(:find_gemfile).and_return(bundled_app_gemfile)
     lockfile = Bundler::LockfileParser.new(read_lockfile)
-    expect(lockfile.platforms).to match_array([java, x86_mingw32, local_platform].uniq)
+    expect(lockfile.platforms).to match_array(default_platform_list(java, x86_mingw32))
 
     bundle "lock --remove-platform java"
 
     lockfile = Bundler::LockfileParser.new(read_lockfile)
-    expect(lockfile.platforms).to match_array([x86_mingw32, local_platform].uniq)
+    expect(lockfile.platforms).to match_array(default_platform_list(x86_mingw32))
   end
 
   it "also cleans up redundant platform gems when removing platforms" do
@@ -376,6 +531,11 @@ RSpec.describe "bundle lock" do
       build_gem "nokogiri", "1.12.0" do |s|
         s.platform = "x86_64-darwin"
       end
+    end
+
+    checksums = checksums_section_when_existing do |c|
+      c.checksum gem_repo4, "nokogiri", "1.12.0"
+      c.checksum gem_repo4, "nokogiri", "1.12.0", "x86_64-darwin"
     end
 
     simulate_platform "x86_64-darwin-22" do
@@ -399,10 +559,12 @@ RSpec.describe "bundle lock" do
 
       DEPENDENCIES
         nokogiri
-
+      #{checksums}
       BUNDLED WITH
          #{Bundler::VERSION}
     L
+
+    checksums.delete("nokogiri", Gem::Platform::RUBY)
 
     simulate_platform "x86_64-darwin-22" do
       bundle "lock --remove-platform ruby"
@@ -419,14 +581,14 @@ RSpec.describe "bundle lock" do
 
       DEPENDENCIES
         nokogiri
-
+      #{checksums}
       BUNDLED WITH
          #{Bundler::VERSION}
     L
   end
 
   it "errors when removing all platforms" do
-    bundle "lock --remove-platform #{local_platform}", :raise_on_error => false
+    bundle "lock --remove-platform #{local_platform}", raise_on_error: false
     expect(err).to include("Removing all platforms from the bundle is not allowed")
   end
 
@@ -467,6 +629,13 @@ RSpec.describe "bundle lock" do
       gem "gssapi"
     G
 
+    checksums = checksums_section_when_existing do |c|
+      c.no_checksum "ffi", "1.9.14", "x86-mingw32"
+      c.no_checksum "gssapi", "1.2.0"
+      c.no_checksum "mixlib-shellout", "2.2.6", "universal-mingw32"
+      c.no_checksum "win32-process", "0.8.3"
+    end
+
     simulate_platform(x86_mingw32) { bundle :lock }
 
     expect(lockfile).to eq <<~G
@@ -487,13 +656,16 @@ RSpec.describe "bundle lock" do
       DEPENDENCIES
         gssapi
         mixlib-shellout
-
+      #{checksums}
       BUNDLED WITH
          #{Bundler::VERSION}
     G
 
     bundle "config set --local force_ruby_platform true"
     bundle :lock
+
+    checksums.no_checksum "ffi", "1.9.14"
+    checksums.no_checksum "mixlib-shellout", "2.2.6"
 
     expect(lockfile).to eq <<~G
       GEM
@@ -516,7 +688,7 @@ RSpec.describe "bundle lock" do
       DEPENDENCIES
         gssapi
         mixlib-shellout
-
+      #{checksums}
       BUNDLED WITH
          #{Bundler::VERSION}
     G
@@ -580,7 +752,12 @@ RSpec.describe "bundle lock" do
       gem "libv8"
     G
 
-    simulate_platform(Gem::Platform.new("x86_64-darwin")) { bundle "lock" }
+    simulate_platform(Gem::Platform.new("x86_64-darwin-19")) { bundle "lock" }
+
+    checksums = checksums_section_when_existing do |c|
+      c.no_checksum "libv8", "8.4.255.0", "x86_64-darwin-19"
+      c.no_checksum "libv8", "8.4.255.0", "x86_64-darwin-20"
+    end
 
     expect(lockfile).to eq <<~G
       GEM
@@ -590,11 +767,12 @@ RSpec.describe "bundle lock" do
           libv8 (8.4.255.0-x86_64-darwin-20)
 
       PLATFORMS
-        x86_64-darwin
+        x86_64-darwin-19
+        x86_64-darwin-20
 
       DEPENDENCIES
         libv8
-
+      #{checksums}
       BUNDLED WITH
          #{Bundler::VERSION}
     G
@@ -609,6 +787,11 @@ RSpec.describe "bundle lock" do
       build_gem "libv8", "8.4.255.0" do |s|
         s.platform = "x86_64-darwin-20"
       end
+    end
+
+    checksums = checksums_section_when_existing do |c|
+      c.checksum gem_repo4, "libv8", "8.4.255.0", "x86_64-darwin-19"
+      c.checksum gem_repo4, "libv8", "8.4.255.0", "x86_64-darwin-20"
     end
 
     gemfile <<-G
@@ -629,7 +812,7 @@ RSpec.describe "bundle lock" do
 
       DEPENDENCIES
         libv8
-
+      #{checksums}
       BUNDLED WITH
          #{Bundler::VERSION}
     G
@@ -692,7 +875,7 @@ RSpec.describe "bundle lock" do
          #{Bundler::VERSION}
     L
 
-    bundle "lock --add-platform x86_64-linux", :artifice => "compact_index", :env => { "BUNDLER_SPEC_GEM_REPO" => gem_repo4.to_s }
+    bundle "lock --add-platform x86_64-linux", artifice: "compact_index", env: { "BUNDLER_SPEC_GEM_REPO" => gem_repo4.to_s }
   end
 
   it "does not crash on conflicting ruby requirements between platform versions in two different gems" do
@@ -748,7 +931,7 @@ RSpec.describe "bundle lock" do
          #{Bundler::VERSION}
     L
 
-    bundle "install --verbose", :artifice => "compact_index", :env => { "BUNDLER_SPEC_GEM_REPO" => gem_repo4.to_s, "DEBUG_RESOLVER" => "1" }
+    bundle "install --verbose", artifice: "compact_index", env: { "BUNDLER_SPEC_GEM_REPO" => gem_repo4.to_s, "DEBUG_RESOLVER" => "1" }
   end
 
   it "respects lower bound ruby requirements" do
@@ -780,30 +963,126 @@ RSpec.describe "bundle lock" do
          #{Bundler::VERSION}
     L
 
-    bundle "install", :artifice => "compact_index", :env => { "BUNDLER_SPEC_GEM_REPO" => gem_repo4.to_s }
+    bundle "install", artifice: "compact_index", env: { "BUNDLER_SPEC_GEM_REPO" => gem_repo4.to_s }
   end
 
   context "when an update is available" do
-    let(:repo) { gem_repo2 }
-
-    before do
-      lockfile(@lockfile)
+    let(:repo) do
       build_repo2 do
         build_gem "foo", "2.0"
       end
+      gem_repo2
+    end
+
+    before do
+      lockfile(@lockfile)
     end
 
     it "does not implicitly update" do
       bundle "lock"
 
-      expect(read_lockfile).to eq(@lockfile)
+      checksums = checksums_section_when_existing do |c|
+        c.checksum repo, "actionmailer", "2.3.2"
+        c.checksum repo, "actionpack", "2.3.2"
+        c.checksum repo, "activerecord", "2.3.2"
+        c.checksum repo, "activeresource", "2.3.2"
+        c.checksum repo, "activesupport", "2.3.2"
+        c.checksum repo, "foo", "1.0"
+        c.checksum repo, "rails", "2.3.2"
+        c.checksum repo, "rake", "13.0.1"
+        c.checksum repo, "weakling", "0.0.3"
+      end
+
+      expected_lockfile = <<~L
+        GEM
+          remote: #{file_uri_for(repo)}/
+          specs:
+            actionmailer (2.3.2)
+              activesupport (= 2.3.2)
+            actionpack (2.3.2)
+              activesupport (= 2.3.2)
+            activerecord (2.3.2)
+              activesupport (= 2.3.2)
+            activeresource (2.3.2)
+              activesupport (= 2.3.2)
+            activesupport (2.3.2)
+            foo (1.0)
+            rails (2.3.2)
+              actionmailer (= 2.3.2)
+              actionpack (= 2.3.2)
+              activerecord (= 2.3.2)
+              activeresource (= 2.3.2)
+              rake (= 13.0.1)
+            rake (13.0.1)
+            weakling (0.0.3)
+
+        PLATFORMS
+          #{lockfile_platforms}
+
+        DEPENDENCIES
+          foo
+          rails
+          weakling
+        #{checksums}
+        BUNDLED WITH
+           #{Bundler::VERSION}
+      L
+
+      expect(read_lockfile).to eq(expected_lockfile)
     end
 
     it "accounts for changes in the gemfile" do
       gemfile gemfile.gsub('"foo"', '"foo", "2.0"')
       bundle "lock"
 
-      expect(read_lockfile).to eq(@lockfile.sub("foo (1.0)", "foo (2.0)").sub(/foo$/, "foo (= 2.0)"))
+      checksums = checksums_section_when_existing do |c|
+        c.checksum repo, "actionmailer", "2.3.2"
+        c.checksum repo, "actionpack", "2.3.2"
+        c.checksum repo, "activerecord", "2.3.2"
+        c.checksum repo, "activeresource", "2.3.2"
+        c.checksum repo, "activesupport", "2.3.2"
+        c.no_checksum "foo", "2.0"
+        c.checksum repo, "rails", "2.3.2"
+        c.checksum repo, "rake", "13.0.1"
+        c.checksum repo, "weakling", "0.0.3"
+      end
+
+      expected_lockfile = <<~L
+        GEM
+          remote: #{file_uri_for(repo)}/
+          specs:
+            actionmailer (2.3.2)
+              activesupport (= 2.3.2)
+            actionpack (2.3.2)
+              activesupport (= 2.3.2)
+            activerecord (2.3.2)
+              activesupport (= 2.3.2)
+            activeresource (2.3.2)
+              activesupport (= 2.3.2)
+            activesupport (2.3.2)
+            foo (2.0)
+            rails (2.3.2)
+              actionmailer (= 2.3.2)
+              actionpack (= 2.3.2)
+              activerecord (= 2.3.2)
+              activeresource (= 2.3.2)
+              rake (= 13.0.1)
+            rake (13.0.1)
+            weakling (0.0.3)
+
+        PLATFORMS
+          #{lockfile_platforms}
+
+        DEPENDENCIES
+          foo (= 2.0)
+          rails
+          weakling
+        #{checksums}
+        BUNDLED WITH
+           #{Bundler::VERSION}
+      L
+
+      expect(read_lockfile).to eq(expected_lockfile)
     end
   end
 
@@ -817,8 +1096,8 @@ RSpec.describe "bundle lock" do
         build_gem "irb", "1.5.0"
       end
 
-      system_gems "irb-1.5.0", :gem_repo => gem_repo4
-      system_gems "debug-1.6.3", :gem_repo => gem_repo4
+      system_gems "irb-1.5.0", gem_repo: gem_repo4
+      system_gems "debug-1.6.3", gem_repo: gem_repo4
 
       # simulate gemspec with wrong empty dependencies
       debug_gemspec_path = system_gem_path("specifications/debug-1.6.3.gemspec")
@@ -847,13 +1126,18 @@ RSpec.describe "bundle lock" do
 
         DEPENDENCIES
           debug
-
+        #{checksums_section}
         BUNDLED WITH
            #{Bundler::VERSION}
       L
 
       simulate_platform "arm64-darwin-22" do
         bundle "lock"
+      end
+
+      checksums = checksums_section do |c|
+        c.no_checksum "debug", "1.6.3"
+        c.no_checksum "irb", "1.5.0"
       end
 
       expect(lockfile).to eq <<~L
@@ -870,7 +1154,7 @@ RSpec.describe "bundle lock" do
 
         DEPENDENCIES
           debug
-
+        #{checksums}
         BUNDLED WITH
            #{Bundler::VERSION}
       L
@@ -903,7 +1187,7 @@ RSpec.describe "bundle lock" do
       gem "activeadmin", "2.13.1"
     G
 
-    bundle "lock", :raise_on_error => false
+    bundle "lock", raise_on_error: false
 
     expect(err).to eq <<~ERR.strip
       Could not find compatible versions
@@ -968,7 +1252,7 @@ RSpec.describe "bundle lock" do
             activemodel (>= 6.0.4)
 
       PLATFORMS
-        #{lockfile_platforms}
+        #{local_platform}
 
       DEPENDENCIES
         activeadmin (= 2.13.1)
@@ -978,7 +1262,7 @@ RSpec.describe "bundle lock" do
          #{Bundler::VERSION}
     L
 
-    bundle "lock", :raise_on_error => false
+    bundle "lock", raise_on_error: false
 
     expect(err).to eq <<~ERR.strip
       Could not find compatible versions
@@ -1004,9 +1288,9 @@ RSpec.describe "bundle lock" do
             version solving has failed.
     ERR
 
-    lockfile lockfile.gsub(/PLATFORMS\n  #{lockfile_platforms}/m, "PLATFORMS\n  #{lockfile_platforms("ruby")}")
+    lockfile lockfile.gsub(/PLATFORMS\n  #{local_platform}/m, "PLATFORMS\n  #{lockfile_platforms("ruby")}")
 
-    bundle "lock", :raise_on_error => false
+    bundle "lock", raise_on_error: false
 
     expect(err).to eq <<~ERR.strip
       Could not find compatible versions
@@ -1099,7 +1383,7 @@ RSpec.describe "bundle lock" do
     G
 
     simulate_platform "universal-java-19" do
-      bundle "lock", :raise_on_error => false
+      bundle "lock", raise_on_error: false
     end
 
     expect(err).to include("Could not find compatible versions")
@@ -1134,7 +1418,7 @@ RSpec.describe "bundle lock" do
 
   context "when resolving platform specific gems as indirect dependencies on truffleruby", :truffleruby_only do
     before do
-      build_lib "foo", :path => bundled_app do |s|
+      build_lib "foo", path: bundled_app do |s|
         s.add_dependency "nokogiri"
       end
 
@@ -1152,6 +1436,11 @@ RSpec.describe "bundle lock" do
     end
 
     it "locks ruby specs" do
+      checksums = checksums_section_when_existing do |c|
+        c.no_checksum "foo", "1.0"
+        c.no_checksum "nokogiri", "1.14.2"
+      end
+
       simulate_platform "x86_64-linux" do
         bundle "lock"
       end
@@ -1169,11 +1458,11 @@ RSpec.describe "bundle lock" do
             nokogiri (1.14.2)
 
         PLATFORMS
-          x86_64-linux
+          #{lockfile_platforms}
 
         DEPENDENCIES
           foo!
-
+        #{checksums}
         BUNDLED WITH
            #{Bundler::VERSION}
       L
@@ -1234,6 +1523,13 @@ RSpec.describe "bundle lock" do
     end
 
     it "does not downgrade top level dependencies" do
+      checksums = checksums_section_when_existing do |c|
+        c.no_checksum "actionpack", "7.0.4.3"
+        c.no_checksum "activesupport", "7.0.4.3"
+        c.no_checksum "govuk_app_config", "4.13.0"
+        c.no_checksum "railties", "7.0.4.3"
+      end
+
       simulate_platform "arm64-darwin-22" do
         bundle "lock"
       end
@@ -1256,7 +1552,7 @@ RSpec.describe "bundle lock" do
         DEPENDENCIES
           activesupport (= 7.0.4.3)
           govuk_app_config
-
+        #{checksums}
         BUNDLED WITH
            #{Bundler::VERSION}
       L

@@ -622,21 +622,24 @@ init_env(void)
 
     if (!GetEnvironmentVariableW(L"HOME", env, numberof(env))) {
         f = FALSE;
-        if (GetEnvironmentVariableW(L"HOMEDRIVE", env, numberof(env)))
-            len = lstrlenW(env);
-        else
-            len = 0;
-        if (GetEnvironmentVariableW(L"HOMEPATH", env + len, numberof(env) - len) || len) {
+        if (GetEnvironmentVariableW(L"USERPROFILE", env, numberof(env))) {
             f = TRUE;
         }
-        else if (GetEnvironmentVariableW(L"USERPROFILE", env, numberof(env))) {
-            f = TRUE;
-        }
-        else if (get_special_folder(CSIDL_PROFILE, env, numberof(env))) {
-            f = TRUE;
-        }
-        else if (get_special_folder(CSIDL_PERSONAL, env, numberof(env))) {
-            f = TRUE;
+        else {
+            if (GetEnvironmentVariableW(L"HOMEDRIVE", env, numberof(env)))
+                len = lstrlenW(env);
+            else
+                len = 0;
+
+            if (GetEnvironmentVariableW(L"HOMEPATH", env + len, numberof(env) - len) || len) {
+                f = TRUE;
+            }
+            else if (get_special_folder(CSIDL_PROFILE, env, numberof(env))) {
+                f = TRUE;
+            }
+            else if (get_special_folder(CSIDL_PERSONAL, env, numberof(env))) {
+                f = TRUE;
+            }
         }
         if (f) {
             regulate_path(env);
@@ -1537,7 +1540,8 @@ rb_w32_uspawn(int mode, const char *cmd, const char *prog)
 
 /* License: Artistic or GPL */
 static rb_pid_t
-w32_aspawn_flags(int mode, const char *prog, char *const *argv, DWORD flags, UINT cp)
+w32_spawn_process(int mode, const char *prog, char *const *argv,
+                  int in_fd, int out_fd, int err_fd, DWORD flags, UINT cp)
 {
     int c_switch = 0;
     size_t len;
@@ -1548,8 +1552,19 @@ w32_aspawn_flags(int mode, const char *prog, char *const *argv, DWORD flags, UIN
     int e = 0;
     rb_pid_t ret = -1;
     VALUE v = 0;
+    HANDLE in_handle = NULL, out_handle = NULL, err_handle = NULL;
 
     if (check_spawn_mode(mode)) return -1;
+
+    if (in_fd >= 0) {
+        in_handle = (HANDLE)rb_w32_get_osfhandle(in_fd);
+    }
+    if (out_fd >= 0) {
+        out_handle = (HANDLE)rb_w32_get_osfhandle(out_fd);
+    }
+    if (err_fd >= 0) {
+        err_handle = (HANDLE)rb_w32_get_osfhandle(err_fd);
+    }
 
     if (!prog) prog = argv[0];
     if ((shell = w32_getenv("COMSPEC", cp)) &&
@@ -1598,7 +1613,7 @@ w32_aspawn_flags(int mode, const char *prog, char *const *argv, DWORD flags, UIN
 
     if (!e) {
         struct ChildRecord *child = FindFreeChildSlot();
-        if (CreateChild(child, wcmd, wprog, NULL, NULL, NULL, flags)) {
+        if (CreateChild(child, wcmd, wprog, in_handle, out_handle, err_handle, flags)) {
             ret = child_result(child, mode);
         }
     }
@@ -1613,21 +1628,21 @@ rb_pid_t
 rb_w32_aspawn_flags(int mode, const char *prog, char *const *argv, DWORD flags)
 {
     /* assume ACP */
-    return w32_aspawn_flags(mode, prog, argv, flags, filecp());
+    return w32_spawn_process(mode, prog, argv, -1, -1, -1, flags, filecp());
 }
 
 /* License: Ruby's */
 rb_pid_t
 rb_w32_uaspawn_flags(int mode, const char *prog, char *const *argv, DWORD flags)
 {
-    return w32_aspawn_flags(mode, prog, argv, flags, CP_UTF8);
+    return w32_spawn_process(mode, prog, argv, -1, -1, -1, flags, CP_UTF8);
 }
 
 /* License: Ruby's */
 rb_pid_t
 rb_w32_aspawn(int mode, const char *prog, char *const *argv)
 {
-    return w32_aspawn_flags(mode, prog, argv, 0, filecp());
+    return w32_spawn_process(mode, prog, argv, -1, -1, -1, 0, filecp());
 }
 
 /* License: Ruby's */
@@ -1635,6 +1650,15 @@ rb_pid_t
 rb_w32_uaspawn(int mode, const char *prog, char *const *argv)
 {
     return rb_w32_uaspawn_flags(mode, prog, argv, 0);
+}
+
+/* License: Ruby's */
+rb_pid_t
+rb_w32_uspawn_process(int mode, const char *prog, char *const *argv,
+                      int in_fd, int out_fd, int err_fd, DWORD flags)
+{
+    return w32_spawn_process(mode, prog, argv, in_fd, out_fd, err_fd,
+                             flags, CP_UTF8);
 }
 
 /* License: Artistic or GPL */
@@ -2591,8 +2615,72 @@ set_pioinfo_extra(void)
      * * https://bugs.ruby-lang.org/issues/18605
      */
     char *p = (char*)get_proc_address(UCRTBASE, "_isatty", NULL);
-    char *pend = p;
     /* _osfile(fh) & FDEV */
+
+#ifdef _M_ARM64
+#define IS_INSN(pc, name) ((*(pc) & name##_mask) == name##_id)
+    const int max_num_inst = 500;
+    uint32_t *start = (uint32_t*)p;
+    uint32_t *end_limit = (start + max_num_inst);
+    uint32_t *pc = start;
+
+    if (!p) {
+        fprintf(stderr, "_isatty proc not found in " UCRTBASE "\n");
+        _exit(1);
+    }
+
+    /* end of function */
+    const uint32_t ret_id = 0xd65f0000;
+    const uint32_t ret_mask = 0xfffffc1f;
+    for(; pc < end_limit; pc++) {
+        if (IS_INSN(pc, ret)) {
+            break;
+        }
+    }
+    if (pc == end_limit) {
+        fprintf(stderr, "end of _isatty not found in " UCRTBASE "\n");
+        _exit(1);
+    }
+
+    /* pioinfo instruction mark */
+    const uint32_t adrp_id = 0x90000000;
+    const uint32_t adrp_mask = 0x9f000000;
+    const uint32_t add_id = 0x11000000;
+    const uint32_t add_mask = 0x3fc00000;
+    for(; pc > start; pc--) {
+        if (IS_INSN(pc, adrp) && IS_INSN(pc + 1, add)) {
+            break;
+        }
+    }
+    if(pc == start) {
+        fprintf(stderr, "pioinfo mark not found in " UCRTBASE "\n");
+        _exit(1);
+    }
+
+    /* We now point to instructions that load address of __pioinfo:
+     * adrp	x8, 0x1801d8000
+     * add	x8, x8, #0xdb0
+     * https://devblogs.microsoft.com/oldnewthing/20220809-00/?p=106955
+     * The last adrp/add sequence before ret is what we are looking for.
+     */
+    const uint32_t adrp_insn = *pc;
+    const uint32_t adrp_immhi = (adrp_insn & 0x00ffffe0) >> 5;
+    const uint32_t adrp_immlo = (adrp_insn & 0x60000000) >> (5 + 19 + 5);
+    /* imm = immhi:immlo:Zeros(12), 64 */
+    const uint64_t adrp_imm = ((adrp_immhi << 2) | adrp_immlo) << 12;
+    /* base = PC64<63:12>:Zeros(12) */
+    const uint64_t adrp_base = (uint64_t)pc & 0xfffffffffffff000;
+
+    const uint32_t add_insn = *(pc + 1);
+    const uint32_t add_sh = (add_insn & 0x400000) >> (12 + 5 + 5);
+    /* case sh of
+      when '0' imm = ZeroExtend(imm12, datasize);
+      when '1' imm = ZeroExtend(imm12:Zeros(12), datasize); */
+    const uint64_t add_imm = ((add_insn & 0x3ffc00) >> (5 + 5)) << (add_sh ? 12 : 0);
+
+    __pioinfo = (ioinfo**)(adrp_base + adrp_imm + add_imm);
+#else /* _M_ARM64 */
+    char *pend = p;
 
 # ifdef _WIN64
     int32_t rel;
@@ -2643,7 +2731,8 @@ set_pioinfo_extra(void)
 #else
     __pioinfo = *(ioinfo***)(p);
 #endif
-#endif
+#endif /* _M_ARM64 */
+#endif /* RUBY_MSVCRT_VERSION */
     int fd;
 
     fd = _open("NUL", O_RDONLY);

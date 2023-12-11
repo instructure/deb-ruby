@@ -360,6 +360,13 @@ loaded_features_index_clear_i(st_data_t key, st_data_t val, st_data_t arg)
     return ST_DELETE;
 }
 
+void
+rb_free_loaded_features_index(rb_vm_t *vm)
+{
+    st_foreach(vm->loaded_features_index, loaded_features_index_clear_i, 0);
+    st_free_table(vm->loaded_features_index);
+}
+
 static st_table *
 get_loaded_features_index(rb_vm_t *vm)
 {
@@ -935,6 +942,7 @@ load_unlock(rb_vm_t *vm, const char *ftptr, int done)
     }
 }
 
+static VALUE rb_require_string_internal(VALUE fname, bool resurrect);
 
 /*
  *  call-seq:
@@ -997,7 +1005,7 @@ rb_f_require_relative(VALUE obj, VALUE fname)
         rb_loaderror("cannot infer basepath");
     }
     base = rb_file_dirname(base);
-    return rb_require_string(rb_file_absolute_path(fname, base));
+    return rb_require_string_internal(rb_file_absolute_path(fname, base), false);
 }
 
 typedef int (*feature_func)(rb_vm_t *vm, const char *feature, const char *ext, int rb, int expanded, const char **fn);
@@ -1210,7 +1218,6 @@ require_internal(rb_execution_context_t *ec, VALUE fname, int exception, bool wa
     volatile bool reset_ext_config = false;
     struct rb_ext_config prev_ext_config;
 
-    fname = rb_get_path(fname);
     path = rb_str_encode_ospath(fname);
     RUBY_DTRACE_HOOK(REQUIRE_ENTRY, RSTRING_PTR(fname));
     saved_path = path;
@@ -1336,6 +1343,12 @@ ruby_require_internal(const char *fname, unsigned int len)
 VALUE
 rb_require_string(VALUE fname)
 {
+    return rb_require_string_internal(FilePathValue(fname), false);
+}
+
+static VALUE
+rb_require_string_internal(VALUE fname, bool resurrect)
+{
     rb_execution_context_t *ec = GET_EC();
     int result = require_internal(ec, fname, 1, RTEST(ruby_verbose));
 
@@ -1343,6 +1356,7 @@ rb_require_string(VALUE fname)
         EC_JUMP_TAG(ec, result);
     }
     if (result < 0) {
+        if (resurrect) fname = rb_str_resurrect(fname);
         load_failed(fname);
     }
 
@@ -1352,7 +1366,9 @@ rb_require_string(VALUE fname)
 VALUE
 rb_require(const char *fname)
 {
-    return rb_require_string(rb_str_new_cstr(fname));
+    struct RString fake;
+    VALUE str = rb_setup_fake_str(&fake, fname, strlen(fname), 0);
+    return rb_require_string_internal(str, true);
 }
 
 static int

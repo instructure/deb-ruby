@@ -11,6 +11,7 @@ module TestIRB
       IRB.init_config(nil)
       IRB.conf[:USE_SINGLELINE] = false
       IRB.conf[:VERBOSE] = false
+      IRB.conf[:USE_PAGER] = false
       workspace = IRB::WorkSpace.new(Object.new)
       @context = IRB::Context.new(nil, workspace, TestInputMethod.new)
 
@@ -91,7 +92,7 @@ module TestIRB
     end
 
     def test_prompt_n_deprecation
-      irb = IRB::Irb.new(IRB::WorkSpace.new(Object.new))
+      irb = IRB::Irb.new(IRB::WorkSpace.new(Object.new), TestInputMethod.new)
 
       _, err = capture_output do
         irb.context.prompt_n = "foo"
@@ -614,21 +615,30 @@ module TestIRB
     def test_prompt_main_escape
       main = Struct.new(:to_s).new("main\a\t\r\n")
       irb = IRB::Irb.new(IRB::WorkSpace.new(main), TestInputMethod.new)
-      assert_equal("irb(main    )>", irb.prompt('irb(%m)>', nil, 1, 1))
+      assert_equal("irb(main    )>", irb.send(:format_prompt, 'irb(%m)>', nil, 1, 1))
     end
 
     def test_prompt_main_inspect_escape
       main = Struct.new(:inspect).new("main\\n\nmain")
       irb = IRB::Irb.new(IRB::WorkSpace.new(main), TestInputMethod.new)
-      assert_equal("irb(main\\n main)>", irb.prompt('irb(%M)>', nil, 1, 1))
+      assert_equal("irb(main\\n main)>", irb.send(:format_prompt, 'irb(%M)>', nil, 1, 1))
     end
 
     def test_prompt_main_truncate
       main = Struct.new(:to_s).new("a" * 100)
       def main.inspect; to_s.inspect; end
       irb = IRB::Irb.new(IRB::WorkSpace.new(main), TestInputMethod.new)
-      assert_equal('irb(aaaaaaaaaaaaaaaaaaaaaaaaaaaaa...)>', irb.prompt('irb(%m)>', nil, 1, 1))
-      assert_equal('irb("aaaaaaaaaaaaaaaaaaaaaaaaaaaa...)>', irb.prompt('irb(%M)>', nil, 1, 1))
+      assert_equal('irb(aaaaaaaaaaaaaaaaaaaaaaaaaaaaa...)>', irb.send(:format_prompt, 'irb(%m)>', nil, 1, 1))
+      assert_equal('irb("aaaaaaaaaaaaaaaaaaaaaaaaaaaa...)>', irb.send(:format_prompt, 'irb(%M)>', nil, 1, 1))
+    end
+
+    def test_prompt_main_raise
+      main = Object.new
+      def main.to_s; raise TypeError; end
+      def main.inspect; raise ArgumentError; end
+      irb = IRB::Irb.new(IRB::WorkSpace.new(main), TestInputMethod.new)
+      assert_equal("irb(!TypeError)>", irb.send(:format_prompt, 'irb(%m)>', nil, 1, 1))
+      assert_equal("irb(!ArgumentError)>", irb.send(:format_prompt, 'irb(%M)>', nil, 1, 1))
     end
 
     def test_lineno
@@ -650,6 +660,19 @@ module TestIRB
           :*, /\b3\n/,
           :*, /\b6\n/,
         ], out)
+    end
+
+    def test_build_completor
+      verbose, $VERBOSE = $VERBOSE, nil
+      original_completor = IRB.conf[:COMPLETOR]
+      IRB.conf[:COMPLETOR] = :regexp
+      assert_equal 'IRB::RegexpCompletor', @context.send(:build_completor).class.name
+      IRB.conf[:COMPLETOR] = :unknown
+      assert_equal 'IRB::RegexpCompletor', @context.send(:build_completor).class.name
+      # :type is tested in test_type_completor.rb
+    ensure
+      $VERBOSE = verbose
+      IRB.conf[:COMPLETOR] = original_completor
     end
 
     private

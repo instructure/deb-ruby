@@ -171,12 +171,6 @@ module RubyVM::RJIT # :nodoc: all
       me_addr == 0 ? nil : rb_method_entry_t.new(me_addr)
     end
 
-    def rb_shape_transition_shape_capa(shape, new_capacity)
-      _shape = shape.to_i
-      shape_addr = Primitive.cexpr! 'SIZET2NUM((size_t)rb_shape_transition_shape_capa((rb_shape_t *)NUM2SIZET(_shape), NUM2UINT(new_capacity)))'
-      rb_shape_t.new(shape_addr)
-    end
-
     def rb_shape_get_next(shape, obj, id)
       _shape = shape.to_i
       shape_addr = Primitive.cexpr! 'SIZET2NUM((size_t)rb_shape_get_next((rb_shape_t *)NUM2SIZET(_shape), obj, (ID)NUM2SIZET(id)))'
@@ -412,11 +406,9 @@ module RubyVM::RJIT # :nodoc: all
   C::RUBY_T_OBJECT = Primitive.cexpr! %q{ SIZET2NUM(RUBY_T_OBJECT) }
   C::RUBY_T_STRING = Primitive.cexpr! %q{ SIZET2NUM(RUBY_T_STRING) }
   C::RUBY_T_SYMBOL = Primitive.cexpr! %q{ SIZET2NUM(RUBY_T_SYMBOL) }
-  C::SHAPE_CAPACITY_CHANGE = Primitive.cexpr! %q{ SIZET2NUM(SHAPE_CAPACITY_CHANGE) }
   C::SHAPE_FLAG_SHIFT = Primitive.cexpr! %q{ SIZET2NUM(SHAPE_FLAG_SHIFT) }
   C::SHAPE_FROZEN = Primitive.cexpr! %q{ SIZET2NUM(SHAPE_FROZEN) }
   C::SHAPE_ID_NUM_BITS = Primitive.cexpr! %q{ SIZET2NUM(SHAPE_ID_NUM_BITS) }
-  C::SHAPE_INITIAL_CAPACITY = Primitive.cexpr! %q{ SIZET2NUM(SHAPE_INITIAL_CAPACITY) }
   C::SHAPE_IVAR = Primitive.cexpr! %q{ SIZET2NUM(SHAPE_IVAR) }
   C::SHAPE_MASK = Primitive.cexpr! %q{ SIZET2NUM(SHAPE_MASK) }
   C::SHAPE_ROOT = Primitive.cexpr! %q{ SIZET2NUM(SHAPE_ROOT) }
@@ -1037,6 +1029,7 @@ module RubyVM::RJIT # :nodoc: all
     @rb_callinfo_kwarg ||= CType::Struct.new(
       "rb_callinfo_kwarg", Primitive.cexpr!("SIZEOF(struct rb_callinfo_kwarg)"),
       keyword_len: [CType::Immediate.parse("int"), Primitive.cexpr!("OFFSETOF((*((struct rb_callinfo_kwarg *)NULL)), keyword_len)")],
+      references: [CType::Immediate.parse("int"), Primitive.cexpr!("OFFSETOF((*((struct rb_callinfo_kwarg *)NULL)), references)")],
       keywords: [CType::Immediate.parse("void *"), Primitive.cexpr!("OFFSETOF((*((struct rb_callinfo_kwarg *)NULL)), keywords)")],
     )
   end
@@ -1269,9 +1262,9 @@ module RubyVM::RJIT # :nodoc: all
       "rb_method_definition_struct", Primitive.cexpr!("SIZEOF(struct rb_method_definition_struct)"),
       type: [CType::BitField.new(4, 0), 0],
       iseq_overload: [CType::BitField.new(1, 4), 4],
-      alias_count: [CType::BitField.new(27, 5), 5],
-      complemented_count: [CType::BitField.new(28, 0), 32],
-      no_redef_warning: [CType::BitField.new(1, 4), 60],
+      no_redef_warning: [CType::BitField.new(1, 5), 5],
+      aliased: [CType::BitField.new(1, 6), 6],
+      reference_count: [CType::BitField.new(28, 0), 32],
       body: [CType::Union.new(
         "", Primitive.cexpr!("SIZEOF(((struct rb_method_definition_struct *)NULL)->body)"),
         iseq: self.rb_method_iseq_t,
@@ -1482,6 +1475,7 @@ module RubyVM::RJIT # :nodoc: all
       type: [CType::Immediate.parse("uint8_t"), Primitive.cexpr!("OFFSETOF((*((struct rb_shape *)NULL)), type)")],
       size_pool_index: [CType::Immediate.parse("uint8_t"), Primitive.cexpr!("OFFSETOF((*((struct rb_shape *)NULL)), size_pool_index)")],
       parent_id: [self.shape_id_t, Primitive.cexpr!("OFFSETOF((*((struct rb_shape *)NULL)), parent_id)")],
+      ancestor_index: [CType::Pointer.new { self.redblack_node_t }, Primitive.cexpr!("OFFSETOF((*((struct rb_shape *)NULL)), ancestor_index)")],
     )
   end
 
@@ -1536,6 +1530,7 @@ module RubyVM::RJIT # :nodoc: all
       scheduler: [self.VALUE, Primitive.cexpr!("OFFSETOF((*((struct rb_thread_struct *)NULL)), scheduler)")],
       blocking: [CType::Immediate.parse("unsigned int"), Primitive.cexpr!("OFFSETOF((*((struct rb_thread_struct *)NULL)), blocking)")],
       name: [self.VALUE, Primitive.cexpr!("OFFSETOF((*((struct rb_thread_struct *)NULL)), name)")],
+      specific_storage: [CType::Pointer.new { CType::Pointer.new { CType::Immediate.parse("void") } }, Primitive.cexpr!("OFFSETOF((*((struct rb_thread_struct *)NULL)), specific_storage)")],
       ext_config: [self.rb_ext_config, Primitive.cexpr!("OFFSETOF((*((struct rb_thread_struct *)NULL)), ext_config)")],
     )
   end
@@ -1638,6 +1633,10 @@ module RubyVM::RJIT # :nodoc: all
 
   def C._Bool
     CType::Bool.new
+  end
+
+  def C.redblack_node_t
+    CType::Stub.new(:redblack_node_t)
   end
 
   def C.ccan_list_node
