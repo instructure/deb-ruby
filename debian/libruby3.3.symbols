@@ -1,4 +1,5 @@
 libruby-3.3.so.3.3 libruby3.3 #MINVER#
+ Init_prism@Base 3.3.0~rc1-1ppa1~ubuntu20.04
  OnigDefaultCaseFoldFlag@Base 3.3.0~preview1
  OnigDefaultSyntax@Base 3.3.0~preview1
  OnigEncAsciiCtypeTable@Base 3.3.0~preview1
@@ -59,6 +60,7 @@ libruby-3.3.so.3.3 libruby3.3 #MINVER#
  onig_memsize@Base 3.3.0~preview1
  onig_name_to_backref_number@Base 3.3.0~preview1
  onig_name_to_group_numbers@Base 3.3.0~preview1
+ onig_names_copy@Base 3.3.0~rc1-1ppa1~ubuntu20.04
  onig_names_free@Base 3.3.0~preview1
  onig_new@Base 3.3.0~preview1
  onig_new_without_alloc@Base 3.3.0~preview1
@@ -79,6 +81,7 @@ libruby-3.3.so.3.3 libruby3.3 #MINVER#
  onig_number_of_names@Base 3.3.0~preview1
  onig_parse_make_tree@Base 3.3.0~preview1
  onig_reduce_nested_quantifier@Base 3.3.0~preview1
+ onig_reg_copy@Base 3.3.0~rc1-1ppa1~ubuntu20.04
  onig_reg_init@Base 3.3.0~preview1
  onig_region_clear@Base 3.3.0~preview1
  onig_region_copy@Base 3.3.0~preview1
@@ -228,6 +231,7 @@ libruby-3.3.so.3.3 libruby3.3 #MINVER#
  rb_assert_failure@Base 3.3.0~preview1
  rb_assoc_new@Base 3.3.0~preview1
  rb_ast_add_mark_object@Base 3.3.0~preview1
+ rb_ast_delete_mark_object@Base 3.3.0~rc1-1ppa1~ubuntu20.04
  rb_ast_delete_node@Base 3.3.0~preview1
  rb_ast_dispose@Base 3.3.0~preview1
  rb_ast_free@Base 3.3.0~preview1
@@ -433,6 +437,7 @@ libruby-3.3.so.3.3 libruby3.3 #MINVER#
  rb_cvar_find@Base 3.3.0~preview1
  rb_cvar_get@Base 3.3.0~preview1
  rb_cvar_set@Base 3.3.0~preview1
+ rb_data_define@Base 3.3.0~rc1-1ppa1~ubuntu20.04
  rb_data_object_wrap@Base 3.3.0~preview1
  rb_data_object_zalloc@Base 3.3.0~preview1
  rb_data_typed_object_wrap@Base 3.3.0~preview1
@@ -595,6 +600,7 @@ libruby-3.3.so.3.3 libruby3.3 #MINVER#
  rb_enc_strlen@Base 3.3.0~preview1
  rb_enc_symname2_p@Base 3.3.0~preview1
  rb_enc_symname_p@Base 3.3.0~preview1
+ rb_enc_symname_type@Base 3.3.0~rc1-1ppa1~ubuntu20.04
  rb_enc_to_index@Base 3.3.0~preview1
  rb_enc_tolower@Base 3.3.0~preview1
  rb_enc_toupper@Base 3.3.0~preview1
@@ -615,6 +621,9 @@ libruby-3.3.so.3.3 libruby3.3 #MINVER#
  rb_eql@Base 3.3.0~preview1
  rb_equal@Base 3.3.0~preview1
  rb_errinfo@Base 3.3.0~preview1
+ rb_errno@Base 3.3.0~rc1-1ppa1~ubuntu20.04
+ rb_errno_ptr@Base 3.3.0~rc1-1ppa1~ubuntu20.04
+ rb_errno_set@Base 3.3.0~rc1-1ppa1~ubuntu20.04
  rb_error_arity@Base 3.3.0~preview1
  rb_error_frozen@Base 3.3.0~preview1
  rb_error_frozen_object@Base 3.3.0~preview1
@@ -740,6 +749,7 @@ libruby-3.3.so.3.3 libruby3.3 #MINVER#
  rb_frame_callee@Base 3.3.0~preview1
  rb_frame_method_id_and_class@Base 3.3.0~preview1
  rb_frame_this_func@Base 3.3.0~preview1
+ rb_free_encoded_insn_data@Base 3.3.0~rc1-1ppa1~ubuntu20.04
  rb_free_generic_ivar@Base 3.3.0~preview1
  rb_free_tmp_buffer@Base 3.3.0~preview1
  rb_freeze_singleton_class@Base 3.3.0~preview1
@@ -779,6 +789,7 @@ libruby-3.3.so.3.3 libruby3.3 #MINVER#
  rb_gc_stat@Base 3.3.0~preview1
  rb_gc_unregister_address@Base 3.3.0~preview1
  rb_gc_update_tbl_refs@Base 3.3.0~preview1
+ rb_gc_update_values@Base 3.3.0~rc1-1ppa1~ubuntu20.04
  rb_gc_verify_internal_consistency@Base 3.3.0~preview1
  rb_gc_writebarrier@Base 3.3.0~preview1
  rb_gc_writebarrier_unprotect@Base 3.3.0~preview1
@@ -860,6 +871,9 @@ libruby-3.3.so.3.3 libruby3.3 #MINVER#
  rb_intern_str@Base 3.3.0~preview1
  rb_internal_thread_add_event_hook@Base 3.3.0~preview1
  rb_internal_thread_remove_event_hook@Base 3.3.0~preview1
+ rb_internal_thread_specific_get@Base 3.3.0~rc1-1ppa1~ubuntu20.04
+ rb_internal_thread_specific_key_create@Base 3.3.0~rc1-1ppa1~ubuntu20.04
+ rb_internal_thread_specific_set@Base 3.3.0~rc1-1ppa1~ubuntu20.04
  rb_interned_str@Base 3.3.0~preview1
  rb_interned_str_cstr@Base 3.3.0~preview1
  rb_interrupt@Base 3.3.0~preview1
@@ -893,6 +907,7 @@ libruby-3.3.so.3.3 libruby3.3 #MINVER#
  rb_io_check_readable@Base 3.3.0~preview1
  rb_io_check_writable@Base 3.3.0~preview1
  rb_io_close@Base 3.3.0~preview1
+ rb_io_closed_p@Base 3.3.0~rc1-1ppa1~ubuntu20.04
  rb_io_descriptor@Base 3.3.0~preview1
  rb_io_eof@Base 3.3.0~preview1
  rb_io_extract_encoding_option@Base 3.3.0~preview1
@@ -908,9 +923,12 @@ libruby-3.3.so.3.3 libruby3.3 #MINVER#
  rb_io_maybe_wait_readable@Base 3.3.0~preview1
  rb_io_maybe_wait_writable@Base 3.3.0~preview1
  rb_io_memsize@Base 3.3.0~preview1
+ rb_io_mode@Base 3.3.0~rc1-1ppa1~ubuntu20.04
  rb_io_modestr_fmode@Base 3.3.0~preview1
  rb_io_modestr_oflags@Base 3.3.0~preview1
  rb_io_oflags_fmode@Base 3.3.0~preview1
+ rb_io_open_descriptor@Base 3.3.0~rc1-1ppa1~ubuntu20.04
+ rb_io_path@Base 3.3.0~rc1-1ppa1~ubuntu20.04
  rb_io_print@Base 3.3.0~preview1
  rb_io_printf@Base 3.3.0~preview1
  rb_io_puts@Base 3.3.0~preview1
@@ -957,7 +975,7 @@ libruby-3.3.so.3.3 libruby3.3 #MINVER#
  rb_iseq_line_no@Base 3.3.0~preview1
  rb_iseq_load@Base 3.3.0~preview1
  rb_iseq_local_variables@Base 3.3.0~preview1
- rb_iseq_mark_and_move_insn_storage@Base 3.3.0~preview1
+ rb_iseq_mark_and_pin_insn_storage@Base 3.3.0~rc1-1ppa1~ubuntu20.04
  rb_iseq_method_name@Base 3.3.0~preview1
  rb_iseq_new@Base 3.3.0~preview1
  rb_iseq_new_eval@Base 3.3.0~preview1
@@ -1018,7 +1036,7 @@ libruby-3.3.so.3.3 libruby3.3 #MINVER#
  rb_mWaitWritable@Base 3.3.0~preview1
  rb_make_backtrace@Base 3.3.0~preview1
  rb_make_exception@Base 3.3.0~preview1
- rb_mark_and_update_generic_ivar@Base 3.3.0~preview1
+ rb_mark_generic_ivar@Base 3.3.0~rc1-1ppa1~ubuntu20.04
  rb_mark_hash@Base 3.3.0~preview1
  rb_mark_set@Base 3.3.0~preview1
  rb_mark_tbl@Base 3.3.0~preview1
@@ -1107,6 +1125,7 @@ libruby-3.3.so.3.3 libruby3.3 #MINVER#
  rb_newobj@Base 3.3.0~preview1
  rb_newobj_of@Base 3.3.0~preview1
  rb_node_init@Base 3.3.0~preview1
+ rb_node_set_type@Base 3.3.0~rc1-1ppa1~ubuntu20.04
  rb_nogvl@Base 3.3.0~preview1
  rb_notimplement@Base 3.3.0~preview1
  rb_num2dbl@Base 3.3.0~preview1
@@ -1171,11 +1190,13 @@ libruby-3.3.so.3.3 libruby3.3 #MINVER#
  rb_output_rs@Base 3.3.0~preview1
  rb_p@Base 3.3.0~preview1
  rb_parser_calloc@Base 3.3.0~preview1
+ rb_parser_compile_string_path@Base 3.3.0~rc1-1ppa1~ubuntu20.04
  rb_parser_dump_tree@Base 3.3.0~preview1
  rb_parser_fatal@Base 3.3.0~preview1
  rb_parser_free@Base 3.3.0~preview1
  rb_parser_lex_state_name@Base 3.3.0~preview1
  rb_parser_malloc@Base 3.3.0~preview1
+ rb_parser_new@Base 3.3.0~rc1-1ppa1~ubuntu20.04
  rb_parser_printf@Base 3.3.0~preview1
  rb_parser_realloc@Base 3.3.0~preview1
  rb_parser_reg_compile@Base 3.3.0~preview1
@@ -1187,14 +1208,57 @@ libruby-3.3.so.3.3 libruby3.3 #MINVER#
  rb_parser_set_location_of_heredoc_end@Base 3.3.0~preview1
  rb_parser_set_location_of_none@Base 3.3.0~preview1
  rb_parser_show_bitstack@Base 3.3.0~preview1
+ rb_parser_st_add_direct@Base 3.3.0~rc1-1ppa1~ubuntu20.04
+ rb_parser_st_cleanup_safe@Base 3.3.0~rc1-1ppa1~ubuntu20.04
+ rb_parser_st_clear@Base 3.3.0~rc1-1ppa1~ubuntu20.04
+ rb_parser_st_copy@Base 3.3.0~rc1-1ppa1~ubuntu20.04
+ rb_parser_st_delete@Base 3.3.0~rc1-1ppa1~ubuntu20.04
+ rb_parser_st_delete_safe@Base 3.3.0~rc1-1ppa1~ubuntu20.04
+ rb_parser_st_foreach@Base 3.3.0~rc1-1ppa1~ubuntu20.04
+ rb_parser_st_foreach_check@Base 3.3.0~rc1-1ppa1~ubuntu20.04
+ rb_parser_st_foreach_with_replace@Base 3.3.0~rc1-1ppa1~ubuntu20.04
+ rb_parser_st_free_table@Base 3.3.0~rc1-1ppa1~ubuntu20.04
+ rb_parser_st_get_key@Base 3.3.0~rc1-1ppa1~ubuntu20.04
+ rb_parser_st_hash@Base 3.3.0~rc1-1ppa1~ubuntu20.04
+ rb_parser_st_hash_end@Base 3.3.0~rc1-1ppa1~ubuntu20.04
+ rb_parser_st_hash_start@Base 3.3.0~rc1-1ppa1~ubuntu20.04
+ rb_parser_st_hash_uint32@Base 3.3.0~rc1-1ppa1~ubuntu20.04
+ rb_parser_st_hash_uint@Base 3.3.0~rc1-1ppa1~ubuntu20.04
+ rb_parser_st_init_existing_table_with_size@Base 3.3.0~rc1-1ppa1~ubuntu20.04
+ rb_parser_st_init_numtable@Base 3.3.0~rc1-1ppa1~ubuntu20.04
+ rb_parser_st_init_numtable_with_size@Base 3.3.0~rc1-1ppa1~ubuntu20.04
+ rb_parser_st_init_strcasetable@Base 3.3.0~rc1-1ppa1~ubuntu20.04
+ rb_parser_st_init_strcasetable_with_size@Base 3.3.0~rc1-1ppa1~ubuntu20.04
+ rb_parser_st_init_strtable@Base 3.3.0~rc1-1ppa1~ubuntu20.04
+ rb_parser_st_init_strtable_with_size@Base 3.3.0~rc1-1ppa1~ubuntu20.04
+ rb_parser_st_init_table@Base 3.3.0~rc1-1ppa1~ubuntu20.04
+ rb_parser_st_init_table_with_size@Base 3.3.0~rc1-1ppa1~ubuntu20.04
+ rb_parser_st_insert2@Base 3.3.0~rc1-1ppa1~ubuntu20.04
+ rb_parser_st_insert@Base 3.3.0~rc1-1ppa1~ubuntu20.04
+ rb_parser_st_keys@Base 3.3.0~rc1-1ppa1~ubuntu20.04
+ rb_parser_st_keys_check@Base 3.3.0~rc1-1ppa1~ubuntu20.04
+ rb_parser_st_locale_insensitive_strcasecmp@Base 3.3.0~rc1-1ppa1~ubuntu20.04
+ rb_parser_st_locale_insensitive_strncasecmp@Base 3.3.0~rc1-1ppa1~ubuntu20.04
+ rb_parser_st_lookup@Base 3.3.0~rc1-1ppa1~ubuntu20.04
+ rb_parser_st_memsize@Base 3.3.0~rc1-1ppa1~ubuntu20.04
+ rb_parser_st_numcmp@Base 3.3.0~rc1-1ppa1~ubuntu20.04
+ rb_parser_st_numhash@Base 3.3.0~rc1-1ppa1~ubuntu20.04
+ rb_parser_st_replace@Base 3.3.0~rc1-1ppa1~ubuntu20.04
+ rb_parser_st_shift@Base 3.3.0~rc1-1ppa1~ubuntu20.04
+ rb_parser_st_table_size@Base 3.3.0~rc1-1ppa1~ubuntu20.04
+ rb_parser_st_update@Base 3.3.0~rc1-1ppa1~ubuntu20.04
+ rb_parser_st_values@Base 3.3.0~rc1-1ppa1~ubuntu20.04
+ rb_parser_st_values_check@Base 3.3.0~rc1-1ppa1~ubuntu20.04
  rb_parser_trace_lex_state@Base 3.3.0~preview1
  rb_path2class@Base 3.3.0~preview1
  rb_path_check@Base 3.3.0~preview1
  rb_path_to_class@Base 3.3.0~preview1
  rb_pipe@Base 3.3.0~preview1
  rb_postponed_job_flush@Base 3.3.0~preview1
+ rb_postponed_job_preregister@Base 3.3.0~rc1-1ppa1~ubuntu20.04
  rb_postponed_job_register@Base 3.3.0~preview1
  rb_postponed_job_register_one@Base 3.3.0~preview1
+ rb_postponed_job_trigger@Base 3.3.0~rc1-1ppa1~ubuntu20.04
  rb_prepend_module@Base 3.3.0~preview1
  rb_proc_arity@Base 3.3.0~preview1
  rb_proc_call@Base 3.3.0~preview1
@@ -1209,6 +1273,7 @@ libruby-3.3.so.3.3 libruby3.3 #MINVER#
  rb_proc_new@Base 3.3.0~preview1
  rb_proc_ractor_make_shareable@Base 3.3.0~preview1
  rb_proc_times@Base 3.3.0~preview1
+ rb_process_status_wait@Base 3.3.0~rc1-1ppa1~ubuntu20.04
  rb_profile_frame_absolute_path@Base 3.3.0~preview1
  rb_profile_frame_base_label@Base 3.3.0~preview1
  rb_profile_frame_classpath@Base 3.3.0~preview1
@@ -1220,6 +1285,7 @@ libruby-3.3.so.3.3 libruby3.3 #MINVER#
  rb_profile_frame_qualified_method_name@Base 3.3.0~preview1
  rb_profile_frame_singleton_method_p@Base 3.3.0~preview1
  rb_profile_frames@Base 3.3.0~preview1
+ rb_profile_thread_frames@Base 3.3.0~rc1-1ppa1~ubuntu20.04
  rb_protect@Base 3.3.0~preview1
  rb_provide@Base 3.3.0~preview1
  rb_provided@Base 3.3.0~preview1
@@ -1260,6 +1326,7 @@ libruby-3.3.so.3.3 libruby3.3 #MINVER#
  rb_readlink@Base 3.3.0~preview1
  rb_readwrite_sys_fail@Base 3.3.0~preview1
  rb_readwrite_syserr_fail@Base 3.3.0~preview1
+ rb_ref_update_generic_ivar@Base 3.3.0~rc1-1ppa1~ubuntu20.04
  rb_refinement_new@Base 3.3.0~preview1
  rb_reg_adjust_startpos@Base 3.3.0~preview1
  rb_reg_alloc@Base 3.3.0~preview1
@@ -1277,6 +1344,7 @@ libruby-3.3.so.3.3 libruby3.3 #MINVER#
  rb_reg_new_str@Base 3.3.0~preview1
  rb_reg_nth_defined@Base 3.3.0~preview1
  rb_reg_nth_match@Base 3.3.0~preview1
+ rb_reg_onig_match@Base 3.3.0~rc1-1ppa1~ubuntu20.04
  rb_reg_options@Base 3.3.0~preview1
  rb_reg_prepare_re@Base 3.3.0~preview1
  rb_reg_quote@Base 3.3.0~preview1
@@ -1305,6 +1373,11 @@ libruby-3.3.so.3.3 libruby3.3 #MINVER#
  rb_rjit_opts@Base 3.3.0~preview1
  rb_rs@Base 3.3.0~preview1
  rb_ruby_debug_ptr@Base 3.3.0~preview1
+ rb_ruby_parser_compile_string@Base 3.3.0~rc1-1ppa1~ubuntu20.04
+ rb_ruby_parser_encoding@Base 3.3.0~rc1-1ppa1~ubuntu20.04
+ rb_ruby_parser_end_seen_p@Base 3.3.0~rc1-1ppa1~ubuntu20.04
+ rb_ruby_parser_free@Base 3.3.0~rc1-1ppa1~ubuntu20.04
+ rb_ruby_parser_set_yydebug@Base 3.3.0~rc1-1ppa1~ubuntu20.04
  rb_ruby_verbose_ptr@Base 3.3.0~preview1
  rb_scan_args@Base 3.3.0~preview1
  rb_scan_args_kw@Base 3.3.0~preview1
@@ -1347,6 +1420,7 @@ libruby-3.3.so.3.3 libruby3.3 #MINVER#
  rb_st_hash_start@Base 3.3.0~preview1
  rb_st_hash_uint32@Base 3.3.0~preview1
  rb_st_hash_uint@Base 3.3.0~preview1
+ rb_st_init_existing_table_with_size@Base 3.3.0~rc1-1ppa1~ubuntu20.04
  rb_st_init_numtable@Base 3.3.0~preview1
  rb_st_init_numtable_with_size@Base 3.3.0~preview1
  rb_st_init_strcasetable@Base 3.3.0~preview1
@@ -1365,6 +1439,7 @@ libruby-3.3.so.3.3 libruby3.3 #MINVER#
  rb_st_memsize@Base 3.3.0~preview1
  rb_st_numcmp@Base 3.3.0~preview1
  rb_st_numhash@Base 3.3.0~preview1
+ rb_st_replace@Base 3.3.0~rc1-1ppa1~ubuntu20.04
  rb_st_shift@Base 3.3.0~preview1
  rb_st_table_size@Base 3.3.0~preview1
  rb_st_update@Base 3.3.0~preview1
@@ -1456,7 +1531,6 @@ libruby-3.3.so.3.3 libruby3.3 #MINVER#
  rb_str_to_str@Base 3.3.0~preview1
  rb_str_unlocktmp@Base 3.3.0~preview1
  rb_str_update@Base 3.3.0~preview1
- rb_str_update_shared_ary@Base 3.3.0~preview1
  rb_str_upto_each@Base 3.3.0~preview1
  rb_str_upto_endless_each@Base 3.3.0~preview1
  rb_str_vcatf@Base 3.3.0~preview1
@@ -1611,29 +1685,34 @@ libruby-3.3.so.3.3 libruby3.3 #MINVER#
  rb_yield_values_kw@Base 3.3.0~preview1
  rb_yjit_before_ractor_spawn@Base 3.3.0~preview1
  rb_yjit_bop_redefined@Base 3.3.0~preview1
+ rb_yjit_call_threshold@Base 3.3.0~rc1-1ppa1~ubuntu20.04
  rb_yjit_cme_invalidate@Base 3.3.0~preview1
  rb_yjit_code_gc@Base 3.3.0~preview1
+ rb_yjit_cold_threshold@Base 3.3.0~rc1-1ppa1~ubuntu20.04
  rb_yjit_collect_binding_alloc@Base 3.3.0~preview1
  rb_yjit_collect_binding_set@Base 3.3.0~preview1
- rb_yjit_compile_new_iseqs@Base 3.3.0~preview1
  rb_yjit_constant_ic_update@Base 3.3.0~preview1
  rb_yjit_constant_state_changed@Base 3.3.0~preview1
  rb_yjit_count_side_exit_op@Base 3.3.0~preview1
  rb_yjit_disasm_iseq@Base 3.3.0~preview1
+ rb_yjit_enable@Base 3.3.0~rc1-1ppa1~ubuntu20.04
  rb_yjit_enabled_p@Base 3.3.0~preview1
  rb_yjit_get_exit_locations@Base 3.3.0~preview1
  rb_yjit_get_stats@Base 3.3.0~preview1
- rb_yjit_init_rust@Base 3.3.0~preview1
+ rb_yjit_incr_counter@Base 3.3.0~rc1-1ppa1~ubuntu20.04
+ rb_yjit_init@Base 3.3.0~rc1-1ppa1~ubuntu20.04
  rb_yjit_insns_compiled@Base 3.3.0~preview1
  rb_yjit_iseq_free@Base 3.3.0~preview1
  rb_yjit_iseq_gen_entry_point@Base 3.3.0~preview1
  rb_yjit_iseq_mark@Base 3.3.0~preview1
  rb_yjit_iseq_update_references@Base 3.3.0~preview1
+ rb_yjit_live_iseq_count@Base 3.3.0~rc1-1ppa1~ubuntu20.04
  rb_yjit_parse_option@Base 3.3.0~preview1
+ rb_yjit_print_stats_p@Base 3.3.0~rc1-1ppa1~ubuntu20.04
  rb_yjit_record_exit_stack@Base 3.3.0~preview1
  rb_yjit_reset_stats_bang@Base 3.3.0~preview1
- rb_yjit_resume@Base 3.3.0~preview1
  rb_yjit_root_mark@Base 3.3.0~preview1
+ rb_yjit_show_usage@Base 3.3.0~rc1-1ppa1~ubuntu20.04
  rb_yjit_simulate_oom_bang@Base 3.3.0~preview1
  rb_yjit_stats_enabled_p@Base 3.3.0~preview1
  rb_yjit_trace_exit_locations_enabled_p@Base 3.3.0~preview1
