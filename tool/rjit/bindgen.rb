@@ -244,7 +244,6 @@ class BindingGenerator
             to_ruby = @ruby_fields.fetch(node.spelling, []).include?(field)
             if child.bitwidth > 0
               if bit_fields_end <= i # give up offsetof calculation for non-leading bit fields
-                binding.irb
                 raise "non-leading bit fields are not supported. consider including '#{field}' in skip_fields."
               end
               offsetof = node.offsetof.fetch(field)
@@ -436,11 +435,9 @@ generator = BindingGenerator.new(
       RUBY_T_STRING
       RUBY_T_SYMBOL
       RUBY_T_OBJECT
-      SHAPE_CAPACITY_CHANGE
       SHAPE_FLAG_SHIFT
       SHAPE_FROZEN
       SHAPE_ID_NUM_BITS
-      SHAPE_INITIAL_CAPACITY
       SHAPE_IVAR
       SHAPE_MASK
       SHAPE_ROOT
@@ -638,7 +635,7 @@ generator = BindingGenerator.new(
   skip_fields: {
     'rb_execution_context_struct.machine': %w[regs], # differs between macOS and Linux
     rb_execution_context_struct: %w[method_missing_reason], # non-leading bit fields not supported
-    rb_iseq_constant_body: %w[jit_exception jit_exception_calls yjit_payload], # conditionally defined
+    rb_iseq_constant_body: %w[jit_exception jit_exception_calls yjit_payload yjit_calls_at_interv], # conditionally defined
     rb_thread_struct: %w[status has_dedicated_nt to_kill abort_on_exception report_on_exception pending_interrupt_queue_checked],
     :'' => %w[is_from_method is_lambda is_isolated], # rb_proc_t
   },

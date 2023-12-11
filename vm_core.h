@@ -524,6 +524,8 @@ struct rb_iseq_constant_body {
 #if USE_YJIT
     // YJIT stores some data on each iseq.
     void *yjit_payload;
+    // Used to estimate how frequently this ISEQ gets called
+    uint64_t yjit_calls_at_interv;
 #endif
 };
 
@@ -634,15 +636,51 @@ typedef struct rb_vm_struct {
             struct rb_ractor_struct *lock_owner;
             unsigned int lock_rec;
 
-            // barrier
-            bool barrier_waiting;
-            unsigned int barrier_cnt;
-            rb_nativethread_cond_t barrier_cond;
-
             // join at exit
             rb_nativethread_cond_t terminate_cond;
             bool terminate_waiting;
+
+#ifndef RUBY_THREAD_PTHREAD_H
+            bool barrier_waiting;
+            unsigned int barrier_cnt;
+            rb_nativethread_cond_t barrier_cond;
+#endif
         } sync;
+
+        // ractor scheduling
+        struct {
+            rb_nativethread_lock_t lock;
+            struct rb_ractor_struct *lock_owner;
+            bool locked;
+
+            rb_nativethread_cond_t cond; // GRQ
+            unsigned int snt_cnt; // count of shared NTs
+            unsigned int dnt_cnt; // count of dedicated NTs
+
+            unsigned int running_cnt;
+
+            unsigned int max_cpu;
+            struct ccan_list_head grq; // // Global Ready Queue
+            unsigned int grq_cnt;
+
+            // running threads
+            struct ccan_list_head running_threads;
+
+            // threads which switch context by timeslice
+            struct ccan_list_head timeslice_threads;
+
+            struct ccan_list_head zombie_threads;
+
+            // true if timeslice timer is not enable
+            bool timeslice_wait_inf;
+
+            // barrier
+            rb_nativethread_cond_t barrier_complete_cond;
+            rb_nativethread_cond_t barrier_release_cond;
+            bool barrier_waiting;
+            unsigned int barrier_waiting_cnt;
+            unsigned int barrier_serial;
+        } sched;
     } ractor;
 
 #ifdef USE_SIGALTSTACK
@@ -688,9 +726,8 @@ typedef struct rb_vm_struct {
     /* relation table of ensure - rollback for callcc */
     struct st_table *ensure_rollback_table;
 
-    /* postponed_job (async-signal-safe, NOT thread-safe) */
-    struct rb_postponed_job_struct *postponed_job_buffer;
-    rb_atomic_t postponed_job_index;
+    /* postponed_job (async-signal-safe, and thread-safe) */
+    struct rb_postponed_job_queue *postponed_job_queue;
 
     int src_encoding_index;
 
@@ -847,13 +884,68 @@ typedef void *rb_jmpbuf_t[5];
 #endif
 
 /*
+  `rb_vm_tag_jmpbuf_t` type represents a buffer used to
+  long jump to a C frame associated with `rb_vm_tag`.
+
+  Use-site of `rb_vm_tag_jmpbuf_t` is responsible for calling the
+  following functions:
+  - `rb_vm_tag_jmpbuf_init` once `rb_vm_tag_jmpbuf_t` is allocated.
+  - `rb_vm_tag_jmpbuf_deinit` once `rb_vm_tag_jmpbuf_t` is no longer necessary.
+
+  `RB_VM_TAG_JMPBUF_GET` transforms a `rb_vm_tag_jmpbuf_t` into a
+  `rb_jmpbuf_t` to be passed to `rb_setjmp/rb_longjmp`.
+*/
+#if defined(__wasm__) && !defined(__EMSCRIPTEN__)
+/*
+  WebAssembly target with Asyncify-based SJLJ needs
+  to capture the execution context by unwind/rewind-ing
+  call frames into a jump buffer. The buffer space tends
+  to be considerably large unlike other architectures'
+  register-based buffers.
+  Therefore, we allocates the buffer on the heap on such
+  environments.
+*/
+typedef rb_jmpbuf_t *rb_vm_tag_jmpbuf_t;
+
+#define RB_VM_TAG_JMPBUF_GET(buf) (*buf)
+
+static inline void
+rb_vm_tag_jmpbuf_init(rb_vm_tag_jmpbuf_t *jmpbuf)
+{
+    *jmpbuf = ruby_xmalloc(sizeof(rb_jmpbuf_t));
+}
+
+static inline void
+rb_vm_tag_jmpbuf_deinit(const rb_vm_tag_jmpbuf_t *jmpbuf)
+{
+    ruby_xfree(*jmpbuf);
+}
+#else
+typedef rb_jmpbuf_t rb_vm_tag_jmpbuf_t;
+
+#define RB_VM_TAG_JMPBUF_GET(buf) (buf)
+
+static inline void
+rb_vm_tag_jmpbuf_init(rb_vm_tag_jmpbuf_t *jmpbuf)
+{
+    // no-op
+}
+
+static inline void
+rb_vm_tag_jmpbuf_deinit(const rb_vm_tag_jmpbuf_t *jmpbuf)
+{
+    // no-op
+}
+#endif
+
+/*
   the members which are written in EC_PUSH_TAG() should be placed at
   the beginning and the end, so that entire region is accessible.
 */
 struct rb_vm_tag {
     VALUE tag;
     VALUE retval;
-    rb_jmpbuf_t buf;
+    rb_vm_tag_jmpbuf_t buf;
     struct rb_vm_tag *prev;
     enum ruby_tag_type state;
     unsigned int lock_rec;
@@ -861,7 +953,7 @@ struct rb_vm_tag {
 
 STATIC_ASSERT(rb_vm_tag_buf_offset, offsetof(struct rb_vm_tag, buf) > 0);
 STATIC_ASSERT(rb_vm_tag_buf_end,
-              offsetof(struct rb_vm_tag, buf) + sizeof(rb_jmpbuf_t) <
+              offsetof(struct rb_vm_tag, buf) + sizeof(rb_vm_tag_jmpbuf_t) <
               sizeof(struct rb_vm_tag));
 
 struct rb_unblock_callback {
@@ -1059,6 +1151,7 @@ typedef struct rb_thread_struct {
 
     /* misc */
     VALUE name;
+    void **specific_storage;
 
     struct rb_ext_config ext_config;
 } rb_thread_t;
@@ -1678,13 +1771,13 @@ VALUE rb_proc_alloc(VALUE klass);
 VALUE rb_proc_dup(VALUE self);
 
 /* for debug */
-extern void rb_vmdebug_stack_dump_raw(const rb_execution_context_t *ec, const rb_control_frame_t *cfp);
-extern void rb_vmdebug_debug_print_pre(const rb_execution_context_t *ec, const rb_control_frame_t *cfp, const VALUE *_pc);
-extern void rb_vmdebug_debug_print_post(const rb_execution_context_t *ec, const rb_control_frame_t *cfp);
+extern bool rb_vmdebug_stack_dump_raw(const rb_execution_context_t *ec, const rb_control_frame_t *cfp, FILE *);
+extern bool rb_vmdebug_debug_print_pre(const rb_execution_context_t *ec, const rb_control_frame_t *cfp, const VALUE *_pc, FILE *);
+extern bool rb_vmdebug_debug_print_post(const rb_execution_context_t *ec, const rb_control_frame_t *cfp, FILE *);
 
-#define SDR() rb_vmdebug_stack_dump_raw(GET_EC(), GET_EC()->cfp)
-#define SDR2(cfp) rb_vmdebug_stack_dump_raw(GET_EC(), (cfp))
-void rb_vm_bugreport(const void *);
+#define SDR() rb_vmdebug_stack_dump_raw(GET_EC(), GET_EC()->cfp, stderr)
+#define SDR2(cfp) rb_vmdebug_stack_dump_raw(GET_EC(), (cfp), stderr)
+bool rb_vm_bugreport(const void *, FILE *);
 typedef void (*ruby_sighandler_t)(int);
 RBIMPL_ATTR_FORMAT(RBIMPL_PRINTF_FORMAT, 4, 5)
 NORETURN(void rb_bug_for_fatal_signal(ruby_sighandler_t default_sighandler, int sig, const void *, const char *fmt, ...));
@@ -1739,6 +1832,7 @@ rb_vm_living_threads_init(rb_vm_t *vm)
     ccan_list_head_init(&vm->waiting_fds);
     ccan_list_head_init(&vm->workqueue);
     ccan_list_head_init(&vm->ractor.set);
+    ccan_list_head_init(&vm->ractor.sched.zombie_threads);
 }
 
 typedef int rb_backtrace_iter_func(void *, VALUE, int, VALUE);
@@ -1839,6 +1933,20 @@ rb_current_execution_context(bool expect_ec)
   #else
     rb_execution_context_t *ec = ruby_current_ec;
   #endif
+
+    /* On the shared objects, `__tls_get_addr()` is used to access the TLS
+     * and the address of the `ruby_current_ec` can be stored on a function
+     * frame. However, this address can be mis-used after native thread
+     * migration of a coroutine.
+     *   1) Get `ptr =&ruby_current_ec` op NT1 and store it on the frame.
+     *   2) Context switch and resume it on the NT2.
+     *   3) `ptr` is used on NT2 but it accesses to the TLS on NT1.
+     * This assertion checks such misusage.
+     *
+     * To avoid accidents, `GET_EC()` should be called once on the frame.
+     * Note that inlining can produce the problem.
+     */
+    VM_ASSERT(ec == rb_current_ec_noinline());
 #else
     rb_execution_context_t *ec = native_tls_get(ruby_current_ec_key);
 #endif
@@ -2062,6 +2170,10 @@ rb_exec_event_hook_script_compiled(rb_execution_context_t *ec, const rb_iseq_t *
 }
 
 void rb_vm_trap_exit(rb_vm_t *vm);
+void rb_vm_postponed_job_atfork(void); /* vm_trace.c */
+void rb_vm_postponed_job_free(void); /* vm_trace.c */
+size_t rb_vm_memsize_postponed_job_queue(void); /* vm_trace.c */
+void rb_vm_postponed_job_queue_init(rb_vm_t *vm); /* vm_trace.c */
 
 RUBY_SYMBOL_EXPORT_BEGIN
 

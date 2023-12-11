@@ -91,6 +91,8 @@
 
     - If you are frequently building Ruby, add the `--disable-install-doc` flag to not build documentation which will speed up the build process.
 
+    - Also `-C` (or `--config-cache`) would reduce time to configure from the next time.
+
 5. Build Ruby:
 
     ``` shell
@@ -102,6 +104,10 @@
 ### Unexplainable Build Errors
 
 If you are having unexplainable build errors, after saving all your work, try running `git clean -xfd` in the source root to remove all git ignored local files. If you are working from a source directory that's been updated several times, you may have temporary build artifacts from previous releases which can cause build failures.
+
+## Building on Windows
+
+The documentation for building on Windows can be found [here](../windows.md).
 
 ## More details
 

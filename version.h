@@ -55,11 +55,15 @@
 #endif
 
 #if RUBY_PATCHLEVEL == -1
-#define RUBY_PATCHLEVEL_STR "preview2"
+# ifdef RUBY_PATCHLEVEL_NAME
+#  define RUBY_PATCHLEVEL_STR STRINGIZE(RUBY_PATCHLEVEL_NAME)
+# else
+#  define RUBY_PATCHLEVEL_STR "rc1"
+# endif
 #elif defined RUBY_ABI_VERSION
-#error RUBY_ABI_VERSION is defined in non-development branch
+# error RUBY_ABI_VERSION is defined in non-development branch
 #else
-#define RUBY_PATCHLEVEL_STR ""
+# define RUBY_PATCHLEVEL_STR ""
 #endif
 
 #endif /* RUBY_TOPLEVEL_VERSION_H */

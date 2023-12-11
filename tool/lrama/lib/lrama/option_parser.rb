@@ -52,12 +52,16 @@ module Lrama
           Usage: lrama [options] FILE
         BANNER
         o.separator ''
+        o.separator 'STDIN mode:'
+        o.separator 'lrama [options] - FILE               read grammar from STDIN'
+        o.separator ''
         o.separator 'Tuning the Parser:'
         o.on('-S', '--skeleton=FILE', 'specify the skeleton to use') {|v| @options.skeleton = v }
         o.on('-t', 'reserved, do nothing') { }
+        o.on('--debug', 'display debugging outputs of internal parser') {|v| @options.debug = true }
         o.separator ''
         o.separator 'Output:'
-        o.on('-h', '--header=[FILE]', 'also produce a header file named FILE') {|v| @options.header = true; @options.header_file = v }
+        o.on('-H', '--header=[FILE]', 'also produce a header file named FILE') {|v| @options.header = true; @options.header_file = v }
         o.on('-d', 'also produce a header file') { @options.header = true }
         o.on('-r', '--report=THINGS', Array, 'also produce details on the automaton') {|v| @report = v }
         o.on('--report-file=FILE', 'also produce details on the automaton output to a file named FILE') {|v| @options.report_file = v }
@@ -70,7 +74,7 @@ module Lrama
         o.separator ''
         o.separator 'Other options:'
         o.on('-V', '--version', "output version information and exit") {|v| puts "lrama #{Lrama::VERSION}"; exit 0 }
-        o.on('--help', "display this help and exit") {|v| puts o; exit 0 }
+        o.on('-h', '--help', "display this help and exit") {|v| puts o; exit 0 }
         o.separator ''
         o.parse!(argv)
       end
@@ -105,7 +109,7 @@ module Lrama
     def validate_trace(trace)
       list = %w[
         none locations scan parse automaton bitsets
-        closure grammar resource sets muscles tools
+        closure grammar rules resource sets muscles tools
         m4-early m4 skeleton time ielr cex all
       ]
       h = {}

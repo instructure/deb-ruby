@@ -433,8 +433,10 @@ THREAD_IMPL_SRC = thread_$(THREAD_MODEL).c
 
 !if "$(CROSS_COMPILING)" == "yes"
 PREP          = $(arch)-fake.rb
+BUILTIN_BINARY = no
 !else
 PREP          = miniruby$(EXEEXT)
+BUILTIN_BINARY = yes
 !endif
 
 !if !defined(EXTSTATIC)
@@ -513,8 +515,6 @@ VCSUP = $(VCS) pull --rebase $(GITPULLOPTIONS)
 VCSUP = rem
 !endif
 ruby_pc = $(RUBY_BASE_NAME)-$(MAJOR).$(MINOR).pc
-
-YARP_BUILD_DIR = $(MAKEDIR)/yarp
 
 MESSAGE_BEGIN = @(for %I in (
 MESSAGE_END = ) do @echo.%~I)
@@ -1281,13 +1281,13 @@ $(ruby_pc): $(RBCONFIG)
 	$(ECHO) assembling $(<:\=/)
 	$(Q) $(AS) $(ASFLAGS) $(XCFLAGS) $(CPPFLAGS) $(COUTFLAG)$@ -c $(<:\=/)
 
-{$(srcdir)/yarp}.c.obj:
+{$(srcdir)/prism}.c.obj:
 	$(ECHO) compiling $(<:\=/)
 	$(Q) $(CC) $(CFLAGS) $(XCFLAGS) $(CPPFLAGS) $(COUTFLAG)$@ -c $(CSRCFLAG)$(<:\=/)
-{$(srcdir)/yarp/enc}.c.obj:
+{$(srcdir)/prism/enc}.c.obj:
 	$(ECHO) compiling $(<:\=/)
 	$(Q) $(CC) $(CFLAGS) $(XCFLAGS) $(CPPFLAGS) $(COUTFLAG)$@ -c $(CSRCFLAG)$(<:\=/)
-{$(srcdir)/yarp/util}.c.obj:
+{$(srcdir)/prism/util}.c.obj:
 	$(ECHO) compiling $(<:\=/)
 	$(Q) $(CC) $(CFLAGS) $(XCFLAGS) $(CPPFLAGS) $(COUTFLAG)$@ -c $(CSRCFLAG)$(<:\=/)
 {$(srcdir)/enc/trans}.c.obj:

@@ -6,6 +6,7 @@
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
+use std::collections::HashMap;
 
 use crate::codegen::CodegenGlobals;
 use crate::core::Context;
@@ -13,6 +14,10 @@ use crate::core::for_each_iseq_payload;
 use crate::cruby::*;
 use crate::options::*;
 use crate::yjit::yjit_enabled_p;
+
+/// A running total of how many ISeqs are in the system.
+#[no_mangle]
+pub static mut rb_yjit_live_iseq_count: u64 = 0;
 
 /// A middleware to count Rust-allocated bytes as yjit_alloc_size.
 #[global_allocator]
@@ -48,6 +53,58 @@ unsafe impl GlobalAlloc for StatsAlloc {
     }
 }
 
+/// Mapping of C function name to integer indices
+/// This is accessed at compilation time only (protected by a lock)
+static mut CFUNC_NAME_TO_IDX: Option<HashMap<String, usize>> = None;
+
+/// Vector of call counts for each C function index
+/// This is modified (but not resized) by JITted code
+static mut CFUNC_CALL_COUNT: Option<Vec<u64>> = None;
+
+/// Assign an index to a given cfunc name string
+pub fn get_cfunc_idx(name: &str) -> usize
+{
+    //println!("{}", name);
+
+    unsafe {
+        if CFUNC_NAME_TO_IDX.is_none() {
+            CFUNC_NAME_TO_IDX = Some(HashMap::default());
+        }
+
+        if CFUNC_CALL_COUNT.is_none() {
+            CFUNC_CALL_COUNT = Some(Vec::default());
+        }
+
+        let name_to_idx = CFUNC_NAME_TO_IDX.as_mut().unwrap();
+
+        match name_to_idx.get(name) {
+            Some(idx) => *idx,
+            None => {
+                let idx = name_to_idx.len();
+                name_to_idx.insert(name.to_string(), idx);
+
+                // Resize the call count vector
+                let cfunc_call_count = CFUNC_CALL_COUNT.as_mut().unwrap();
+                if idx >= cfunc_call_count.len() {
+                    cfunc_call_count.resize(idx + 1, 0);
+                }
+
+                idx
+            }
+        }
+    }
+}
+
+// Increment the counter for a C function
+pub extern "C" fn incr_cfunc_counter(idx: usize)
+{
+    unsafe {
+        let cfunc_call_count = CFUNC_CALL_COUNT.as_mut().unwrap();
+        assert!(idx < cfunc_call_count.len());
+        cfunc_call_count[idx] += 1;
+    }
+}
+
 // YJIT exit counts for each instruction type
 const VM_INSTRUCTION_SIZE_USIZE: usize = VM_INSTRUCTION_SIZE as usize;
 static mut EXIT_OP_COUNT: [u64; VM_INSTRUCTION_SIZE_USIZE] = [0; VM_INSTRUCTION_SIZE_USIZE];
@@ -70,11 +127,6 @@ static mut YJIT_EXIT_LOCATIONS: Option<YjitExitLocations> = None;
 impl YjitExitLocations {
     /// Initialize the yjit exit locations
     pub fn init() {
-        // Return if the stats feature is disabled
-        if !cfg!(feature = "stats") {
-            return;
-        }
-
         // Return if --yjit-trace-exits isn't enabled
         if !get_option!(gen_trace_exits) {
             return;
@@ -121,11 +173,6 @@ impl YjitExitLocations {
     pub fn gc_mark_raw_samples() {
         // Return if YJIT is not enabled
         if !yjit_enabled_p() {
-            return;
-        }
-
-        // Return if the stats feature is disabled
-        if !cfg!(feature = "stats") {
             return;
         }
 
@@ -198,9 +245,10 @@ macro_rules! make_counters {
 
 /// The list of counters that are available without --yjit-stats.
 /// They are incremented only by `incr_counter!` and don't use `gen_counter_incr`.
-pub const DEFAULT_COUNTERS: [Counter; 7] = [
+pub const DEFAULT_COUNTERS: [Counter; 8] = [
     Counter::code_gc_count,
     Counter::compiled_iseq_entry,
+    Counter::cold_iseq_entry,
     Counter::compiled_iseq_count,
     Counter::compiled_blockid_count,
     Counter::compiled_block_count,
@@ -264,8 +312,11 @@ make_counters! {
     send_call_block,
     send_call_kwarg,
     send_call_multi_ractor,
+    send_cme_not_found,
+    send_megamorphic,
     send_missing_method,
     send_refined_method,
+    send_private_not_fcall,
     send_cfunc_ruby_array_varg,
     send_cfunc_argc_mismatch,
     send_cfunc_toomany_args,
@@ -276,6 +327,8 @@ make_counters! {
     send_attrset_kwargs,
     send_iseq_tailcall,
     send_iseq_arity_error,
+    send_iseq_clobbering_block_arg,
+    send_iseq_leaf_builtin_block_arg_block_param,
     send_iseq_only_keywords,
     send_iseq_kwargs_req_and_opt_missing,
     send_iseq_kwargs_mismatch,
@@ -411,7 +464,6 @@ make_counters! {
     opt_case_dispatch_megamorphic,
 
     opt_getconstant_path_ic_miss,
-    opt_getconstant_path_no_ic_entry,
     opt_getconstant_path_multi_ractor,
 
     expandarray_splat,
@@ -441,6 +493,7 @@ make_counters! {
     binding_set,
 
     compiled_iseq_entry,
+    cold_iseq_entry,
     compiled_iseq_count,
     compiled_blockid_count,
     compiled_block_count,
@@ -476,11 +529,14 @@ make_counters! {
 
     num_send,
     num_send_known_class,
-    num_send_megamorphic,
     num_send_polymorphic,
     num_send_x86_rel32,
     num_send_x86_reg,
     num_send_dynamic,
+    num_send_inline,
+    num_send_leaf_builtin,
+    num_send_cfunc,
+    num_send_cfunc_inline,
 
     num_getivar_megamorphic,
     num_setivar_megamorphic,
@@ -516,7 +572,7 @@ pub extern "C" fn rb_yjit_stats_enabled_p(_ec: EcPtr, _ruby_self: VALUE) -> VALU
 /// Check if stats generation should print at exit
 #[no_mangle]
 pub extern "C" fn rb_yjit_print_stats_p(_ec: EcPtr, _ruby_self: VALUE) -> VALUE {
-    if get_option!(print_stats) {
+    if yjit_enabled_p() && get_option!(print_stats) {
         return Qtrue;
     } else {
         return Qfalse;
@@ -536,7 +592,6 @@ pub extern "C" fn rb_yjit_get_stats(_ec: EcPtr, _ruby_self: VALUE, context: VALU
 /// to be enabled.
 #[no_mangle]
 pub extern "C" fn rb_yjit_trace_exit_locations_enabled_p(_ec: EcPtr, _ruby_self: VALUE) -> VALUE {
-    #[cfg(feature = "stats")]
     if get_option!(gen_trace_exits) {
         return Qtrue;
     }
@@ -550,11 +605,6 @@ pub extern "C" fn rb_yjit_trace_exit_locations_enabled_p(_ec: EcPtr, _ruby_self:
 pub extern "C" fn rb_yjit_get_exit_locations(_ec: EcPtr, _ruby_self: VALUE) -> VALUE {
     // Return if YJIT is not enabled
     if !yjit_enabled_p() {
-        return Qnil;
-    }
-
-    // Return if the stats feature is disabled
-    if !cfg!(feature = "stats") {
         return Qnil;
     }
 
@@ -579,6 +629,16 @@ pub extern "C" fn rb_yjit_get_exit_locations(_ec: EcPtr, _ruby_self: VALUE) -> V
     unsafe {
         rb_yjit_exit_locations_dict(yjit_raw_samples.as_mut_ptr(), yjit_line_samples.as_mut_ptr(), samples_len)
     }
+}
+
+/// Increment a counter by name from the CRuby side
+/// Warning: this is not fast because it requires a hash lookup, so don't use in tight loops
+#[no_mangle]
+pub extern "C" fn rb_yjit_incr_counter(counter_name: *const std::os::raw::c_char) {
+    use std::ffi::CStr;
+    let counter_name = unsafe { CStr::from_ptr(counter_name).to_str().unwrap() };
+    let counter_ptr = get_counter_ptr(counter_name);
+    unsafe { *counter_ptr += 1 };
 }
 
 /// Export all YJIT statistics as a Ruby hash.
@@ -636,6 +696,8 @@ fn rb_yjit_gen_stats_dict(context: bool) -> VALUE {
 
         // VM instructions count
         hash_aset_usize!(hash, "vm_insns_count", rb_vm_insns_count as usize);
+
+        hash_aset_usize!(hash, "live_iseq_count", rb_yjit_live_iseq_count as usize);
     }
 
     // If we're not generating stats, put only default counters
@@ -654,7 +716,6 @@ fn rb_yjit_gen_stats_dict(context: bool) -> VALUE {
         return hash;
     }
 
-    // If the stats feature is enabled
     unsafe {
         // Indicate that the complete set of stats is available
         rb_hash_aset(hash, rust_str_to_sym("all_stats"), Qtrue);
@@ -679,6 +740,20 @@ fn rb_yjit_gen_stats_dict(context: bool) -> VALUE {
             let key = rust_str_to_sym(&key_string);
             let value = VALUE::fixnum_from_usize(EXIT_OP_COUNT[op_idx] as usize);
             rb_hash_aset(hash, key, value);
+        }
+
+        // Create a hash for the cfunc call counts
+        let calls_hash = rb_hash_new();
+        rb_hash_aset(hash, rust_str_to_sym("cfunc_calls"), calls_hash);
+        if let Some(cfunc_name_to_idx) = CFUNC_NAME_TO_IDX.as_mut() {
+            let call_counts = CFUNC_CALL_COUNT.as_mut().unwrap();
+
+            for (name, idx) in cfunc_name_to_idx {
+                let count = call_counts[*idx];
+                let key = rust_str_to_sym(name);
+                let value = VALUE::fixnum_from_usize(count as usize);
+                rb_hash_aset(calls_hash, key, value);
+            }
         }
     }
 
@@ -711,11 +786,6 @@ pub extern "C" fn rb_yjit_record_exit_stack(_exit_pc: *const VALUE)
 {
     // Return if YJIT is not enabled
     if !yjit_enabled_p() {
-        return;
-    }
-
-    // Return if the stats feature is disabled
-    if !cfg!(feature = "stats") {
         return;
     }
 

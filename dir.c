@@ -471,23 +471,21 @@ dir_free(void *ptr)
     struct dir_data *dir = ptr;
 
     if (dir->dir) closedir(dir->dir);
-    xfree(dir);
 }
 
-static size_t
-dir_memsize(const void *ptr)
-{
-    return sizeof(struct dir_data);
-}
-
-RUBY_REFERENCES_START(dir_refs)
-    REF_EDGE(dir_data, path),
-RUBY_REFERENCES_END
+RUBY_REFERENCES(dir_refs) = {
+    RUBY_REF_EDGE(struct dir_data, path),
+    RUBY_REF_END
+};
 
 static const rb_data_type_t dir_data_type = {
     "dir",
-    {REFS_LIST_PTR(dir_refs), dir_free, dir_memsize,},
-    0, NULL, RUBY_TYPED_WB_PROTECTED | RUBY_TYPED_FREE_IMMEDIATELY | RUBY_TYPED_DECL_MARKING
+    {
+        RUBY_REFS_LIST_PTR(dir_refs),
+        dir_free,
+        NULL, // Nothing allocated externally, so don't need a memsize function
+    },
+    0, NULL, RUBY_TYPED_WB_PROTECTED | RUBY_TYPED_FREE_IMMEDIATELY | RUBY_TYPED_DECL_MARKING | RUBY_TYPED_EMBEDDABLE
 };
 
 static VALUE dir_close(VALUE);
@@ -805,7 +803,7 @@ dir_read(VALUE dir)
     struct dirent *dp;
 
     GetDIR(dir, dirp);
-    errno = 0;
+    rb_errno_set(0);
     if ((dp = READDIR(dirp->dir, dirp->enc)) != NULL) {
         return rb_external_str_new_with_enc(dp->d_name, NAMLEN(dp), dirp->enc);
     }
@@ -1324,7 +1322,7 @@ dir_s_fchdir(VALUE klass, VALUE fd_value)
  *   Dir.pwd # => "/"
  *   dir = Dir.new('example')
  *   dir.chdir
- *   dir.pwd # => "/example"
+ *   Dir.pwd # => "/example"
  *
  */
 static VALUE
@@ -1723,7 +1721,7 @@ nogvl_opendir_at(void *ptr)
             /* fallthrough*/
           case 0:
             if (fd >= 0) close(fd);
-            errno = e;
+            rb_errno_set(e);
         }
     }
 #else  /* !USE_OPENDIR_AT */
@@ -3116,7 +3114,7 @@ push_glob(VALUE ary, VALUE str, VALUE base, int flags)
     fd = AT_FDCWD;
     if (!NIL_P(base)) {
         if (!RB_TYPE_P(base, T_STRING) || !rb_enc_check(str, base)) {
-            struct dir_data *dirp = DATA_PTR(base);
+            struct dir_data *dirp = RTYPEDDATA_GET_DATA(base);
             if (!dirp->dir) dir_closed();
 #ifdef HAVE_DIRFD
             if ((fd = dirfd(dirp->dir)) == -1)
@@ -3357,7 +3355,7 @@ dir_s_each_child(int argc, VALUE *argv, VALUE io)
  *   "main.rb"
  *
  * If no block is given, returns an enumerator.
-  */
+ */
 static VALUE
 dir_each_child_m(VALUE dir)
 {
@@ -3478,6 +3476,9 @@ file_s_fnmatch(int argc, VALUE *argv, VALUE obj)
  * call-seq:
  *   Dir.home(user_name = nil) -> dirpath
  *
+ * Retruns the home directory path of the user specified with +user_name+
+ * if it is not +nil+, or the current login user:
+ *
  *   Dir.home         # => "/home/me"
  *   Dir.home('root') # => "/root"
  *
@@ -3514,6 +3515,7 @@ dir_s_home(int argc, VALUE *argv, VALUE obj)
  *   Dir.exist?('/nosuch')          # => false
  *   Dir.exist?('/example/main.rb') # => false
  *
+ * Same as File.directory?.
  *
  */
 VALUE

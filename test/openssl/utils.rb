@@ -139,6 +139,30 @@ class OpenSSL::TestCase < Test::Unit::TestCase
     # OpenSSL error stack must be empty
     assert_equal([], OpenSSL.errors)
   end
+
+  # Omit the tests in FIPS.
+  #
+  # For example, the password based encryption used in the PEM format uses MD5
+  # for deriving the encryption key from the password, and MD5 is not
+  # FIPS-approved.
+  #
+  # See https://github.com/openssl/openssl/discussions/21830#discussioncomment-6865636
+  # for details.
+  def omit_on_fips
+    return unless OpenSSL.fips_mode
+
+    omit <<~MESSAGE
+      Only for OpenSSL non-FIPS with the following possible reasons:
+      * A testing logic is non-FIPS specific.
+      * An encryption used in the test is not FIPS-approved.
+    MESSAGE
+  end
+
+  def omit_on_non_fips
+    return if OpenSSL.fips_mode
+
+    omit "Only for OpenSSL FIPS"
+  end
 end
 
 class OpenSSL::SSLTestCase < OpenSSL::TestCase

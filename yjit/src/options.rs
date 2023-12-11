@@ -1,5 +1,27 @@
-use std::ffi::CStr;
-use crate::backend::ir::Assembler;
+use std::{ffi::{CStr, CString}, ptr::null, fs::File};
+use crate::backend::current::TEMP_REGS;
+use std::os::raw::{c_char, c_int, c_uint};
+
+// Call threshold for small deployments and command-line apps
+pub static SMALL_CALL_THRESHOLD: u64 = 30;
+
+// Call threshold for larger deployments and production-sized applications
+pub static LARGE_CALL_THRESHOLD: u64 = 120;
+
+// Number of live ISEQs after which we consider an app to be large
+pub static LARGE_ISEQ_COUNT: u64 = 40_000;
+
+// This option is exposed to the C side in a global variable for performance, see vm.c
+// Number of method calls after which to start generating code
+// Threshold==1 means compile on first execution
+#[no_mangle]
+pub static mut rb_yjit_call_threshold: u64 = SMALL_CALL_THRESHOLD;
+
+// This option is exposed to the C side in a global variable for performance, see vm.c
+// Number of execution requests after which a method is no longer
+// considered hot. Raising this results in more generated code.
+#[no_mangle]
+pub static mut rb_yjit_cold_threshold: u64 = 200_000;
 
 // Command-line options
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -8,13 +30,6 @@ pub struct Options {
     // Size of the executable memory block to allocate in bytes
     // Note that the command line argument is expressed in MiB and not bytes
     pub exec_mem_size: usize,
-
-    // Number of method calls after which to start generating code
-    // Threshold==1 means compile on first execution
-    pub call_threshold: usize,
-
-    // Generate versions greedily until the limit is hit
-    pub greedy_versioning: bool,
 
     // Disable the propagation of type information
     pub no_type_prop: bool,
@@ -38,9 +53,9 @@ pub struct Options {
     // how often to sample exit trace data
     pub trace_exits_sample_rate: usize,
 
-    // Whether to start YJIT in paused state (initialize YJIT but don't
-    // compile anything)
-    pub pause: bool,
+    // Whether to enable YJIT at boot. This option prevents other
+    // YJIT tuning options from enabling YJIT at boot.
+    pub disable: bool,
 
     /// Dump compiled and executed instructions for debugging
     pub dump_insns: bool,
@@ -53,13 +68,20 @@ pub struct Options {
 
     /// Verify context objects (debug mode only)
     pub verify_ctx: bool,
+
+    /// Enable generating frame pointers (for x86. arm64 always does this)
+    pub frame_pointer: bool,
+
+    /// Run code GC when exec_mem_size is reached.
+    pub code_gc: bool,
+
+    /// Enable writing /tmp/perf-{pid}.map for Linux perf
+    pub perf_map: bool,
 }
 
 // Initialize the options to default values
 pub static mut OPTIONS: Options = Options {
-    exec_mem_size: 128 * 1024 * 1024,
-    call_threshold: 30,
-    greedy_versioning: false,
+    exec_mem_size: 64 * 1024 * 1024,
     no_type_prop: false,
     max_versions: 4,
     num_temp_regs: 5,
@@ -67,12 +89,27 @@ pub static mut OPTIONS: Options = Options {
     gen_trace_exits: false,
     print_stats: true,
     trace_exits_sample_rate: 0,
-    pause: false,
+    disable: false,
     dump_insns: false,
     dump_disasm: None,
     verify_ctx: false,
     dump_iseq_disasm: None,
+    frame_pointer: false,
+    code_gc: false,
+    perf_map: false,
 };
+
+/// YJIT option descriptions for `ruby --help`.
+static YJIT_OPTIONS: [(&str, &str); 8] = [
+    ("--yjit-stats",                    "Enable collecting YJIT statistics"),
+    ("--yjit-trace-exits",              "Record Ruby source location when exiting from generated code"),
+    ("--yjit-trace-exits-sample-rate",  "Trace exit locations only every Nth occurrence"),
+    ("--yjit-exec-mem-size=num",        "Size of executable memory block in MiB (default: 64)"),
+    ("--yjit-code-gc",                  "Run code GC when the code size reaches the limit"),
+    ("--yjit-call-threshold=num",       "Number of calls to trigger JIT"),
+    ("--yjit-cold-threshold=num",       "Global call after which ISEQs not compiled (default: 200K)"),
+    ("--yjit-perf",                     "Enable frame pointers and perf profiling"),
+];
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum DumpDisasm {
@@ -87,7 +124,12 @@ macro_rules! get_option {
     // Unsafe is ok here because options are initialized
     // once before any Ruby code executes
     ($option_name:ident) => {
-        unsafe { OPTIONS.$option_name }
+        {
+            // Make this a statement since attributes on expressions are experimental
+            #[allow(unused_unsafe)]
+            let ret = unsafe { OPTIONS.$option_name };
+            ret
+        }
     };
 }
 pub(crate) use get_option;
@@ -137,7 +179,14 @@ pub fn parse_option(str_ptr: *const std::os::raw::c_char) -> Option<()> {
         },
 
         ("call-threshold", _) => match opt_val.parse() {
-            Ok(n) => unsafe { OPTIONS.call_threshold = n },
+            Ok(n) => unsafe { rb_yjit_call_threshold = n },
+            Err(_) => {
+                return None;
+            }
+        },
+
+        ("cold-threshold", _) => match opt_val.parse() {
+            Ok(n) => unsafe { rb_yjit_cold_threshold = n },
             Err(_) => {
                 return None;
             }
@@ -150,13 +199,13 @@ pub fn parse_option(str_ptr: *const std::os::raw::c_char) -> Option<()> {
             }
         },
 
-        ("pause", "") => unsafe {
-            OPTIONS.pause = true;
+        ("disable", "") => unsafe {
+            OPTIONS.disable = true;
         },
 
         ("temp-regs", _) => match opt_val.parse() {
             Ok(n) => {
-                assert!(n <= Assembler::TEMP_REGS.len(), "--yjit-temp-regs must be <= {}", Assembler::TEMP_REGS.len());
+                assert!(n <= TEMP_REGS.len(), "--yjit-temp-regs must be <= {}", TEMP_REGS.len());
                 unsafe { OPTIONS.num_temp_regs = n }
             }
             Err(_) => {
@@ -164,13 +213,31 @@ pub fn parse_option(str_ptr: *const std::os::raw::c_char) -> Option<()> {
             }
         },
 
+        ("code-gc", _) => unsafe {
+            OPTIONS.code_gc = true;
+        },
+
+        ("perf", _) => match opt_val {
+            "" => unsafe {
+                OPTIONS.frame_pointer = true;
+                OPTIONS.perf_map = true;
+            },
+            "fp" => unsafe { OPTIONS.frame_pointer = true },
+            "map" => unsafe { OPTIONS.perf_map = true },
+            _ => return None,
+         },
+
         ("dump-disasm", _) => match opt_val {
             "" => unsafe { OPTIONS.dump_disasm = Some(DumpDisasm::Stdout) },
             directory => {
-                let pid = std::process::id();
-                let path = format!("{directory}/yjit_{pid}.log");
-                println!("YJIT disasm dump: {path}");
-                unsafe { OPTIONS.dump_disasm = Some(DumpDisasm::File(path)) }
+                let path = format!("{directory}/yjit_{}.log", std::process::id());
+                match File::options().create(true).append(true).open(&path) {
+                    Ok(_) => {
+                        eprintln!("YJIT disasm dump: {path}");
+                        unsafe { OPTIONS.dump_disasm = Some(DumpDisasm::File(path)) }
+                    }
+                    Err(err) => eprintln!("Failed to create {path}: {err}"),
+                }
             }
          },
 
@@ -178,7 +245,6 @@ pub fn parse_option(str_ptr: *const std::os::raw::c_char) -> Option<()> {
             OPTIONS.dump_iseq_disasm = Some(opt_val.to_string());
         },
 
-        ("greedy-versioning", "") => unsafe { OPTIONS.greedy_versioning = true },
         ("no-type-prop", "") => unsafe { OPTIONS.no_type_prop = true },
         ("stats", _) => match opt_val {
             "" => unsafe { OPTIONS.gen_stats = true },
@@ -218,4 +284,19 @@ pub fn parse_option(str_ptr: *const std::os::raw::c_char) -> Option<()> {
 
     // Option successfully parsed
     return Some(());
+}
+
+/// Print YJIT options for `ruby --help`. `width` is width of option parts, and
+/// `columns` is indent width of descriptions.
+#[no_mangle]
+pub extern "C" fn rb_yjit_show_usage(help: c_int, highlight: c_int, width: c_uint, columns: c_int) {
+    for &(name, description) in YJIT_OPTIONS.iter() {
+        extern "C" {
+            fn ruby_show_usage_line(name: *const c_char, secondary: *const c_char, description: *const c_char,
+                                    help: c_int, highlight: c_int, width: c_uint, columns: c_int);
+        }
+        let name = CString::new(name).unwrap();
+        let description = CString::new(description).unwrap();
+        unsafe { ruby_show_usage_line(name.as_ptr(), null(), description.as_ptr(), help, highlight, width, columns) }
+    }
 }

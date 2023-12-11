@@ -238,48 +238,6 @@ module Bundler
       end
     end
 
-    def replace_require(specs)
-      return if [::Kernel.singleton_class, ::Kernel].any? {|klass| klass.respond_to?(:no_warning_require) }
-
-      [::Kernel.singleton_class, ::Kernel].each do |kernel_class|
-        kernel_class.send(:alias_method, :no_warning_require, :require)
-        kernel_class.send(:define_method, :require) do |file|
-          file = File.path(file)
-          name = file.tr("/", "-")
-          if (::Gem::BUNDLED_GEMS::SINCE.keys - specs.to_a.map(&:name)).include?(name)
-            unless $LOADED_FEATURES.any? {|f| f.end_with?("#{name}.rb", "#{name}.#{RbConfig::CONFIG["DLEXT"]}") }
-              target_file = begin
-                              Bundler.default_gemfile.basename
-                            rescue GemfileNotFound
-                              "inline Gemfile"
-                            end
-              be = ::Gem::BUNDLED_GEMS::SINCE[name] > RUBY_VERSION ? "will be" : "is"
-              message = "#{name} #{be} not part of the default gems since Ruby #{::Gem::BUNDLED_GEMS::SINCE[name]}." \
-              " Add #{name} to your #{target_file}."
-              location = caller_locations(1,1)[0]&.path
-              if File.file?(location) && !location.start_with?(Gem::BUNDLED_GEMS::LIBDIR)
-                caller_gem = nil
-                Gem.path.each do |path|
-                  if location =~ %r{#{path}/gems/([\w\-\.]+)}
-                    caller_gem = $1
-                    break
-                  end
-                end
-                message += " Also contact author of #{caller_gem} to add #{name} into its gemspec."
-              end
-              warn message, :uplevel => 1
-            end
-          end
-          kernel_class.send(:no_warning_require, file)
-        end
-        if kernel_class == ::Kernel
-          kernel_class.send(:private, :require)
-        else
-          kernel_class.send(:public, :require)
-        end
-      end
-    end
-
     def replace_gem(specs, specs_by_name)
       executables = nil
 
@@ -396,11 +354,13 @@ module Bundler
     def replace_entrypoints(specs)
       specs_by_name = add_default_gems_to(specs)
 
-      if defined?(::Gem::BUNDLED_GEMS::SINCE)
-        replace_require(specs)
-      else
-        reverse_rubygems_kernel_mixin
-      end
+      reverse_rubygems_kernel_mixin
+      begin
+        # bundled_gems only provide with Ruby 3.3 or later
+        require "bundled_gems"
+      rescue LoadError
+      end unless defined?(::Gem::BUNDLED_GEMS)
+      Gem::BUNDLED_GEMS.replace_require(specs) if defined?(::Gem::BUNDLED_GEMS)
       replace_gem(specs, specs_by_name)
       stub_rubygems(specs)
       replace_bin_path(specs_by_name)
@@ -490,30 +450,28 @@ module Bundler
       Gem::Specification.all = specs
     end
 
-    def fetch_specs(remote, name)
+    def fetch_specs(remote, name, fetcher)
       require "rubygems/remote_fetcher"
       path = remote.uri.to_s + "#{name}.#{Gem.marshal_version}.gz"
-      fetcher = gem_remote_fetcher
-      fetcher.headers = { "X-Gemfile-Source" => remote.original_uri.to_s } if remote.original_uri
       string = fetcher.fetch_path(path)
-      Bundler.safe_load_marshal(string)
+      specs = Bundler.safe_load_marshal(string)
+      raise MarshalError, "Specs #{name} from #{remote} is expected to be an Array but was unexpected class #{specs.class}" unless specs.is_a?(Array)
+      specs
     rescue Gem::RemoteFetcher::FetchError
       # it's okay for prerelease to fail
       raise unless name == "prerelease_specs"
     end
 
-    def fetch_all_remote_specs(remote)
-      specs = fetch_specs(remote, "specs")
-      pres = fetch_specs(remote, "prerelease_specs") || []
+    def fetch_all_remote_specs(remote, gem_remote_fetcher)
+      specs = fetch_specs(remote, "specs", gem_remote_fetcher)
+      pres = fetch_specs(remote, "prerelease_specs", gem_remote_fetcher) || []
 
       specs.concat(pres)
     end
 
-    def download_gem(spec, uri, cache_dir)
+    def download_gem(spec, uri, cache_dir, fetcher)
       require "rubygems/remote_fetcher"
       uri = Bundler.settings.mirror_for(uri)
-      fetcher = gem_remote_fetcher
-      fetcher.headers = { "X-Gemfile-Source" => spec.remote.original_uri.to_s } if spec.remote.original_uri
       Bundler::Retry.new("download gem from #{uri}").attempts do
         gem_file_name = spec.file_name
         local_gem_path = File.join cache_dir, gem_file_name
@@ -538,12 +496,6 @@ module Bundler
       end
     rescue Gem::RemoteFetcher::FetchError => e
       raise Bundler::HTTPError, "Could not download gem from #{uri} due to underlying error <#{e.message}>"
-    end
-
-    def gem_remote_fetcher
-      require "rubygems/remote_fetcher"
-      proxy = Gem.configuration[:http_proxy]
-      Gem::RemoteFetcher.new(proxy)
     end
 
     def build(spec, skip_validation = false)

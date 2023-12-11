@@ -5,6 +5,41 @@
 #
 
 module IRB # :nodoc:
+  @CONF = {}
+  # Displays current configuration.
+  #
+  # Modifying the configuration is achieved by sending a message to IRB.conf.
+  #
+  # See IRB@Configuration for more information.
+  def IRB.conf
+    @CONF
+  end
+
+  def @CONF.inspect
+    array = []
+    for k, v in sort{|a1, a2| a1[0].id2name <=> a2[0].id2name}
+      case k
+      when :MAIN_CONTEXT, :__TMP__EHV__
+        array.push format("CONF[:%s]=...myself...", k.id2name)
+      when :PROMPT
+        s = v.collect{
+          |kk, vv|
+          ss = vv.collect{|kkk, vvv| ":#{kkk.id2name}=>#{vvv.inspect}"}
+          format(":%s=>{%s}", kk.id2name, ss.join(", "))
+        }
+        array.push format("CONF[:%s]={%s}", k.id2name, s.join(", "))
+      else
+        array.push format("CONF[:%s]=%s", k.id2name, v.inspect)
+      end
+    end
+    array.join("\n")
+  end
+
+  # Returns the current version of IRB, including release version and last
+  # updated date.
+  def IRB.version
+    format("irb %s (%s)", @RELEASE_VERSION, @LAST_UPDATE_DATE)
+  end
 
   # initialize config
   def IRB.setup(ap_path, argv: ::ARGV)
@@ -28,6 +63,7 @@ module IRB # :nodoc:
     unless ap_path and @CONF[:AP_NAME]
       ap_path = File.join(File.dirname(File.dirname(__FILE__)), "irb.rb")
     end
+    @CONF[:VERSION] = version
     @CONF[:AP_NAME] = File::basename(ap_path, ".rb")
 
     @CONF[:IRB_NAME] = "irb"
@@ -40,11 +76,13 @@ module IRB # :nodoc:
     @CONF[:USE_SINGLELINE] = false unless defined?(ReadlineInputMethod)
     @CONF[:USE_COLORIZE] = (nc = ENV['NO_COLOR']).nil? || nc.empty?
     @CONF[:USE_AUTOCOMPLETE] = ENV.fetch("IRB_USE_AUTOCOMPLETE", "true") != "false"
+    @CONF[:COMPLETOR] = ENV.fetch("IRB_COMPLETOR", "regexp").to_sym
     @CONF[:INSPECT_MODE] = true
     @CONF[:USE_TRACER] = false
     @CONF[:USE_LOADER] = false
     @CONF[:IGNORE_SIGINT] = true
     @CONF[:IGNORE_EOF] = false
+    @CONF[:USE_PAGER] = true
     @CONF[:EXTRA_DOC_DIRS] = []
     @CONF[:ECHO] = nil
     @CONF[:ECHO_ON_ASSIGNMENT] = nil
@@ -151,10 +189,6 @@ module IRB # :nodoc:
       # Symbol aliases
       :'$' => :show_source,
       :'@' => :whereami,
-      # Keyword aliases
-      :break => :irb_break,
-      :catch => :irb_catch,
-      :next => :irb_next,
     }
   end
 
@@ -248,6 +282,8 @@ module IRB # :nodoc:
         end
       when "--noinspect"
         @CONF[:INSPECT_MODE] = false
+      when "--no-pager"
+        @CONF[:USE_PAGER] = false
       when "--singleline", "--readline", "--legacy"
         @CONF[:USE_SINGLELINE] = true
       when "--nosingleline", "--noreadline"
@@ -293,6 +329,10 @@ module IRB # :nodoc:
         @CONF[:USE_AUTOCOMPLETE] = true
       when "--noautocomplete"
         @CONF[:USE_AUTOCOMPLETE] = false
+      when "--regexp-completor"
+        @CONF[:COMPLETOR] = :regexp
+      when "--type-completor"
+        @CONF[:COMPLETOR] = :type
       when /^--prompt-mode(?:=(.+))?/, /^--prompt(?:=(.+))?/
         opt = $1 || argv.shift
         prompt_mode = opt.upcase.tr("-", "_").intern

@@ -140,7 +140,6 @@ extern "C" {
 // Renames
 pub use rb_insn_name as raw_insn_name;
 pub use rb_insn_len as raw_insn_len;
-pub use rb_yarv_class_of as CLASS_OF;
 pub use rb_get_ec_cfp as get_ec_cfp;
 pub use rb_get_cfp_iseq as get_cfp_iseq;
 pub use rb_get_cfp_pc as get_cfp_pc;
@@ -250,6 +249,12 @@ pub type IseqPtr = *const rb_iseq_t;
 pub fn iseq_pc_to_insn_idx(iseq: IseqPtr, pc: *mut VALUE) -> Option<u16> {
     let pc_zero = unsafe { rb_iseq_pc_at_idx(iseq, 0) };
     unsafe { pc.offset_from(pc_zero) }.try_into().ok()
+}
+
+/// Given an ISEQ pointer and an instruction index, return an opcode.
+pub fn iseq_opcode_at_idx(iseq: IseqPtr, insn_idx: u32) -> u32 {
+    let pc = unsafe { rb_iseq_pc_at_idx(iseq, insn_idx) };
+    unsafe { rb_iseq_opcode_at_pc(iseq, pc) as u32 }
 }
 
 /// Opaque execution-context type from vm_core.h
@@ -400,7 +405,13 @@ impl VALUE {
     }
 
     pub fn class_of(self) -> VALUE {
-        unsafe { CLASS_OF(self) }
+        if !self.special_const_p() {
+            let builtin_type = self.builtin_type();
+            assert_ne!(builtin_type, RUBY_T_NONE, "YJIT should only see live objects");
+            assert_ne!(builtin_type, RUBY_T_MOVED, "YJIT should only see live objects");
+        }
+
+        unsafe { rb_yarv_class_of(self) }
     }
 
     pub fn is_frozen(self) -> bool {
@@ -577,7 +588,6 @@ pub fn rust_str_to_sym(str: &str) -> VALUE {
 }
 
 /// Produce an owned Rust String from a C char pointer
-#[cfg(feature = "disasm")]
 pub fn cstr_to_rust_string(c_char_ptr: *const c_char) -> Option<String> {
     assert!(c_char_ptr != std::ptr::null());
 
@@ -735,3 +745,51 @@ mod manual_defs {
     pub const RUBY_OFFSET_ICE_VALUE: i32 = 8;
 }
 pub use manual_defs::*;
+
+/// Interned ID values for Ruby symbols and method names.
+/// See [crate::cruby::ID] and usages outside of YJIT.
+pub(crate) mod ids {
+    use std::sync::atomic::AtomicU64;
+    /// Globals to cache IDs on boot. Atomic to use with relaxed ordering
+    /// so reads can happen without `unsafe`. Initialization is done
+    /// single-threaded and release-acquire on [crate::yjit::YJIT_ENABLED]
+    /// makes sure we read the cached values after initialization is done.
+    macro_rules! def_ids {
+        ($(name: $ident:ident content: $str:literal)*) => {
+            $(
+                #[doc = concat!("[crate::cruby::ID] for `", stringify!($str), "`")]
+                pub static $ident: AtomicU64 = AtomicU64::new(0);
+            )*
+
+            pub(crate) fn init() {
+                $(
+                    let content = &$str;
+                    let ptr: *const u8 = content.as_ptr();
+
+                    // Lookup and cache each ID
+                    $ident.store(
+                        unsafe { $crate::cruby::rb_intern2(ptr.cast(), content.len() as _) },
+                        std::sync::atomic::Ordering::Relaxed
+                    );
+                )*
+
+            }
+        }
+    }
+
+    def_ids! {
+        name: NULL               content: b""
+        name: min                content: b"min"
+        name: max                content: b"max"
+        name: hash               content: b"hash"
+        name: respond_to_missing content: b"respond_to_missing?"
+    }
+}
+
+/// Get an CRuby `ID` to an interned string, e.g. a particular method name.
+macro_rules! ID {
+    ($id_name:ident) => {
+        $crate::cruby::ids::$id_name.load(std::sync::atomic::Ordering::Relaxed)
+    }
+}
+pub(crate) use ID;

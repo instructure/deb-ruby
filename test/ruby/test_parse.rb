@@ -453,10 +453,39 @@ class TestParse < Test::Unit::TestCase
   end
 
   def test_define_singleton_error
-    assert_syntax_error("#{<<~"begin;"}\n#{<<~'end;'}", /singleton method for literals/) do
-      begin;
-        def ("foo").foo; end
-      end;
+    msg = /singleton method for literals/
+    assert_parse_error(%q[def ("foo").foo; end], msg)
+    assert_parse_error(%q[def (1).foo; end], msg)
+    assert_parse_error(%q[def ((1;1)).foo; end], msg)
+    assert_parse_error(%q[def ((;1)).foo; end], msg)
+    assert_parse_error(%q[def ((1+1;1)).foo; end], msg)
+    assert_parse_error(%q[def ((%s();1)).foo; end], msg)
+    assert_parse_error(%q[def ((%w();1)).foo; end], msg)
+    assert_parse_error(%q[def ("#{42}").foo; end], msg)
+    assert_parse_error(%q[def (:"#{42}").foo; end], msg)
+  end
+
+  def test_flip_flop
+    all_assertions_foreach(nil,
+      ['(cond1..cond2)', true],
+      ['((cond1..cond2))', true],
+
+      # '(;;;cond1..cond2)', # don't care
+
+      '(1; cond1..cond2)',
+      '(%s(); cond1..cond2)',
+      '(%w(); cond1..cond2)',
+      '(1; (2; (3; 4; cond1..cond2)))',
+      '(1+1; cond1..cond2)',
+    ) do |code, pass|
+      code = code.sub("cond1", "n==4").sub("cond2", "n==5")
+      if pass
+        assert_equal([4,5], eval("(1..9).select {|n| true if #{code}}"))
+      else
+        assert_raise_with_message(ArgumentError, /bad value for range/, code) {
+          eval("[4].each {|n| true if #{code}}")
+        }
+      end
     end
   end
 
@@ -578,6 +607,10 @@ class TestParse < Test::Unit::TestCase
     assert_equal(' ^~~~~'"\n", e.message.lines.last)
     e = assert_syntax_error('"\M-\U0000"', 'Invalid escape character syntax')
     assert_equal(' ^~~~~'"\n", e.message.lines.last)
+
+    e = assert_syntax_error(%["\\C-\u3042"], 'Invalid escape character syntax')
+    assert_match(/^\s \^(?# \\ ) ~(?# C ) ~(?# - ) ~+(?# U+3042 )$/x, e.message.lines.last)
+    assert_not_include(e.message, "invalid multibyte char")
   end
 
   def test_question
@@ -608,6 +641,8 @@ class TestParse < Test::Unit::TestCase
     assert_syntax_error("?\\M-\x01", 'Invalid escape character syntax')
     assert_syntax_error("?\\M-\\C-\x01", 'Invalid escape character syntax')
     assert_syntax_error("?\\C-\\M-\x01", 'Invalid escape character syntax')
+
+    assert_equal("\xff", eval("# encoding: ascii-8bit\n""?\\\xFF"))
   end
 
   def test_percent
@@ -641,6 +676,7 @@ class TestParse < Test::Unit::TestCase
     assert_syntax_error(':@@1', /is not allowed/)
     assert_syntax_error(':@', /is not allowed/)
     assert_syntax_error(':@1', /is not allowed/)
+    assert_syntax_error(':$01234', /is not allowed/)
   end
 
   def test_parse_string
@@ -848,7 +884,6 @@ x = __ENCODING__
   def test_void_expr_stmts_value
     x = 1
     useless_use = /useless use/
-    unused = /unused/
     assert_nil assert_warning(useless_use) {eval("x; nil")}
     assert_nil assert_warning(useless_use) {eval("1+1; nil")}
     assert_nil assert_warning('') {eval("1.+(1); nil")}
@@ -856,10 +891,10 @@ x = __ENCODING__
     assert_nil assert_warning(useless_use) {eval("::TestParse; nil")}
     assert_nil assert_warning(useless_use) {eval("x..x; nil")}
     assert_nil assert_warning(useless_use) {eval("x...x; nil")}
-    assert_nil assert_warning(unused) {eval("self; nil")}
-    assert_nil assert_warning(unused) {eval("nil; nil")}
-    assert_nil assert_warning(unused) {eval("true; nil")}
-    assert_nil assert_warning(unused) {eval("false; nil")}
+    assert_nil assert_warning(useless_use) {eval("self; nil")}
+    assert_nil assert_warning(useless_use) {eval("nil; nil")}
+    assert_nil assert_warning(useless_use) {eval("true; nil")}
+    assert_nil assert_warning(useless_use) {eval("false; nil")}
     assert_nil assert_warning(useless_use) {eval("defined?(1); nil")}
     assert_equal 1, x
 
@@ -867,12 +902,14 @@ x = __ENCODING__
   end
 
   def test_assign_in_conditional
+    # multiple assignment
     assert_warning(/`= literal' in conditional/) do
       eval <<-END, nil, __FILE__, __LINE__+1
         (x, y = 1, 2) ? 1 : 2
       END
     end
 
+    # instance variable assignment
     assert_warning(/`= literal' in conditional/) do
       eval <<-END, nil, __FILE__, __LINE__+1
         if @x = true
@@ -882,6 +919,71 @@ x = __ENCODING__
         end
       END
     end
+
+    # local variable assignment
+    assert_warning(/`= literal' in conditional/) do
+      eval <<-END, nil, __FILE__, __LINE__+1
+        def m
+          if x = true
+            1
+          else
+            2
+          end
+        end
+      END
+    end
+
+    # global variable assignment
+    assert_separately([], <<-RUBY)
+      assert_warning(/`= literal' in conditional/) do
+        eval <<-END, nil, __FILE__, __LINE__+1
+          if $x = true
+            1
+          else
+            2
+          end
+        END
+      end
+    RUBY
+
+    # dynamic variable assignment
+    assert_warning(/`= literal' in conditional/) do
+      eval <<-END, nil, __FILE__, __LINE__+1
+        y = 1
+
+        1.times do
+          if y = true
+            1
+          else
+            2
+          end
+        end
+      END
+    end
+
+    # class variable assignment
+    assert_warning(/`= literal' in conditional/) do
+      eval <<-END, nil, __FILE__, __LINE__+1
+        c = Class.new
+        class << c
+          if @@a = 1
+          end
+        end
+      END
+    end
+
+    # constant declaration
+    assert_separately([], <<-RUBY)
+      assert_warning(/`= literal' in conditional/) do
+        eval <<-END, nil, __FILE__, __LINE__+1
+          if Const = true
+            1
+          else
+            2
+          end
+        END
+      end
+    RUBY
   end
 
   def test_literal_in_conditional
@@ -963,6 +1065,25 @@ x = __ENCODING__
     assert_warning('') {eval("a = 1; /(?<a>)/ =~ ''")}
     a = "\u{3042}"
     assert_warning('') {eval("#{a} = 1; /(?<#{a}>)/ =~ ''")}
+  end
+
+  def test_named_capture_in_block
+    all_assertions_foreach(nil,
+      '(/(?<a>.*)/)',
+      '(;/(?<a>.*)/)',
+      '(%s();/(?<a>.*)/)',
+      '(%w();/(?<a>.*)/)',
+      '(1; (2; 3; (4; /(?<a>.*)/)))',
+      '(1+1; /(?<a>.*)/)',
+      '/#{""}(?<a>.*)/',
+    ) do |code, pass|
+      token = Random.bytes(4).unpack1("H*")
+      if pass
+        assert_equal(token, eval("#{code} =~ #{token.dump}; a"))
+      else
+        assert_nil(eval("#{code} =~ #{token.dump}; defined?(a)"), code)
+      end
+    end
   end
 
   def test_rescue_in_command_assignment
@@ -1444,8 +1565,8 @@ x = __ENCODING__
   end
 
   def test_ungettable_gvar
-    assert_syntax_error('$01234', /not valid to get/)
-    assert_syntax_error('"#$01234"', /not valid to get/)
+    assert_syntax_error('$01234', /not allowed/)
+    assert_syntax_error('"#$01234"', /not allowed/)
   end
 
 =begin
@@ -1453,4 +1574,19 @@ x = __ENCODING__
     assert_warning(/past scope/) {catch {|tag| eval("BEGIN{throw tag}; tap {a = 1}; a")}}
   end
 =end
+
+  def assert_parse(code)
+    assert_kind_of(RubyVM::AbstractSyntaxTree::Node, RubyVM::AbstractSyntaxTree.parse(code))
+  end
+
+  def assert_parse_error(code, message)
+    assert_raise_with_message(SyntaxError, message) do
+      $VERBOSE, verbose_bak = nil, $VERBOSE
+      begin
+        RubyVM::AbstractSyntaxTree.parse(code)
+      ensure
+        $VERBOSE = verbose_bak
+      end
+    end
+  end
 end

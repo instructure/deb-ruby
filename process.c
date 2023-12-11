@@ -594,17 +594,17 @@ struct rb_process_status {
 static const rb_data_type_t rb_process_status_type = {
     .wrap_struct_name = "Process::Status",
     .function = {
+        .dmark = NULL,
         .dfree = RUBY_DEFAULT_FREE,
+        .dsize = NULL,
     },
-    .data = NULL,
-    .flags = RUBY_TYPED_FREE_IMMEDIATELY,
+    .flags = RUBY_TYPED_FREE_IMMEDIATELY | RUBY_TYPED_WB_PROTECTED | RUBY_TYPED_EMBEDDABLE,
 };
 
 static VALUE
 rb_process_status_allocate(VALUE klass)
 {
-    struct rb_process_status *data = NULL;
-
+    struct rb_process_status *data;
     return TypedData_Make_Struct(klass, struct rb_process_status, &rb_process_status_type, data);
 }
 
@@ -646,8 +646,7 @@ VALUE
 rb_process_status_new(rb_pid_t pid, int status, int error)
 {
     VALUE last_status = rb_process_status_allocate(rb_cProcessStatus);
-
-    struct rb_process_status *data = RTYPEDDATA_DATA(last_status);
+    struct rb_process_status *data = RTYPEDDATA_GET_DATA(last_status);
     data->pid = pid;
     data->status = status;
     data->error = error;
@@ -660,7 +659,8 @@ static VALUE
 process_status_dump(VALUE status)
 {
     VALUE dump = rb_class_new_instance(0, 0, rb_cObject);
-    struct rb_process_status *data = RTYPEDDATA_DATA(status);
+    struct rb_process_status *data;
+    TypedData_Get_Struct(status, struct rb_process_status, &rb_process_status_type, data);
     if (data->pid) {
         rb_ivar_set(dump, id_status, INT2NUM(data->status));
         rb_ivar_set(dump, id_pid, PIDT2NUM(data->pid));
@@ -685,23 +685,31 @@ rb_last_status_set(int status, rb_pid_t pid)
     GET_THREAD()->last_status = rb_process_status_new(pid, status, 0);
 }
 
+static void
+last_status_clear(rb_thread_t *th)
+{
+    th->last_status = Qnil;
+}
+
 void
 rb_last_status_clear(void)
 {
-    GET_THREAD()->last_status = Qnil;
+    last_status_clear(GET_THREAD());
 }
 
 static rb_pid_t
-pst_pid(VALUE pst)
+pst_pid(VALUE status)
 {
-    struct rb_process_status *data = RTYPEDDATA_DATA(pst);
+    struct rb_process_status *data;
+    TypedData_Get_Struct(status, struct rb_process_status, &rb_process_status_type, data);
     return data->pid;
 }
 
 static int
-pst_status(VALUE pst)
+pst_status(VALUE status)
 {
-    struct rb_process_status *data = RTYPEDDATA_DATA(pst);
+    struct rb_process_status *data;
+    TypedData_Get_Struct(status, struct rb_process_status, &rb_process_status_type, data);
     return data->status;
 }
 
@@ -870,6 +878,8 @@ pst_equal(VALUE st1, VALUE st2)
  *  call-seq:
  *    stat & mask -> integer
  *
+ *  This method is deprecated; use other attribute methods.
+ *
  *  Returns the logical AND of the value of #to_i with +mask+:
  *
  *    `cat /nop`
@@ -877,12 +887,40 @@ pst_equal(VALUE st1, VALUE st2)
  *    sprintf('%x', stat.to_i)  # => "100"
  *    stat & 0x00               # => 0
  *
+ *  ArgumentError is raised if +mask+ is negative.
  */
 
 static VALUE
 pst_bitand(VALUE st1, VALUE st2)
 {
-    int status = PST2INT(st1) & NUM2INT(st2);
+    int status = PST2INT(st1);
+    int mask = NUM2INT(st2);
+
+    if (mask < 0) {
+        rb_raise(rb_eArgError, "negative mask value: %d", mask);
+    }
+#define WARN_SUGGEST(suggest) \
+    rb_warn_deprecated_to_remove_at(3.4, "Process::Status#&", suggest)
+
+    switch (mask) {
+      case 0x80:
+        WARN_SUGGEST("Process::Status#coredump?");
+        break;
+      case 0x7f:
+        WARN_SUGGEST("Process::Status#signaled? or Process::Status#termsig");
+        break;
+      case 0xff:
+        WARN_SUGGEST("Process::Status#exited?, Process::Status#stopped? or Process::Status#coredump?");
+        break;
+      case 0xff00:
+        WARN_SUGGEST("Process::Status#exitstatus or Process::Status#stopsig");
+        break;
+      default:
+        WARN_SUGGEST("other Process::Status predicates");
+        break;
+    }
+#undef WARN_SUGGEST
+    status &= mask;
 
     return INT2NUM(status);
 }
@@ -892,6 +930,8 @@ pst_bitand(VALUE st1, VALUE st2)
  *  call-seq:
  *    stat >> places -> integer
  *
+ *  This method is deprecated; use other predicate methods.
+ *
  *  Returns the value of #to_i, shifted +places+ to the right:
  *
  *     `cat /nop`
@@ -900,13 +940,34 @@ pst_bitand(VALUE st1, VALUE st2)
  *     stat >> 1                 # => 128
  *     stat >> 2                 # => 64
  *
- *  The behavior is unspecified if +places+ is negative.
+ *  ArgumentError is raised if +places+ is negative.
  */
 
 static VALUE
 pst_rshift(VALUE st1, VALUE st2)
 {
-    int status = PST2INT(st1) >> NUM2INT(st2);
+    int status = PST2INT(st1);
+    int places = NUM2INT(st2);
+
+    if (places < 0) {
+        rb_raise(rb_eArgError, "negative shift value: %d", places);
+    }
+#define WARN_SUGGEST(suggest) \
+    rb_warn_deprecated_to_remove_at(3.4, "Process::Status#>>", suggest)
+
+    switch (places) {
+      case 7:
+        WARN_SUGGEST("Process::Status#coredump?");
+        break;
+      case 8:
+        WARN_SUGGEST("Process::Status#exitstatus or Process::Status#stopsig");
+        break;
+      default:
+        WARN_SUGGEST("other Process::Status attributes");
+        break;
+    }
+#undef WARN_SUGGEST
+    status >>= places;
 
     return INT2NUM(status);
 }
@@ -1601,24 +1662,11 @@ before_exec(void)
     before_exec_async_signal_safe();
 }
 
-/* This function should be async-signal-safe.  Actually it is. */
-static void
-after_exec_async_signal_safe(void)
-{
-}
-
-static void
-after_exec_non_async_signal_safe(void)
-{
-    rb_thread_reset_timer_thread();
-    rb_thread_start_timer_thread();
-}
-
 static void
 after_exec(void)
 {
-    after_exec_async_signal_safe();
-    after_exec_non_async_signal_safe();
+    rb_thread_reset_timer_thread();
+    rb_thread_start_timer_thread();
 }
 
 #if defined HAVE_WORKING_FORK || defined HAVE_DAEMON
@@ -1633,10 +1681,14 @@ after_fork_ruby(rb_pid_t pid)
 {
     rb_threadptr_pending_interrupt_clear(GET_THREAD());
     if (pid == 0) {
+        // child
         clear_pid_cache();
         rb_thread_atfork();
     }
-    after_exec();
+    else {
+        // parent
+        after_exec();
+    }
 }
 #endif
 
@@ -1784,7 +1836,7 @@ memsize_exec_arg(const void *ptr)
 static const rb_data_type_t exec_arg_data_type = {
     "exec_arg",
     {mark_exec_arg, RUBY_TYPED_DEFAULT_FREE, memsize_exec_arg},
-    0, 0, RUBY_TYPED_FREE_IMMEDIATELY
+    0, 0, RUBY_TYPED_FREE_IMMEDIATELY | RUBY_TYPED_EMBEDDABLE
 };
 
 #ifdef _WIN32
@@ -2728,6 +2780,7 @@ rb_execarg_setenv(VALUE execarg_obj, VALUE env)
     struct rb_execarg *eargp = rb_execarg_get(execarg_obj);
     env = !NIL_P(env) ? rb_check_exec_env(env, &eargp->path_env) : Qfalse;
     eargp->env_modification = env;
+    RB_GC_GUARD(execarg_obj);
 }
 
 static int
@@ -2925,6 +2978,7 @@ execarg_parent_end(VALUE execarg_obj)
     }
 
     errno = err;
+    RB_GC_GUARD(execarg_obj);
     return execarg_obj;
 }
 
@@ -3016,7 +3070,7 @@ NORETURN(static VALUE f_exec(int c, const VALUE *a, VALUE _));
  *
  *  - +command_line+ if it is a string,
  *    and if it begins with a shell reserved word or special built-in,
- *    or if it contains one or more metacharacters.
+ *    or if it contains one or more meta characters.
  *  - +exe_path+ otherwise.
  *
  *  <b>Argument +command_line+</b>
@@ -3025,8 +3079,8 @@ NORETURN(static VALUE f_exec(int c, const VALUE *a, VALUE _));
  *  it must begin with a shell reserved word, begin with a special built-in,
  *  or contain meta characters:
  *
- *    exec('echo')                         # Built-in.
  *    exec('if true; then echo "Foo"; fi') # Shell reserved word.
+ *    exec('echo')                         # Built-in.
  *    exec('date > date.tmp')              # Contains meta character.
  *
  *  The command line may also contain arguments and options for the command:
@@ -3037,21 +3091,7 @@ NORETURN(static VALUE f_exec(int c, const VALUE *a, VALUE _));
  *
  *    Foo
  *
- *  On a Unix-like system, the shell is <tt>/bin/sh</tt>;
- *  otherwise the shell is determined by environment variable
- *  <tt>ENV['RUBYSHELL']</tt>, if defined, or <tt>ENV['COMSPEC']</tt> otherwise.
- *
- *  Except for the +COMSPEC+ case,
- *  the entire string +command_line+ is passed as an argument
- *  to {shell option -c}[https://pubs.opengroup.org/onlinepubs/9699919799.2018edition/utilities/sh.html].
- *
- *  The shell performs normal shell expansion on the command line:
- *
- *    exec('echo C*')
- *
- *  Output:
- *
- *    CONTRIBUTING.md COPYING COPYING.ja
+ *  See {Execution Shell}[rdoc-ref:Process@Execution+Shell] for details about the shell.
  *
  *  Raises an exception if the new process could not execute.
  *
@@ -4171,16 +4211,19 @@ rb_fork_ruby2(struct rb_process_status *status)
 
     while (1) {
         prefork();
-        disable_child_handler_before_fork(&old);
+
         before_fork_ruby();
-        pid = rb_fork();
-        err = errno;
-        if (status) {
-            status->pid = pid;
-            status->error = err;
+        disable_child_handler_before_fork(&old);
+        {
+            pid = rb_fork();
+            err = errno;
+            if (status) {
+                status->pid = pid;
+                status->error = err;
+            }
         }
-        after_fork_ruby(pid);
         disable_child_handler_fork_parent(&old); /* yes, bad name */
+        after_fork_ruby(pid);
 
         if (pid >= 0) { /* fork succeed */
             return pid;
@@ -4624,10 +4667,15 @@ static VALUE
 do_spawn_process(VALUE arg)
 {
     struct spawn_args *argp = (struct spawn_args *)arg;
+
     rb_execarg_parent_start1(argp->execarg);
-    return (VALUE)rb_spawn_process(DATA_PTR(argp->execarg),
+
+    return (VALUE)rb_spawn_process(rb_execarg_get(argp->execarg),
                                    argp->errmsg.ptr, argp->errmsg.buflen);
 }
+
+NOINLINE(static rb_pid_t
+         rb_execarg_spawn(VALUE execarg_obj, char *errmsg, size_t errmsg_buflen));
 
 static rb_pid_t
 rb_execarg_spawn(VALUE execarg_obj, char *errmsg, size_t errmsg_buflen)
@@ -4637,8 +4685,10 @@ rb_execarg_spawn(VALUE execarg_obj, char *errmsg, size_t errmsg_buflen)
     args.execarg = execarg_obj;
     args.errmsg.ptr = errmsg;
     args.errmsg.buflen = errmsg_buflen;
-    return (rb_pid_t)rb_ensure(do_spawn_process, (VALUE)&args,
-                               execarg_parent_end, execarg_obj);
+
+    rb_pid_t r = (rb_pid_t)rb_ensure(do_spawn_process, (VALUE)&args,
+                                     execarg_parent_end, execarg_obj);
+    return r;
 }
 
 static rb_pid_t
@@ -4702,7 +4752,7 @@ rb_spawn(int argc, const VALUE *argv)
  *
  *  - +command_line+ if it is a string,
  *    and if it begins with a shell reserved word or special built-in,
- *    or if it contains one or more metacharacters.
+ *    or if it contains one or more meta characters.
  *  - +exe_path+ otherwise.
  *
  *  <b>Argument +command_line+</b>
@@ -4711,8 +4761,8 @@ rb_spawn(int argc, const VALUE *argv)
  *  it must begin with a shell reserved word, begin with a special built-in,
  *  or contain meta characters:
  *
- *    system('echo')                                  # => true  # Built-in.
  *    system('if true; then echo "Foo"; fi')          # => true  # Shell reserved word.
+ *    system('echo')                                  # => true  # Built-in.
  *    system('date > /tmp/date.tmp')                  # => true  # Contains meta character.
  *    system('date > /nop/date.tmp')                  # => false
  *    system('date > /nop/date.tmp', exception: true) # Raises RuntimeError.
@@ -4732,21 +4782,7 @@ rb_spawn(int argc, const VALUE *argv)
  *
  *    Foo
  *
- *  On a Unix-like system, the shell is <tt>/bin/sh</tt>;
- *  otherwise the shell is determined by environment variable
- *  <tt>ENV['RUBYSHELL']</tt>, if defined, or <tt>ENV['COMSPEC']</tt> otherwise.
- *
- *  Except for the +COMSPEC+ case,
- *  the entire string +command_line+ is passed as an argument
- *  to {shell option -c}[https://pubs.opengroup.org/onlinepubs/9699919799.2018edition/utilities/sh.html].
- *
- *  The shell performs normal shell expansion on the command line:
- *
- *    system('echo C*') # => true
- *
- *  Output:
- *
- *    CONTRIBUTING.md COPYING COPYING.ja
+ *  See {Execution Shell}[rdoc-ref:Process@Execution+Shell] for details about the shell.
  *
  *  Raises an exception if the new process could not execute.
  *
@@ -4795,13 +4831,14 @@ rb_spawn(int argc, const VALUE *argv)
 static VALUE
 rb_f_system(int argc, VALUE *argv, VALUE _)
 {
+    rb_thread_t *th = GET_THREAD();
     VALUE execarg_obj = rb_execarg_new(argc, argv, TRUE, TRUE);
     struct rb_execarg *eargp = rb_execarg_get(execarg_obj);
 
     struct rb_process_status status = {0};
     eargp->status = &status;
 
-    rb_last_status_clear();
+    last_status_clear(th);
 
     // This function can set the thread's last status.
     // May be different from waitpid_state.pid on exec failure.
@@ -4809,12 +4846,10 @@ rb_f_system(int argc, VALUE *argv, VALUE _)
 
     if (pid > 0) {
         VALUE status = rb_process_status_wait(pid, 0);
-
         struct rb_process_status *data = rb_check_typeddata(status, &rb_process_status_type);
-
         // Set the last status:
         rb_obj_freeze(status);
-        GET_THREAD()->last_status = status;
+        th->last_status = status;
 
         if (data->status == EXIT_SUCCESS) {
             return Qtrue;
@@ -4892,7 +4927,7 @@ rb_f_system(int argc, VALUE *argv, VALUE _)
  *
  *  - +command_line+ if it is a string,
  *    and if it begins with a shell reserved word or special built-in,
- *    or if it contains one or more metacharacters.
+ *    or if it contains one or more meta characters.
  *  - +exe_path+ otherwise.
  *
  *  <b>Argument +command_line+</b>
@@ -4901,11 +4936,11 @@ rb_f_system(int argc, VALUE *argv, VALUE _)
  *  it must begin with a shell reserved word, begin with a special built-in,
  *  or contain meta characters:
  *
- *    spawn('echo')                         # => 798847
+ *    spawn('if true; then echo "Foo"; fi') # => 798847 # Shell reserved word.
  *    Process.wait                          # => 798847
- *    spawn('if true; then echo "Foo"; fi') # => 798848
+ *    spawn('echo')                         # => 798848 # Built-in.
  *    Process.wait                          # => 798848
- *    spawn('date > /tmp/date.tmp')         # => 798879
+ *    spawn('date > /tmp/date.tmp')         # => 798879 # Contains meta character.
  *    Process.wait                          # => 798849
  *    spawn('date > /nop/date.tmp')         # => 798882 # Issues error message.
  *    Process.wait                          # => 798882
@@ -4919,22 +4954,7 @@ rb_f_system(int argc, VALUE *argv, VALUE _)
  *
  *    Foo
  *
- *  On a Unix-like system, the shell is <tt>/bin/sh</tt>;
- *  otherwise the shell is determined by environment variable
- *  <tt>ENV['RUBYSHELL']</tt>, if defined, or <tt>ENV['COMSPEC']</tt> otherwise.
- *
- *  Except for the +COMSPEC+ case,
- *  the entire string +command_line+ is passed as an argument
- *  to {shell option -c}[https://pubs.opengroup.org/onlinepubs/9699919799.2018edition/utilities/sh.html].
- *
- *  The shell performs normal shell expansion on the command line:
- *
- *    spawn('echo C*') # => 799139
- *    Process.wait     # => 799139
- *
- *  Output:
- *
- *    CONTRIBUTING.md COPYING COPYING.ja
+ *  See {Execution Shell}[rdoc-ref:Process@Execution+Shell] for details about the shell.
  *
  *  Raises an exception if the new process could not execute.
  *
@@ -4942,18 +4962,24 @@ rb_f_system(int argc, VALUE *argv, VALUE _)
  *
  *  Argument +exe_path+ is one of the following:
  *
- *  - The string path to an executable to be called.
+ *  - The string path to an executable to be called:
+ *
+ *      spawn('/usr/bin/date') # Path to date on Unix-style system.
+ *      Process.wait
+ *
+ *    Output:
+ *
+ *      Thu Aug 31 10:06:48 AM CDT 2023
+ *
  *  - A 2-element array containing the path to an executable
- *    and the string to be used as the name of the executing process.
+ *    and the string to be used as the name of the executing process:
  *
- *  Example:
+ *      pid = spawn(['sleep', 'Hello!'], '1') # 2-element array.
+ *      p `ps -p #{pid} -o command=`
  *
- *    spawn('/usr/bin/date') # => 799198 # Path to date on Unix-style system.
- *    Process.wait           # => 799198
+ *    Output:
  *
- *  Output:
- *
- *    Thu Aug 31 10:06:48 AM CDT 2023
+ *      "Hello! 1\n"
  *
  *  Ruby invokes the executable directly, with no shell and no shell expansion.
  *
@@ -7820,6 +7846,7 @@ get_clk_tck(void)
  *    Process.times
  *    # => #<struct Process::Tms utime=55.122118, stime=35.533068, cutime=0.0, cstime=0.002846>
  *
+ *  The precision is platform-defined.
  */
 
 VALUE
@@ -8736,6 +8763,7 @@ static VALUE rb_mProcID_Syscall;
  *  * Precomputes the coderange of all strings.
  *  * Frees all empty heap pages and increments the allocatable pages counter
  *    by the number of pages freed.
+ *  * Invoke +malloc_trim+ if available to free empty malloc pages.
  */
 
 static VALUE
@@ -8755,16 +8783,23 @@ proc_warmup(VALUE _)
  *
  * == \Process Creation
  *
- * Each of these methods creates a process:
+ * Each of the following methods executes a given command in a new process or subshell,
+ * or multiple commands in new processes and/or subshells.
+ * The choice of process or subshell depends on the form of the command;
+ * see {Argument command_line or exe_path}[rdoc-ref:Process@Argument+command_line+or+exe_path].
  *
- * - Process.exec: Replaces the current process by running a given external command.
- * - Process.spawn, Kernel#spawn: Executes the given command and returns its pid without waiting for completion.
- * - Kernel#system: Executes the given command in a subshell.
+ * - Process.spawn, Kernel#spawn: Executes the command;
+ *   returns the new pid without waiting for completion.
+ * - Process.exec: Replaces the current process by executing the command.
  *
- * Each of these methods accepts:
+ * In addition:
  *
- * - An optional hash of environment variable names and values.
- * - An optional hash of execution options.
+ * - \Method Kernel#system executes a given command-line (string) in a subshell;
+ *   returns +true+, +false+, or +nil+.
+ * - \Method Kernel#` executes a given command-line (string) in a subshell;
+ *   returns its $stdout string.
+ * - \Module Open3 supports creating child processes
+ *   with access to their $stdin, $stdout, and $stderr streams.
  *
  * === Execution Environment
  *
@@ -8777,7 +8812,6 @@ proc_warmup(VALUE _)
  *
  * Output:
  *
- *   nil
  *   "0"
  *
  * The effect is usually similar to that of calling ENV#update with argument +env+,
@@ -8788,6 +8822,53 @@ proc_warmup(VALUE _)
  * However, some modifications to the calling process may remain
  * if the new process fails.
  * For example, hard resource limits are not restored.
+ *
+ * === Argument +command_line+ or +exe_path+
+ *
+ * The required string argument is one of the following:
+ *
+ * - +command_line+ if it begins with a shell reserved word or special built-in,
+ *   or if it contains one or more meta characters.
+ * - +exe_path+ otherwise.
+ *
+ * <b>Argument +command_line+</b>
+ *
+ * \String argument +command_line+ is a command line to be passed to a shell;
+ * it must begin with a shell reserved word, begin with a special built-in,
+ * or contain meta characters:
+ *
+ *   system('if true; then echo "Foo"; fi')          # => true  # Shell reserved word.
+ *   system('echo')                                  # => true  # Built-in.
+ *   system('date > /tmp/date.tmp')                  # => true  # Contains meta character.
+ *   system('date > /nop/date.tmp')                  # => false
+ *   system('date > /nop/date.tmp', exception: true) # Raises RuntimeError.
+ *
+ * The command line may also contain arguments and options for the command:
+ *
+ *   system('echo "Foo"') # => true
+ *
+ * Output:
+ *
+ *   Foo
+ *
+ * See {Execution Shell}[rdoc-ref:Process@Execution+Shell] for details about the shell.
+ *
+ * <b>Argument +exe_path+</b>
+ *
+ * Argument +exe_path+ is one of the following:
+ *
+ * - The string path to an executable to be called.
+ * - A 2-element array containing the path to an executable to be called,
+ *   and the string to be used as the name of the executing process.
+ *
+ * Example:
+ *
+ *   system('/usr/bin/date') # => true # Path to date on Unix-style system.
+ *   system('foo')           # => nil  # Command failed.
+ *
+ * Output:
+ *
+ *   Mon Aug 28 11:43:10 AM CDT 2023
  *
  * === Execution Options
  *
@@ -8824,7 +8905,7 @@ proc_warmup(VALUE _)
  * The key for such an option may be an integer file descriptor (fd),
  * specifying a source,
  * or an array of fds, specifying multiple sources.
-
+ *
  * An integer source fd may be specified as:
  *
  * - _n_: Specifies file descriptor _n_.
@@ -8918,6 +8999,25 @@ proc_warmup(VALUE _)
  *
  * Use execution option <tt>:close_others => true</tt> to modify that inheritance
  * by closing non-standard fds (3 and greater) that are not otherwise redirected.
+ *
+ * === Execution Shell
+ *
+ * On a Unix-like system, the shell invoked is <tt>/bin/sh</tt>;
+ * otherwise the shell invoked is determined by environment variable
+ * <tt>ENV['RUBYSHELL']</tt>, if defined, or <tt>ENV['COMSPEC']</tt> otherwise.
+ *
+ * Except for the +COMSPEC+ case,
+ * the entire string +command_line+ is passed as an argument
+ * to {shell option -c}[https://pubs.opengroup.org/onlinepubs/9699919799.2018edition/utilities/sh.html].
+ *
+ * The shell performs normal shell expansion on the command line:
+ *
+ *   spawn('echo C*') # => 799139
+ *   Process.wait     # => 799139
+ *
+ * Output:
+ *
+ *   CONTRIBUTING.md COPYING COPYING.ja
  *
  * == What's Here
  *

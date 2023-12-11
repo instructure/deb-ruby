@@ -152,6 +152,16 @@ proc_clone(VALUE self)
 {
     VALUE procval = rb_proc_dup(self);
     CLONESETUP(procval, self);
+    rb_check_funcall(procval, idInitialize_clone, 1, &self);
+    return procval;
+}
+
+/* :nodoc: */
+static VALUE
+proc_dup(VALUE self)
+{
+    VALUE procval = rb_proc_dup(self);
+    rb_check_funcall(procval, idInitialize_dup, 1, &self);
     return procval;
 }
 
@@ -1587,21 +1597,15 @@ bm_mark_and_move(void *ptr)
     rb_gc_mark_and_move_ptr((rb_method_entry_t **)&data->me);
 }
 
-static size_t
-bm_memsize(const void *ptr)
-{
-    return sizeof(struct METHOD);
-}
-
 static const rb_data_type_t method_data_type = {
     "method",
     {
         bm_mark_and_move,
         RUBY_TYPED_DEFAULT_FREE,
-        bm_memsize,
+        NULL, // No external memory to report,
         bm_mark_and_move,
     },
-    0, 0, RUBY_TYPED_FREE_IMMEDIATELY | RUBY_TYPED_WB_PROTECTED
+    0, 0, RUBY_TYPED_FREE_IMMEDIATELY | RUBY_TYPED_WB_PROTECTED | RUBY_TYPED_EMBEDDABLE
 };
 
 VALUE
@@ -1795,8 +1799,8 @@ method_eq(VALUE method, VALUE other)
         return Qfalse;
 
     Check_TypedStruct(method, &method_data_type);
-    m1 = (struct METHOD *)DATA_PTR(method);
-    m2 = (struct METHOD *)DATA_PTR(other);
+    m1 = (struct METHOD *)RTYPEDDATA_GET_DATA(method);
+    m2 = (struct METHOD *)RTYPEDDATA_GET_DATA(other);
 
     klass1 = method_entry_defined_class(m1->me);
     klass2 = method_entry_defined_class(m2->me);
@@ -2212,7 +2216,7 @@ rb_mod_define_method_with_visibility(int argc, VALUE *argv, VALUE mod, const str
     if (!id) id = rb_to_id(name);
 
     if (is_method) {
-        struct METHOD *method = (struct METHOD *)DATA_PTR(body);
+        struct METHOD *method = (struct METHOD *)RTYPEDDATA_GET_DATA(body);
         if (method->me->owner != mod && !RB_TYPE_P(method->me->owner, T_MODULE) &&
             !RTEST(rb_class_inherited_p(mod, method->me->owner))) {
             if (FL_TEST(method->me->owner, FL_SINGLETON)) {
@@ -3415,9 +3419,15 @@ env_clone(const rb_env_t *env, const rb_cref_t *cref)
     }
 
     new_body = ALLOC_N(VALUE, env->env_size);
-    MEMCPY(new_body, env->env, VALUE, env->env_size);
     new_ep = &new_body[env->ep - env->env];
     new_env = vm_env_new(new_ep, new_body, env->env_size, env->iseq);
+
+    /* The memcpy has to happen after the vm_env_new because it can trigger a
+     * GC compaction which can move the objects in the env. */
+    MEMCPY(new_body, env->env, VALUE, env->env_size);
+    /* VM_ENV_DATA_INDEX_ENV is set in vm_env_new but will get overwritten
+     * by the memcpy above. */
+    new_ep[VM_ENV_DATA_INDEX_ENV] = (VALUE)new_env;
     RB_OBJ_WRITE(new_env, &new_ep[VM_ENV_DATA_INDEX_ME_CREF], (VALUE)cref);
     VM_ASSERT(VM_ENV_ESCAPED_P(new_ep));
     return new_env;
@@ -4258,7 +4268,7 @@ Init_Proc(void)
     rb_define_method(rb_cProc, "to_proc", proc_to_proc, 0);
     rb_define_method(rb_cProc, "arity", proc_arity, 0);
     rb_define_method(rb_cProc, "clone", proc_clone, 0);
-    rb_define_method(rb_cProc, "dup", rb_proc_dup, 0);
+    rb_define_method(rb_cProc, "dup", proc_dup, 0);
     rb_define_method(rb_cProc, "hash", proc_hash, 0);
     rb_define_method(rb_cProc, "to_s", proc_to_s, 0);
     rb_define_alias(rb_cProc, "inspect", "to_s");

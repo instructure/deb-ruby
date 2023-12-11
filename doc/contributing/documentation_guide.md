@@ -20,9 +20,11 @@ build directory:
 make html
 ```
 
+If you don't have a build directory, follow the [quick start
+guide](building_ruby.md#label-Quick+start+guide) up to step 4.
+
 Then you can preview your changes by opening
 `{build folder}/.ext/html/index.html` file in your browser.
-
 
 ## Goal
 
@@ -197,6 +199,36 @@ will be autolinked:
 If not, or if you suppress autolinking, consider forcing
 [monofont](rdoc-ref:RDoc::MarkupReference@Monofont).
 
+### Explicit Links
+
+When writing an explicit link, follow these guidelines.
+
+#### +rdoc-ref+ Scheme
+
+Use the +rdoc-ref+ scheme for:
+
+- A link in core documentation to other core documentation.
+- A link in core documentation to documentation in a standard library package.
+- A link in a standard library package to other documentation in that same
+  standard library package.
+
+See section "+rdoc-ref+ Scheme" in {Links}[rdoc-ref:RDoc::MarkupReference@Links].
+
+#### URL-Based Link
+
+Use a full URL-based link for:
+
+- A link in standard library documentation to documentation in the core.
+- A link in standard library documentation to documentation in a different
+  standard library package.
+
+Doing so ensures that the link will valid even when the package documentation
+is built independently (separately from the core documentation).
+
+The link should lead to a target in https://docs.ruby-lang.org/en/master/.
+
+Also use a full URL-based link for a link to an off-site document.
+
 ### Variable Names
 
 The name of a variable (as specified in its call-seq) should be marked up as
@@ -216,16 +248,21 @@ may not render them properly.
 In particular, avoid building tables with HTML tags
 (<tt><table></tt>, etc.).
 
-Alternatives are:
-
-- The GFM (GitHub Flavored Markdown) table extension,
-  which is enabled by default. See
-  {GFM tables extension}[https://github.github.com/gfm/#tables-extension-].
+Alternatives:
 
 - A {verbatim text block}[rdoc-ref:RDoc::MarkupReference@Verbatim+Text+Blocks],
-  using spaces and punctuation to format the text.
-  Note that {text markup}[rdoc-ref:RDoc::MarkupReference@Text+Markup]
-  will not be honored.
+  using spaces and punctuation to format the text;
+  note that {text markup}[rdoc-ref:RDoc::MarkupReference@Text+Markup]
+  will not be honored:
+
+    - Example {source}[https://github.com/ruby/ruby/blob/34d802f32f00df1ac0220b62f72605827c16bad8/file.c#L6570-L6596].
+    - Corresponding {output}[rdoc-ref:File@Read-2FWrite+Mode].
+
+- (Markdown format only): A {Github Flavored Markdown (GFM) table}[https://github.github.com/gfm/#tables-extension-],
+  using special formatting for the text:
+
+    - Example {source}[https://github.com/ruby/ruby/blob/34d802f32f00df1ac0220b62f72605827c16bad8/doc/contributing/glossary.md?plain=1].
+    - Corresponding {output}[https://docs.ruby-lang.org/en/master/contributing/glossary_md.html].
 
 ## Documenting Classes and Modules
 
@@ -257,7 +294,10 @@ Guidelines:
 - Consider listing the parent class and any included modules; consider
   [links](rdoc-ref:RDoc::MarkupReference@Links)
   to their "What's Here" sections if those exist.
-- List methods as a bullet list:
+- All methods mentioned in the left-pane table of contents
+  should be listed (including any methods extended from another class).
+- Attributes (which are not included in the TOC) may also be listed.
+- Display methods as items in one or more bullet lists:
 
     - Begin each item with the method name, followed by a colon
       and a short description.

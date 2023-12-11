@@ -108,7 +108,7 @@ class Gem::Specification < Gem::BasicSpecification
   @load_cache = {} # :nodoc:
   @load_cache_mutex = Thread::Mutex.new
 
-  VALID_NAME_PATTERN = /\A[a-zA-Z0-9\.\-\_]+\z/.freeze # :nodoc:
+  VALID_NAME_PATTERN = /\A[a-zA-Z0-9\.\-\_]+\z/ # :nodoc:
 
   # :startdoc:
 
@@ -127,35 +127,35 @@ class Gem::Specification < Gem::BasicSpecification
   # Map of attribute names to default values.
 
   @@default_value = {
-    :authors => [],
-    :autorequire => nil,
-    :bindir => "bin",
-    :cert_chain => [],
-    :date => nil,
-    :dependencies => [],
-    :description => nil,
-    :email => nil,
-    :executables => [],
-    :extensions => [],
-    :extra_rdoc_files => [],
-    :files => [],
-    :homepage => nil,
-    :licenses => [],
-    :metadata => {},
-    :name => nil,
-    :platform => Gem::Platform::RUBY,
-    :post_install_message => nil,
-    :rdoc_options => [],
-    :require_paths => ["lib"],
-    :required_ruby_version => Gem::Requirement.default,
-    :required_rubygems_version => Gem::Requirement.default,
-    :requirements => [],
-    :rubygems_version => Gem::VERSION,
-    :signing_key => nil,
-    :specification_version => CURRENT_SPECIFICATION_VERSION,
-    :summary => nil,
-    :test_files => [],
-    :version => nil,
+    authors: [],
+    autorequire: nil,
+    bindir: "bin",
+    cert_chain: [],
+    date: nil,
+    dependencies: [],
+    description: nil,
+    email: nil,
+    executables: [],
+    extensions: [],
+    extra_rdoc_files: [],
+    files: [],
+    homepage: nil,
+    licenses: [],
+    metadata: {},
+    name: nil,
+    platform: Gem::Platform::RUBY,
+    post_install_message: nil,
+    rdoc_options: [],
+    require_paths: ["lib"],
+    required_ruby_version: Gem::Requirement.default,
+    required_rubygems_version: Gem::Requirement.default,
+    requirements: [],
+    rubygems_version: Gem::VERSION,
+    signing_key: nil,
+    specification_version: CURRENT_SPECIFICATION_VERSION,
+    summary: nil,
+    test_files: [],
+    version: nil,
   }.freeze
 
   # rubocop:disable Style/MutableConstant
@@ -426,11 +426,11 @@ class Gem::Specification < Gem::BasicSpecification
   end
 
   ##
-  # The path in the gem for executable scripts.  Usually 'bin'
+  # The path in the gem for executable scripts.  Usually 'exe'
   #
   # Usage:
   #
-  #   spec.bindir = 'bin'
+  #   spec.bindir = 'exe'
 
   attr_accessor :bindir
 
@@ -529,13 +529,6 @@ class Gem::Specification < Gem::BasicSpecification
   # The RubyGems version required by this gem
 
   attr_reader :required_rubygems_version
-
-  ##
-  # The version of RubyGems used to create this gem.
-  #
-  # Do not set this, it is set automatically when the gem is packaged.
-
-  attr_accessor :rubygems_version
 
   ##
   # The key used to sign this gem.  See Gem::Security for details.
@@ -725,6 +718,21 @@ class Gem::Specification < Gem::BasicSpecification
   end
 
   ######################################################################
+  # :section: Read-only attributes
+
+  ##
+  # The version of RubyGems used to create this gem.
+
+  attr_accessor :rubygems_version
+
+  ##
+  # The path where this gem installs its extensions.
+
+  def extensions_dir
+    @extensions_dir ||= super
+  end
+
+  ######################################################################
   # :section: Specification internals
 
   ##
@@ -775,7 +783,7 @@ class Gem::Specification < Gem::BasicSpecification
   def self.each_gemspec(dirs) # :nodoc:
     dirs.each do |dir|
       Gem::Util.glob_files_in_dir("*.gemspec", dir).each do |path|
-        yield path.tap(&Gem::UNTAINT)
+        yield path
       end
     end
   end
@@ -961,7 +969,7 @@ class Gem::Specification < Gem::BasicSpecification
 
   def self.dirs
     @@dirs ||= Gem.path.collect do |dir|
-      File.join dir.dup.tap(&Gem::UNTAINT), "specifications"
+      File.join dir, "specifications"
     end
   end
 
@@ -1154,12 +1162,9 @@ class Gem::Specification < Gem::BasicSpecification
     spec = @load_cache_mutex.synchronize { @load_cache[file] }
     return spec if spec
 
-    file = file.dup.tap(&Gem::UNTAINT)
     return unless File.file?(file)
 
     code = Gem.open_file(file, "r:UTF-8:-", &:read)
-
-    code.tap(&Gem::UNTAINT)
 
     begin
       spec = eval code, binding, file
@@ -1300,12 +1305,13 @@ class Gem::Specification < Gem::BasicSpecification
 
   def self._load(str)
     Gem.load_yaml
+    Gem.load_safe_marshal
 
     yaml_set = false
     retry_count = 0
 
     array = begin
-      Marshal.load str
+      Gem::SafeMarshal.safe_load str
     rescue ArgumentError => e
       # Avoid an infinite retry loop when the argument error has nothing to do
       # with the classes not being defined.
@@ -1749,7 +1755,7 @@ class Gem::Specification < Gem::BasicSpecification
     /\A
      (\d{4})-(\d{2})-(\d{2})
      (\s+ \d{2}:\d{2}:\d{2}\.\d+ \s* (Z | [-+]\d\d:\d\d) )?
-     \Z/x.freeze
+     \Z/x
 
   ##
   # The date this gem was created
@@ -2362,12 +2368,12 @@ class Gem::Specification < Gem::BasicSpecification
     when Hash               then
       seg = obj.keys.sort.map {|k| "#{k.to_s.dump} => #{obj[k].to_s.dump}" }
       "{ #{seg.join(", ")} }"
-    when Gem::Version       then obj.to_s.dump
+    when Gem::Version       then ruby_code(obj.to_s)
     when DateLike           then obj.strftime("%Y-%m-%d").dump
     when Time               then obj.strftime("%Y-%m-%d").dump
     when Numeric            then obj.inspect
     when true, false, nil   then obj.inspect
-    when Gem::Platform      then "Gem::Platform.new(#{obj.to_a.inspect})"
+    when Gem::Platform      then "Gem::Platform.new(#{ruby_code obj.to_a})"
     when Gem::Requirement   then
       list = obj.as_list
       "Gem::Requirement.new(#{ruby_code(list.size == 1 ? obj.to_s : list)})"
@@ -2532,12 +2538,12 @@ class Gem::Specification < Gem::BasicSpecification
     end
 
     if String === signing_key
-      result << "  s.signing_key = #{signing_key.dump}.freeze"
+      result << "  s.signing_key = #{ruby_code signing_key}"
     end
 
     if @installed_by_version
       result << nil
-      result << "  s.installed_by_version = \"#{Gem::VERSION}\" if s.respond_to? :installed_by_version"
+      result << "  s.installed_by_version = #{ruby_code Gem::VERSION} if s.respond_to? :installed_by_version"
     end
 
     unless dependencies.empty?
@@ -2546,9 +2552,8 @@ class Gem::Specification < Gem::BasicSpecification
       result << nil
 
       dependencies.each do |dep|
-        req = dep.requirements_list.inspect
         dep.instance_variable_set :@type, :runtime if dep.type.nil? # HACK
-        result << "  s.add_#{dep.type}_dependency(%q<#{dep.name}>.freeze, #{req})"
+        result << "  s.add_#{dep.type}_dependency(%q<#{dep.name}>.freeze, #{ruby_code dep.requirements_list})"
       end
     end
 
@@ -2694,9 +2699,9 @@ class Gem::Specification < Gem::BasicSpecification
       case ivar
       when "date"
         # Force Date to go through the extra coerce logic in date=
-        self.date = val.tap(&Gem::UNTAINT)
+        self.date = val
       else
-        instance_variable_set "@#{ivar}", val.tap(&Gem::UNTAINT)
+        instance_variable_set "@#{ivar}", val
       end
     end
 
