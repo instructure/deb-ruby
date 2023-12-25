@@ -72,6 +72,18 @@ class TestRegexp < Test::Unit::TestCase
     end
   end
 
+  def test_to_s_under_gc_compact_stress
+    EnvUtil.under_gc_compact_stress do
+      str = "abcd\u3042"
+      [:UTF_16BE, :UTF_16LE, :UTF_32BE, :UTF_32LE].each do |es|
+        enc = Encoding.const_get(es)
+        rs = Regexp.new(str.encode(enc)).to_s
+        assert_equal("(?-mix:abcd\u3042)".encode(enc), rs)
+        assert_equal(enc, rs.encoding)
+      end
+    end
+  end
+
   def test_to_s_extended_subexp
     re = /#\g#{"\n"}/x
     re = /#{re}/
@@ -455,6 +467,12 @@ class TestRegexp < Test::Unit::TestCase
     assert_equal("/\n/i", /#{"\n"}/i.inspect)
     s = [0xf1, 0xf2, 0xf3].pack("C*")
     assert_equal('/\/\xF1\xF2\xF3/i', /\/#{s}/i.inspect)
+  end
+
+  def test_inspect_under_gc_compact_stress
+    EnvUtil.under_gc_compact_stress do
+      assert_equal('/(?-mix:\\/)|/', Regexp.union(/\//, "").inspect)
+    end
   end
 
   def test_char_to_option
@@ -858,6 +876,13 @@ class TestRegexp < Test::Unit::TestCase
     $_ = "abc"; assert_equal(1, ~/bc/)
     $_ = "abc"; assert_nil(~/d/)
     $_ = nil; assert_nil(~/./)
+  end
+
+  def test_match_under_gc_compact_stress
+    EnvUtil.under_gc_compact_stress do
+      m = /(?<foo>.)(?<n>[^aeiou])?(?<bar>.+)/.match("hoge\u3042")
+      assert_equal("h", m.match(:foo))
+    end
   end
 
   def test_match_p

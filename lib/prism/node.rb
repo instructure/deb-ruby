@@ -2061,6 +2061,11 @@ module Prism
       flags.anybits?(CallNodeFlags::VARIABLE_CALL)
     end
 
+    # def attribute_write?: () -> bool
+    def attribute_write?
+      flags.anybits?(CallNodeFlags::ATTRIBUTE_WRITE)
+    end
+
     # def call_operator: () -> String?
     def call_operator
       call_operator_loc&.slice
@@ -2079,7 +2084,7 @@ module Prism
     # def inspect(inspector: NodeInspector) -> String
     def inspect(inspector = NodeInspector.new)
       inspector << inspector.header(self)
-      flags = [("safe_navigation" if safe_navigation?), ("variable_call" if variable_call?)].compact
+      flags = [("safe_navigation" if safe_navigation?), ("variable_call" if variable_call?), ("attribute_write" if attribute_write?)].compact
       inspector << "├── flags: #{flags.empty? ? "∅" : flags.join(", ")}\n"
       if (receiver = self.receiver).nil?
         inspector << "├── receiver: ∅\n"
@@ -2245,6 +2250,11 @@ module Prism
       flags.anybits?(CallNodeFlags::VARIABLE_CALL)
     end
 
+    # def attribute_write?: () -> bool
+    def attribute_write?
+      flags.anybits?(CallNodeFlags::ATTRIBUTE_WRITE)
+    end
+
     # def call_operator: () -> String?
     def call_operator
       call_operator_loc&.slice
@@ -2268,7 +2278,7 @@ module Prism
     # def inspect(inspector: NodeInspector) -> String
     def inspect(inspector = NodeInspector.new)
       inspector << inspector.header(self)
-      flags = [("safe_navigation" if safe_navigation?), ("variable_call" if variable_call?)].compact
+      flags = [("safe_navigation" if safe_navigation?), ("variable_call" if variable_call?), ("attribute_write" if attribute_write?)].compact
       inspector << "├── flags: #{flags.empty? ? "∅" : flags.join(", ")}\n"
       if (receiver = self.receiver).nil?
         inspector << "├── receiver: ∅\n"
@@ -2428,6 +2438,11 @@ module Prism
       flags.anybits?(CallNodeFlags::VARIABLE_CALL)
     end
 
+    # def attribute_write?: () -> bool
+    def attribute_write?
+      flags.anybits?(CallNodeFlags::ATTRIBUTE_WRITE)
+    end
+
     # def call_operator: () -> String?
     def call_operator
       call_operator_loc&.slice
@@ -2441,7 +2456,7 @@ module Prism
     # def inspect(inspector: NodeInspector) -> String
     def inspect(inspector = NodeInspector.new)
       inspector << inspector.header(self)
-      flags = [("safe_navigation" if safe_navigation?), ("variable_call" if variable_call?)].compact
+      flags = [("safe_navigation" if safe_navigation?), ("variable_call" if variable_call?), ("attribute_write" if attribute_write?)].compact
       inspector << "├── flags: #{flags.empty? ? "∅" : flags.join(", ")}\n"
       if (receiver = self.receiver).nil?
         inspector << "├── receiver: ∅\n"
@@ -2587,6 +2602,11 @@ module Prism
       flags.anybits?(CallNodeFlags::VARIABLE_CALL)
     end
 
+    # def attribute_write?: () -> bool
+    def attribute_write?
+      flags.anybits?(CallNodeFlags::ATTRIBUTE_WRITE)
+    end
+
     # def call_operator: () -> String?
     def call_operator
       call_operator_loc&.slice
@@ -2605,7 +2625,7 @@ module Prism
     # def inspect(inspector: NodeInspector) -> String
     def inspect(inspector = NodeInspector.new)
       inspector << inspector.header(self)
-      flags = [("safe_navigation" if safe_navigation?), ("variable_call" if variable_call?)].compact
+      flags = [("safe_navigation" if safe_navigation?), ("variable_call" if variable_call?), ("attribute_write" if attribute_write?)].compact
       inspector << "├── flags: #{flags.empty? ? "∅" : flags.join(", ")}\n"
       if (receiver = self.receiver).nil?
         inspector << "├── receiver: ∅\n"
@@ -2649,6 +2669,151 @@ module Prism
     # def self.type: () -> Symbol
     def self.type
       :call_or_write_node
+    end
+  end
+
+  # Represents assigning to a method call.
+  #
+  #     foo.bar, = 1
+  #     ^^^^^^^
+  #
+  #     begin
+  #     rescue => foo.bar
+  #               ^^^^^^^
+  #     end
+  #
+  #     for foo.bar in baz do end
+  #         ^^^^^^^
+  class CallTargetNode < Node
+    # attr_reader flags: Integer
+    private attr_reader :flags
+
+    # attr_reader receiver: Node
+    attr_reader :receiver
+
+    # attr_reader call_operator_loc: Location
+    attr_reader :call_operator_loc
+
+    # attr_reader name: Symbol
+    attr_reader :name
+
+    # attr_reader message_loc: Location
+    attr_reader :message_loc
+
+    # def initialize: (flags: Integer, receiver: Node, call_operator_loc: Location, name: Symbol, message_loc: Location, location: Location) -> void
+    def initialize(flags, receiver, call_operator_loc, name, message_loc, location)
+      @flags = flags
+      @receiver = receiver
+      @call_operator_loc = call_operator_loc
+      @name = name
+      @message_loc = message_loc
+      @location = location
+    end
+
+    # def accept: (visitor: Visitor) -> void
+    def accept(visitor)
+      visitor.visit_call_target_node(self)
+    end
+
+    # def child_nodes: () -> Array[nil | Node]
+    def child_nodes
+      [receiver]
+    end
+
+    # def compact_child_nodes: () -> Array[Node]
+    def compact_child_nodes
+      [receiver]
+    end
+
+    # def comment_targets: () -> Array[Node | Location]
+    def comment_targets
+      [receiver, call_operator_loc, message_loc]
+    end
+
+    # def copy: (**params) -> CallTargetNode
+    def copy(**params)
+      CallTargetNode.new(
+        params.fetch(:flags) { flags },
+        params.fetch(:receiver) { receiver },
+        params.fetch(:call_operator_loc) { call_operator_loc },
+        params.fetch(:name) { name },
+        params.fetch(:message_loc) { message_loc },
+        params.fetch(:location) { location },
+      )
+    end
+
+    # def deconstruct: () -> Array[nil | Node]
+    alias deconstruct child_nodes
+
+    # def deconstruct_keys: (keys: Array[Symbol]) -> Hash[Symbol, nil | Node | Array[Node] | String | Token | Array[Token] | Location]
+    def deconstruct_keys(keys)
+      { flags: flags, receiver: receiver, call_operator_loc: call_operator_loc, name: name, message_loc: message_loc, location: location }
+    end
+
+    # def safe_navigation?: () -> bool
+    def safe_navigation?
+      flags.anybits?(CallNodeFlags::SAFE_NAVIGATION)
+    end
+
+    # def variable_call?: () -> bool
+    def variable_call?
+      flags.anybits?(CallNodeFlags::VARIABLE_CALL)
+    end
+
+    # def attribute_write?: () -> bool
+    def attribute_write?
+      flags.anybits?(CallNodeFlags::ATTRIBUTE_WRITE)
+    end
+
+    # def call_operator: () -> String
+    def call_operator
+      call_operator_loc.slice
+    end
+
+    # def message: () -> String
+    def message
+      message_loc.slice
+    end
+
+    # def inspect(inspector: NodeInspector) -> String
+    def inspect(inspector = NodeInspector.new)
+      inspector << inspector.header(self)
+      flags = [("safe_navigation" if safe_navigation?), ("variable_call" if variable_call?), ("attribute_write" if attribute_write?)].compact
+      inspector << "├── flags: #{flags.empty? ? "∅" : flags.join(", ")}\n"
+      inspector << "├── receiver:\n"
+      inspector << inspector.child_node(receiver, "│   ")
+      inspector << "├── call_operator_loc: #{inspector.location(call_operator_loc)}\n"
+      inspector << "├── name: #{name.inspect}\n"
+      inspector << "└── message_loc: #{inspector.location(message_loc)}\n"
+      inspector.to_str
+    end
+
+    # Sometimes you want to check an instance of a node against a list of
+    # classes to see what kind of behavior to perform. Usually this is done by
+    # calling `[cls1, cls2].include?(node.class)` or putting the node into a
+    # case statement and doing `case node; when cls1; when cls2; end`. Both of
+    # these approaches are relatively slow because of the constant lookups,
+    # method calls, and/or array allocations.
+    #
+    # Instead, you can call #type, which will return to you a symbol that you
+    # can use for comparison. This is faster than the other approaches because
+    # it uses a single integer comparison, but also because if you're on CRuby
+    # you can take advantage of the fact that case statements with all symbol
+    # keys will use a jump table.
+    #
+    # def type: () -> Symbol
+    def type
+      :call_target_node
+    end
+
+    # Similar to #type, this method returns a symbol that you can use for
+    # splitting on the type of the node without having to do a long === chain.
+    # Note that like #type, it will still be slower than using == for a single
+    # class, but should be faster in a case statement or an array comparison.
+    #
+    # def self.type: () -> Symbol
+    def self.type
+      :call_target_node
     end
   end
 
@@ -8186,6 +8351,11 @@ module Prism
       flags.anybits?(CallNodeFlags::VARIABLE_CALL)
     end
 
+    # def attribute_write?: () -> bool
+    def attribute_write?
+      flags.anybits?(CallNodeFlags::ATTRIBUTE_WRITE)
+    end
+
     # def call_operator: () -> String?
     def call_operator
       call_operator_loc&.slice
@@ -8209,7 +8379,7 @@ module Prism
     # def inspect(inspector: NodeInspector) -> String
     def inspect(inspector = NodeInspector.new)
       inspector << inspector.header(self)
-      flags = [("safe_navigation" if safe_navigation?), ("variable_call" if variable_call?)].compact
+      flags = [("safe_navigation" if safe_navigation?), ("variable_call" if variable_call?), ("attribute_write" if attribute_write?)].compact
       inspector << "├── flags: #{flags.empty? ? "∅" : flags.join(", ")}\n"
       if (receiver = self.receiver).nil?
         inspector << "├── receiver: ∅\n"
@@ -8377,6 +8547,11 @@ module Prism
       flags.anybits?(CallNodeFlags::VARIABLE_CALL)
     end
 
+    # def attribute_write?: () -> bool
+    def attribute_write?
+      flags.anybits?(CallNodeFlags::ATTRIBUTE_WRITE)
+    end
+
     # def call_operator: () -> String?
     def call_operator
       call_operator_loc&.slice
@@ -8395,7 +8570,7 @@ module Prism
     # def inspect(inspector: NodeInspector) -> String
     def inspect(inspector = NodeInspector.new)
       inspector << inspector.header(self)
-      flags = [("safe_navigation" if safe_navigation?), ("variable_call" if variable_call?)].compact
+      flags = [("safe_navigation" if safe_navigation?), ("variable_call" if variable_call?), ("attribute_write" if attribute_write?)].compact
       inspector << "├── flags: #{flags.empty? ? "∅" : flags.join(", ")}\n"
       if (receiver = self.receiver).nil?
         inspector << "├── receiver: ∅\n"
@@ -8559,6 +8734,11 @@ module Prism
       flags.anybits?(CallNodeFlags::VARIABLE_CALL)
     end
 
+    # def attribute_write?: () -> bool
+    def attribute_write?
+      flags.anybits?(CallNodeFlags::ATTRIBUTE_WRITE)
+    end
+
     # def call_operator: () -> String?
     def call_operator
       call_operator_loc&.slice
@@ -8582,7 +8762,7 @@ module Prism
     # def inspect(inspector: NodeInspector) -> String
     def inspect(inspector = NodeInspector.new)
       inspector << inspector.header(self)
-      flags = [("safe_navigation" if safe_navigation?), ("variable_call" if variable_call?)].compact
+      flags = [("safe_navigation" if safe_navigation?), ("variable_call" if variable_call?), ("attribute_write" if attribute_write?)].compact
       inspector << "├── flags: #{flags.empty? ? "∅" : flags.join(", ")}\n"
       if (receiver = self.receiver).nil?
         inspector << "├── receiver: ∅\n"
@@ -8637,6 +8817,171 @@ module Prism
     # def self.type: () -> Symbol
     def self.type
       :index_or_write_node
+    end
+  end
+
+  # Represents assigning to an index.
+  #
+  #     foo[bar], = 1
+  #     ^^^^^^^^
+  #
+  #     begin
+  #     rescue => foo[bar]
+  #               ^^^^^^^^
+  #     end
+  #
+  #     for foo[bar] in baz do end
+  #         ^^^^^^^^
+  class IndexTargetNode < Node
+    # attr_reader flags: Integer
+    private attr_reader :flags
+
+    # attr_reader receiver: Node
+    attr_reader :receiver
+
+    # attr_reader opening_loc: Location
+    attr_reader :opening_loc
+
+    # attr_reader arguments: ArgumentsNode?
+    attr_reader :arguments
+
+    # attr_reader closing_loc: Location
+    attr_reader :closing_loc
+
+    # attr_reader block: Node?
+    attr_reader :block
+
+    # def initialize: (flags: Integer, receiver: Node, opening_loc: Location, arguments: ArgumentsNode?, closing_loc: Location, block: Node?, location: Location) -> void
+    def initialize(flags, receiver, opening_loc, arguments, closing_loc, block, location)
+      @flags = flags
+      @receiver = receiver
+      @opening_loc = opening_loc
+      @arguments = arguments
+      @closing_loc = closing_loc
+      @block = block
+      @location = location
+    end
+
+    # def accept: (visitor: Visitor) -> void
+    def accept(visitor)
+      visitor.visit_index_target_node(self)
+    end
+
+    # def child_nodes: () -> Array[nil | Node]
+    def child_nodes
+      [receiver, arguments, block]
+    end
+
+    # def compact_child_nodes: () -> Array[Node]
+    def compact_child_nodes
+      compact = []
+      compact << receiver
+      compact << arguments if arguments
+      compact << block if block
+      compact
+    end
+
+    # def comment_targets: () -> Array[Node | Location]
+    def comment_targets
+      [receiver, opening_loc, *arguments, closing_loc, *block]
+    end
+
+    # def copy: (**params) -> IndexTargetNode
+    def copy(**params)
+      IndexTargetNode.new(
+        params.fetch(:flags) { flags },
+        params.fetch(:receiver) { receiver },
+        params.fetch(:opening_loc) { opening_loc },
+        params.fetch(:arguments) { arguments },
+        params.fetch(:closing_loc) { closing_loc },
+        params.fetch(:block) { block },
+        params.fetch(:location) { location },
+      )
+    end
+
+    # def deconstruct: () -> Array[nil | Node]
+    alias deconstruct child_nodes
+
+    # def deconstruct_keys: (keys: Array[Symbol]) -> Hash[Symbol, nil | Node | Array[Node] | String | Token | Array[Token] | Location]
+    def deconstruct_keys(keys)
+      { flags: flags, receiver: receiver, opening_loc: opening_loc, arguments: arguments, closing_loc: closing_loc, block: block, location: location }
+    end
+
+    # def safe_navigation?: () -> bool
+    def safe_navigation?
+      flags.anybits?(CallNodeFlags::SAFE_NAVIGATION)
+    end
+
+    # def variable_call?: () -> bool
+    def variable_call?
+      flags.anybits?(CallNodeFlags::VARIABLE_CALL)
+    end
+
+    # def attribute_write?: () -> bool
+    def attribute_write?
+      flags.anybits?(CallNodeFlags::ATTRIBUTE_WRITE)
+    end
+
+    # def opening: () -> String
+    def opening
+      opening_loc.slice
+    end
+
+    # def closing: () -> String
+    def closing
+      closing_loc.slice
+    end
+
+    # def inspect(inspector: NodeInspector) -> String
+    def inspect(inspector = NodeInspector.new)
+      inspector << inspector.header(self)
+      flags = [("safe_navigation" if safe_navigation?), ("variable_call" if variable_call?), ("attribute_write" if attribute_write?)].compact
+      inspector << "├── flags: #{flags.empty? ? "∅" : flags.join(", ")}\n"
+      inspector << "├── receiver:\n"
+      inspector << inspector.child_node(receiver, "│   ")
+      inspector << "├── opening_loc: #{inspector.location(opening_loc)}\n"
+      if (arguments = self.arguments).nil?
+        inspector << "├── arguments: ∅\n"
+      else
+        inspector << "├── arguments:\n"
+        inspector << arguments.inspect(inspector.child_inspector("│   ")).delete_prefix(inspector.prefix)
+      end
+      inspector << "├── closing_loc: #{inspector.location(closing_loc)}\n"
+      if (block = self.block).nil?
+        inspector << "└── block: ∅\n"
+      else
+        inspector << "└── block:\n"
+        inspector << block.inspect(inspector.child_inspector("    ")).delete_prefix(inspector.prefix)
+      end
+      inspector.to_str
+    end
+
+    # Sometimes you want to check an instance of a node against a list of
+    # classes to see what kind of behavior to perform. Usually this is done by
+    # calling `[cls1, cls2].include?(node.class)` or putting the node into a
+    # case statement and doing `case node; when cls1; when cls2; end`. Both of
+    # these approaches are relatively slow because of the constant lookups,
+    # method calls, and/or array allocations.
+    #
+    # Instead, you can call #type, which will return to you a symbol that you
+    # can use for comparison. This is faster than the other approaches because
+    # it uses a single integer comparison, but also because if you're on CRuby
+    # you can take advantage of the fact that case statements with all symbol
+    # keys will use a jump table.
+    #
+    # def type: () -> Symbol
+    def type
+      :index_target_node
+    end
+
+    # Similar to #type, this method returns a symbol that you can use for
+    # splitting on the type of the node without having to do a long === chain.
+    # Note that like #type, it will still be slower than using == for a single
+    # class, but should be faster in a case statement or an array comparison.
+    #
+    # def self.type: () -> Symbol
+    def self.type
+      :index_target_node
     end
   end
 
@@ -10056,11 +10401,15 @@ module Prism
   #     foo(a: b)
   #         ^^^^
   class KeywordHashNode < Node
+    # attr_reader flags: Integer
+    private attr_reader :flags
+
     # attr_reader elements: Array[Node]
     attr_reader :elements
 
-    # def initialize: (elements: Array[Node], location: Location) -> void
-    def initialize(elements, location)
+    # def initialize: (flags: Integer, elements: Array[Node], location: Location) -> void
+    def initialize(flags, elements, location)
+      @flags = flags
       @elements = elements
       @location = location
     end
@@ -10088,6 +10437,7 @@ module Prism
     # def copy: (**params) -> KeywordHashNode
     def copy(**params)
       KeywordHashNode.new(
+        params.fetch(:flags) { flags },
         params.fetch(:elements) { elements },
         params.fetch(:location) { location },
       )
@@ -10098,12 +10448,19 @@ module Prism
 
     # def deconstruct_keys: (keys: Array[Symbol]) -> Hash[Symbol, nil | Node | Array[Node] | String | Token | Array[Token] | Location]
     def deconstruct_keys(keys)
-      { elements: elements, location: location }
+      { flags: flags, elements: elements, location: location }
+    end
+
+    # def static_keys?: () -> bool
+    def static_keys?
+      flags.anybits?(KeywordHashNodeFlags::STATIC_KEYS)
     end
 
     # def inspect(inspector: NodeInspector) -> String
     def inspect(inspector = NodeInspector.new)
       inspector << inspector.header(self)
+      flags = [("static_keys" if static_keys?)].compact
+      inspector << "├── flags: #{flags.empty? ? "∅" : flags.join(", ")}\n"
       inspector << "└── elements: #{inspector.list("#{inspector.prefix}    ", elements)}"
       inspector.to_str
     end
@@ -16935,6 +17292,9 @@ module Prism
 
     # a call that could have been a local variable
     VARIABLE_CALL = 1 << 1
+
+    # a call that is an attribute write, so the value being written should be returned
+    ATTRIBUTE_WRITE = 1 << 2
   end
 
   # Flags for nodes that have unescaped content.
@@ -16959,6 +17319,12 @@ module Prism
 
     # 0x prefix
     HEXADECIMAL = 1 << 3
+  end
+
+  # Flags for keyword hash nodes.
+  module KeywordHashNodeFlags
+    # a keyword hash which only has `AssocNode` elements all with static literal keys, which means the elements can be treated as keyword arguments
+    STATIC_KEYS = 1 << 0
   end
 
   # Flags for while and until loop nodes.

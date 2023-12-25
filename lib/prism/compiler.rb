@@ -102,6 +102,9 @@ module Prism
     # Compile a CallOrWriteNode node
     alias visit_call_or_write_node visit_child_nodes
 
+    # Compile a CallTargetNode node
+    alias visit_call_target_node visit_child_nodes
+
     # Compile a CapturePatternNode node
     alias visit_capture_pattern_node visit_child_nodes
 
@@ -257,6 +260,9 @@ module Prism
 
     # Compile a IndexOrWriteNode node
     alias visit_index_or_write_node visit_child_nodes
+
+    # Compile a IndexTargetNode node
+    alias visit_index_target_node visit_child_nodes
 
     # Compile a InstanceVariableAndWriteNode node
     alias visit_instance_variable_and_write_node visit_child_nodes

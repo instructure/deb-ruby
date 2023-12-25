@@ -233,6 +233,14 @@ module Prism
       listeners[:on_call_or_write_node_leave]&.each { |listener| listener.on_call_or_write_node_leave(node) }
     end
 
+    # Dispatch enter and leave events for CallTargetNode nodes and continue
+    # walking the tree.
+    def visit_call_target_node(node)
+      listeners[:on_call_target_node_enter]&.each { |listener| listener.on_call_target_node_enter(node) }
+      super
+      listeners[:on_call_target_node_leave]&.each { |listener| listener.on_call_target_node_leave(node) }
+    end
+
     # Dispatch enter and leave events for CapturePatternNode nodes and continue
     # walking the tree.
     def visit_capture_pattern_node(node)
@@ -647,6 +655,14 @@ module Prism
       listeners[:on_index_or_write_node_enter]&.each { |listener| listener.on_index_or_write_node_enter(node) }
       super
       listeners[:on_index_or_write_node_leave]&.each { |listener| listener.on_index_or_write_node_leave(node) }
+    end
+
+    # Dispatch enter and leave events for IndexTargetNode nodes and continue
+    # walking the tree.
+    def visit_index_target_node(node)
+      listeners[:on_index_target_node_enter]&.each { |listener| listener.on_index_target_node_enter(node) }
+      super
+      listeners[:on_index_target_node_leave]&.each { |listener| listener.on_index_target_node_leave(node) }
     end
 
     # Dispatch enter and leave events for InstanceVariableAndWriteNode nodes and continue
@@ -1366,6 +1382,12 @@ module Prism
         listeners[:on_call_or_write_node_leave]&.each { |listener| listener.on_call_or_write_node_leave(node) }
       end
 
+      # Dispatch enter and leave events for CallTargetNode nodes.
+      def visit_call_target_node(node)
+        listeners[:on_call_target_node_enter]&.each { |listener| listener.on_call_target_node_enter(node) }
+        listeners[:on_call_target_node_leave]&.each { |listener| listener.on_call_target_node_leave(node) }
+      end
+
       # Dispatch enter and leave events for CapturePatternNode nodes.
       def visit_capture_pattern_node(node)
         listeners[:on_capture_pattern_node_enter]&.each { |listener| listener.on_capture_pattern_node_enter(node) }
@@ -1676,6 +1698,12 @@ module Prism
       def visit_index_or_write_node(node)
         listeners[:on_index_or_write_node_enter]&.each { |listener| listener.on_index_or_write_node_enter(node) }
         listeners[:on_index_or_write_node_leave]&.each { |listener| listener.on_index_or_write_node_leave(node) }
+      end
+
+      # Dispatch enter and leave events for IndexTargetNode nodes.
+      def visit_index_target_node(node)
+        listeners[:on_index_target_node_enter]&.each { |listener| listener.on_index_target_node_enter(node) }
+        listeners[:on_index_target_node_leave]&.each { |listener| listener.on_index_target_node_leave(node) }
       end
 
       # Dispatch enter and leave events for InstanceVariableAndWriteNode nodes.

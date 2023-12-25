@@ -1104,6 +1104,7 @@ static rb_node_break_t *rb_node_break_new(struct parser_params *p, NODE *nd_stts
 static rb_node_next_t *rb_node_next_new(struct parser_params *p, NODE *nd_stts, const YYLTYPE *loc);
 static rb_node_redo_t *rb_node_redo_new(struct parser_params *p, const YYLTYPE *loc);
 static rb_node_def_temp_t *rb_node_def_temp_new(struct parser_params *p, const YYLTYPE *loc);
+static rb_node_def_temp_t *def_head_save(struct parser_params *p, rb_node_def_temp_t *n);
 
 #define NEW_BREAK(s,loc) (NODE *)rb_node_break_new(p,s,loc)
 #define NEW_NEXT(s,loc) (NODE *)rb_node_next_new(p,s,loc)
@@ -1377,6 +1378,7 @@ static NODE *new_args_forward_call(struct parser_params*, NODE*, const YYLTYPE*,
 #endif
 static int check_forwarding_args(struct parser_params*);
 static void add_forwarding_args(struct parser_params *p);
+static void forwarding_arg_check(struct parser_params *p, ID arg, ID all, const char *var);
 
 static const struct vtable *dyna_push(struct parser_params *);
 static void dyna_pop(struct parser_params*, const struct vtable *);
@@ -2058,7 +2060,7 @@ get_nd_args(struct parser_params *p, NODE *node)
 %type <val> expr_value expr_value_do arg_value primary_value rel_expr
 %type <val> fcall
 %type <val> if_tail opt_else case_body case_args cases opt_rescue exc_list exc_var opt_ensure
-%type <val> args call_args opt_call_args
+%type <val> args arg_splat call_args opt_call_args
 %type <val> paren_args opt_paren_args
 %type <val> args_tail opt_args_tail block_args_tail opt_block_args_tail
 %type <val> command_args aref_args
@@ -2694,7 +2696,7 @@ def_name	: fname
 
 defn_head	: k_def def_name
                     {
-                        $$ = $k_def;
+                        $$ = def_head_save(p, $k_def);
                         $$->nd_mid = $def_name;
 #if 0
                         $$->nd_def = NEW_DEFN($def_name, 0, &@$);
@@ -2712,7 +2714,7 @@ defs_head	: k_def singleton dot_or_colon
                   def_name
                     {
                         SET_LEX_STATE(EXPR_ENDFN|EXPR_LABEL); /* force for args */
-                        $$ = $k_def;
+                        $$ = def_head_save(p, $k_def);
                         $$->nd_mid = $def_name;
 #if 0
                         $$->nd_def = NEW_DEFS($singleton, $def_name, 0, &@$);
@@ -3755,9 +3757,7 @@ block_arg	: tAMPER arg_value
                     }
                 | tAMPER
                     {
-                        if (!local_id(p, idFWD_BLOCK)) {
-                            compile_error(p, "no anonymous block parameter");
-                        }
+                        forwarding_arg_check(p, idFWD_BLOCK, 0, "block");
 #if 0
                         $$ = NEW_BLOCK_PASS(NEW_LVAR(idFWD_BLOCK, &@1), &@$);
 #endif
@@ -3783,23 +3783,12 @@ args		: arg_value
 #endif
 			{VALUE v1,v2,v3,v4;v1=dispatch0(args_new);v2=v1;v3=$1;v4=dispatch2(args_add,v2,v3);$$=v4;}
                     }
-                | tSTAR arg_value
+                | arg_splat
                     {
 #if 0
-                        $$ = NEW_SPLAT($2, &@$);
+                        $$ = NEW_SPLAT($arg_splat, &@$);
 #endif
-			{VALUE v1,v2,v3,v4;v1=dispatch0(args_new);v2=v1;v3=$2;v4=dispatch2(args_add_star,v2,v3);$$=v4;}
-                    }
-                | tSTAR
-                    {
-                        if (!local_id(p, idFWD_REST) ||
-                            local_id(p, idFWD_ALL)) {
-                            compile_error(p, "no anonymous rest parameter");
-                        }
-#if 0
-                        $$ = NEW_SPLAT(NEW_LVAR(idFWD_REST, &@1), &@$);
-#endif
-			{VALUE v1,v2,v3,v4;v1=dispatch0(args_new);v2=v1;v3=Qnil;v4=dispatch2(args_add_star,v2,v3);$$=v4;}
+			{VALUE v1,v2,v3,v4;v1=dispatch0(args_new);v2=v1;v3=$arg_splat;v4=dispatch2(args_add_star,v2,v3);$$=v4;}
                     }
                 | args ',' arg_value
                     {
@@ -3808,23 +3797,27 @@ args		: arg_value
 #endif
 			{VALUE v1,v2,v3;v1=$1;v2=$3;v3=dispatch2(args_add,v1,v2);$$=v3;}
                     }
-                | args ',' tSTAR arg_value
+                | args ',' arg_splat
                     {
 #if 0
-                        $$ = rest_arg_append(p, $1, $4, &@$);
+                        $$ = rest_arg_append(p, $args, $arg_splat, &@$);
 #endif
-			{VALUE v1,v2,v3;v1=$1;v2=$4;v3=dispatch2(args_add_star,v1,v2);$$=v3;}
+			{VALUE v1,v2,v3;v1=$args;v2=$arg_splat;v3=dispatch2(args_add_star,v1,v2);$$=v3;}
                     }
-                | args ',' tSTAR
+                ;
+
+/* value */
+arg_splat	: tSTAR arg_value
                     {
-                        if (!local_id(p, idFWD_REST) ||
-                            local_id(p, idFWD_ALL)) {
-                            compile_error(p, "no anonymous rest parameter");
-                        }
+                        $$ = $2;
+                    }
+                | tSTAR /* none */
+                    {
+                        forwarding_arg_check(p, idFWD_REST, idFWD_ALL, "rest");
 #if 0
-                        $$ = rest_arg_append(p, $1, NEW_LVAR(idFWD_REST, &@3), &@$);
+                        $$ = NEW_LVAR(idFWD_REST, &@1);
 #endif
-			{VALUE v1,v2,v3;v1=$1;v2=Qnil;v3=dispatch2(args_add_star,v1,v2);$$=v3;}
+			$$=Qnil;
                     }
                 ;
 
@@ -6692,10 +6685,7 @@ assoc		: arg_value tASSOC arg_value
                     }
                 | tDSTAR
                     {
-                        if (!local_id(p, idFWD_KWREST) ||
-                            local_id(p, idFWD_ALL)) {
-                            compile_error(p, "no anonymous keyword rest parameter");
-                        }
+                        forwarding_arg_check(p, idFWD_KWREST, idFWD_ALL, "keyword rest");
 #if 0
                         $$ = list_append(p, NEW_LIST(0, &@$),
                                          NEW_LVAR(idFWD_KWREST, &@$));
@@ -12260,8 +12250,8 @@ rb_node_def_temp_new(struct parser_params *p, const YYLTYPE *loc)
 {
     rb_node_def_temp_t *n = NODE_NEWNODE((enum node_type)NODE_DEF_TEMP, rb_node_def_temp_t, loc);
     n->save.cur_arg = p->cur_arg;
-    n->save.numparam_save = numparam_push(p);
-    n->save.max_numparam = p->max_numparam;
+    n->save.numparam_save = 0;
+    n->save.max_numparam = 0;
     n->save.ctxt = p->ctxt;
 #ifdef RIPPER
     n->nd_recv = Qnil;
@@ -12272,6 +12262,14 @@ rb_node_def_temp_new(struct parser_params *p, const YYLTYPE *loc)
     n->nd_mid = 0;
 #endif
 
+    return n;
+}
+
+static rb_node_def_temp_t *
+def_head_save(struct parser_params *p, rb_node_def_temp_t *n)
+{
+    n->save.numparam_save = numparam_push(p);
+    n->save.max_numparam = p->max_numparam;
     return n;
 }
 
@@ -15006,6 +15004,40 @@ add_forwarding_args(struct parser_params *p)
 #endif
     arg_var(p, idFWD_BLOCK);
     arg_var(p, idFWD_ALL);
+}
+
+static void
+forwarding_arg_check(struct parser_params *p, ID arg, ID all, const char *var)
+{
+    bool conflict = false;
+
+    struct vtable *vars, *args;
+
+    vars = p->lvtbl->vars;
+    args = p->lvtbl->args;
+
+    while (vars && !DVARS_TERMINAL_P(vars->prev)) {
+        vars = vars->prev;
+        args = args->prev;
+        conflict |= (vtable_included(args, arg) && !(all && vtable_included(args, all)));
+    }
+
+    bool found = false;
+    if (vars && vars->prev == DVARS_INHERIT) {
+        found = (rb_local_defined(arg, p->parent_iseq) &&
+                 !(all && rb_local_defined(all, p->parent_iseq)));
+    }
+    else {
+        found = (vtable_included(args, arg) &&
+                 !(all && vtable_included(args, all)));
+    }
+
+    if (!found) {
+        compile_error(p, "no anonymous %s parameter", var);
+    }
+    else if (conflict) {
+        compile_error(p, "anonymous %s parameter is also used within block", var);
+    }
 }
 
 #ifndef RIPPER

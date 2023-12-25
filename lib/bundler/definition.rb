@@ -342,7 +342,11 @@ module Bundler
 
       preserve_unknown_sections ||= !updating_major && (Bundler.frozen_bundle? || !(unlocking? || @unlocking_bundler))
 
-      return if file && File.exist?(file) && lockfiles_equal?(@lockfile_contents, contents, preserve_unknown_sections)
+      if file && File.exist?(file) && lockfiles_equal?(@lockfile_contents, contents, preserve_unknown_sections)
+        return if Bundler.frozen_bundle?
+        SharedHelpers.filesystem_access(file) { FileUtils.touch(file) }
+        return
+      end
 
       if Bundler.frozen_bundle?
         Bundler.ui.error "Cannot write a changed lockfile while frozen."
@@ -492,7 +496,15 @@ module Bundler
     private :sources
 
     def nothing_changed?
-      !@source_changes && !@dependency_changes && !@new_platform && !@path_changes && !@local_changes && !@missing_lockfile_dep && !@unlocking_bundler && !@invalid_lockfile_dep
+      !@source_changes &&
+        !@dependency_changes &&
+        !@new_platform &&
+        !@path_changes &&
+        !@local_changes &&
+        !@missing_lockfile_dep &&
+        !@unlocking_bundler &&
+        !@locked_spec_with_missing_deps &&
+        !@locked_spec_with_invalid_deps
     end
 
     def no_resolve_needed?
@@ -649,7 +661,8 @@ module Bundler
         [@local_changes, "the gemspecs for git local gems changed"],
         [@missing_lockfile_dep, "your lock file is missing \"#{@missing_lockfile_dep}\""],
         [@unlocking_bundler, "an update to the version of Bundler itself was requested"],
-        [@invalid_lockfile_dep, "your lock file has an invalid dependency \"#{@invalid_lockfile_dep}\""],
+        [@locked_spec_with_missing_deps, "your lock file includes \"#{@locked_spec_with_missing_deps}\" but not some of its dependencies"],
+        [@locked_spec_with_invalid_deps, "your lockfile does not satisfy dependencies of \"#{@locked_spec_with_invalid_deps}\""],
       ].select(&:first).map(&:last).join(", ")
     end
 
@@ -704,26 +717,25 @@ module Bundler
     end
 
     def check_lockfile
-      @invalid_lockfile_dep = nil
       @missing_lockfile_dep = nil
 
-      locked_names = @locked_specs.map(&:name)
+      @locked_spec_with_invalid_deps = nil
+      @locked_spec_with_missing_deps = nil
+
       missing = []
       invalid = []
 
       @locked_specs.each do |s|
-        s.dependencies.each do |dep|
-          next if dep.name == "bundler"
+        validation = @locked_specs.validate_deps(s)
 
-          missing << s unless locked_names.include?(dep.name)
-          invalid << s if @locked_specs.none? {|spec| dep.matches_spec?(spec) }
-        end
+        missing << s if validation == :missing
+        invalid << s if validation == :invalid
       end
 
       if missing.any?
         @locked_specs.delete(missing)
 
-        @missing_lockfile_dep = missing.first.name
+        @locked_spec_with_missing_deps = missing.first.name
       elsif !@dependency_changes
         @missing_lockfile_dep = current_dependencies.find do |d|
           @locked_specs[d.name].empty? && d.name != "bundler"
@@ -733,7 +745,7 @@ module Bundler
       if invalid.any?
         @locked_specs.delete(invalid)
 
-        @invalid_lockfile_dep = invalid.first.name
+        @locked_spec_with_invalid_deps = invalid.first.name
       end
     end
 

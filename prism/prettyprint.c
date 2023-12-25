@@ -1039,6 +1039,11 @@ prettyprint_node(pm_buffer_t *output_buffer, const pm_parser_t *parser, const pm
                     pm_buffer_append_string(output_buffer, " variable_call", 14);
                     found = true;
                 }
+                if (cast->base.flags & PM_CALL_NODE_FLAGS_ATTRIBUTE_WRITE) {
+                    if (found) pm_buffer_append_byte(output_buffer, ',');
+                    pm_buffer_append_string(output_buffer, " attribute_write", 16);
+                    found = true;
+                }
                 if (!found) pm_buffer_append_string(output_buffer, " \xe2\x88\x85", 4);
                 pm_buffer_append_byte(output_buffer, '\n');
             }
@@ -1156,6 +1161,11 @@ prettyprint_node(pm_buffer_t *output_buffer, const pm_parser_t *parser, const pm
                 if (cast->base.flags & PM_CALL_NODE_FLAGS_VARIABLE_CALL) {
                     if (found) pm_buffer_append_byte(output_buffer, ',');
                     pm_buffer_append_string(output_buffer, " variable_call", 14);
+                    found = true;
+                }
+                if (cast->base.flags & PM_CALL_NODE_FLAGS_ATTRIBUTE_WRITE) {
+                    if (found) pm_buffer_append_byte(output_buffer, ',');
+                    pm_buffer_append_string(output_buffer, " attribute_write", 16);
                     found = true;
                 }
                 if (!found) pm_buffer_append_string(output_buffer, " \xe2\x88\x85", 4);
@@ -1309,6 +1319,11 @@ prettyprint_node(pm_buffer_t *output_buffer, const pm_parser_t *parser, const pm
                     pm_buffer_append_string(output_buffer, " variable_call", 14);
                     found = true;
                 }
+                if (cast->base.flags & PM_CALL_NODE_FLAGS_ATTRIBUTE_WRITE) {
+                    if (found) pm_buffer_append_byte(output_buffer, ',');
+                    pm_buffer_append_string(output_buffer, " attribute_write", 16);
+                    found = true;
+                }
                 if (!found) pm_buffer_append_string(output_buffer, " \xe2\x88\x85", 4);
                 pm_buffer_append_byte(output_buffer, '\n');
             }
@@ -1437,6 +1452,11 @@ prettyprint_node(pm_buffer_t *output_buffer, const pm_parser_t *parser, const pm
                     pm_buffer_append_string(output_buffer, " variable_call", 14);
                     found = true;
                 }
+                if (cast->base.flags & PM_CALL_NODE_FLAGS_ATTRIBUTE_WRITE) {
+                    if (found) pm_buffer_append_byte(output_buffer, ',');
+                    pm_buffer_append_string(output_buffer, " attribute_write", 16);
+                    found = true;
+                }
                 if (!found) pm_buffer_append_string(output_buffer, " \xe2\x88\x85", 4);
                 pm_buffer_append_byte(output_buffer, '\n');
             }
@@ -1531,6 +1551,84 @@ prettyprint_node(pm_buffer_t *output_buffer, const pm_parser_t *parser, const pm
                 pm_buffer_concat(output_buffer, prefix_buffer);
                 prettyprint_node(output_buffer, parser, (pm_node_t *) cast->value, prefix_buffer);
                 prefix_buffer->length = prefix_length;
+            }
+
+            break;
+        }
+        case PM_CALL_TARGET_NODE: {
+            pm_call_target_node_t *cast = (pm_call_target_node_t *) node;
+            pm_buffer_append_string(output_buffer, "@ CallTargetNode (location: ", 28);
+            prettyprint_location(output_buffer, parser, &node->location);
+            pm_buffer_append_string(output_buffer, ")\n", 2);
+
+            // flags
+            {
+                pm_buffer_concat(output_buffer, prefix_buffer);
+                pm_buffer_append_string(output_buffer, "\xe2\x94\x9c\xe2\x94\x80\xe2\x94\x80 flags:", 16);
+                bool found = false;
+                if (cast->base.flags & PM_CALL_NODE_FLAGS_SAFE_NAVIGATION) {
+                    if (found) pm_buffer_append_byte(output_buffer, ',');
+                    pm_buffer_append_string(output_buffer, " safe_navigation", 16);
+                    found = true;
+                }
+                if (cast->base.flags & PM_CALL_NODE_FLAGS_VARIABLE_CALL) {
+                    if (found) pm_buffer_append_byte(output_buffer, ',');
+                    pm_buffer_append_string(output_buffer, " variable_call", 14);
+                    found = true;
+                }
+                if (cast->base.flags & PM_CALL_NODE_FLAGS_ATTRIBUTE_WRITE) {
+                    if (found) pm_buffer_append_byte(output_buffer, ',');
+                    pm_buffer_append_string(output_buffer, " attribute_write", 16);
+                    found = true;
+                }
+                if (!found) pm_buffer_append_string(output_buffer, " \xe2\x88\x85", 4);
+                pm_buffer_append_byte(output_buffer, '\n');
+            }
+
+            // receiver
+            {
+                pm_buffer_concat(output_buffer, prefix_buffer);
+                pm_buffer_append_string(output_buffer, "\xe2\x94\x9c\xe2\x94\x80\xe2\x94\x80 receiver:", 19);
+                pm_buffer_append_byte(output_buffer, '\n');
+
+                size_t prefix_length = prefix_buffer->length;
+                pm_buffer_append_string(prefix_buffer, "\xe2\x94\x82   ", 6);
+                pm_buffer_concat(output_buffer, prefix_buffer);
+                prettyprint_node(output_buffer, parser, (pm_node_t *) cast->receiver, prefix_buffer);
+                prefix_buffer->length = prefix_length;
+            }
+
+            // call_operator_loc
+            {
+                pm_buffer_concat(output_buffer, prefix_buffer);
+                pm_buffer_append_string(output_buffer, "\xe2\x94\x9c\xe2\x94\x80\xe2\x94\x80 call_operator_loc:", 28);
+                pm_location_t *location = &cast->call_operator_loc;
+                pm_buffer_append_byte(output_buffer, ' ');
+                prettyprint_location(output_buffer, parser, location);
+                pm_buffer_append_string(output_buffer, " = \"", 4);
+                prettyprint_source(output_buffer, location->start, (size_t) (location->end - location->start));
+                pm_buffer_append_string(output_buffer, "\"\n", 2);
+            }
+
+            // name
+            {
+                pm_buffer_concat(output_buffer, prefix_buffer);
+                pm_buffer_append_string(output_buffer, "\xe2\x94\x9c\xe2\x94\x80\xe2\x94\x80 name:", 15);
+                pm_buffer_append_byte(output_buffer, ' ');
+                prettyprint_constant(output_buffer, parser, cast->name);
+                pm_buffer_append_byte(output_buffer, '\n');
+            }
+
+            // message_loc
+            {
+                pm_buffer_concat(output_buffer, prefix_buffer);
+                pm_buffer_append_string(output_buffer, "\xe2\x94\x94\xe2\x94\x80\xe2\x94\x80 message_loc:", 22);
+                pm_location_t *location = &cast->message_loc;
+                pm_buffer_append_byte(output_buffer, ' ');
+                prettyprint_location(output_buffer, parser, location);
+                pm_buffer_append_string(output_buffer, " = \"", 4);
+                prettyprint_source(output_buffer, location->start, (size_t) (location->end - location->start));
+                pm_buffer_append_string(output_buffer, "\"\n", 2);
             }
 
             break;
@@ -4120,6 +4218,11 @@ prettyprint_node(pm_buffer_t *output_buffer, const pm_parser_t *parser, const pm
                     pm_buffer_append_string(output_buffer, " variable_call", 14);
                     found = true;
                 }
+                if (cast->base.flags & PM_CALL_NODE_FLAGS_ATTRIBUTE_WRITE) {
+                    if (found) pm_buffer_append_byte(output_buffer, ',');
+                    pm_buffer_append_string(output_buffer, " attribute_write", 16);
+                    found = true;
+                }
                 if (!found) pm_buffer_append_string(output_buffer, " \xe2\x88\x85", 4);
                 pm_buffer_append_byte(output_buffer, '\n');
             }
@@ -4261,6 +4364,11 @@ prettyprint_node(pm_buffer_t *output_buffer, const pm_parser_t *parser, const pm
                 if (cast->base.flags & PM_CALL_NODE_FLAGS_VARIABLE_CALL) {
                     if (found) pm_buffer_append_byte(output_buffer, ',');
                     pm_buffer_append_string(output_buffer, " variable_call", 14);
+                    found = true;
+                }
+                if (cast->base.flags & PM_CALL_NODE_FLAGS_ATTRIBUTE_WRITE) {
+                    if (found) pm_buffer_append_byte(output_buffer, ',');
+                    pm_buffer_append_string(output_buffer, " attribute_write", 16);
                     found = true;
                 }
                 if (!found) pm_buffer_append_string(output_buffer, " \xe2\x88\x85", 4);
@@ -4415,6 +4523,11 @@ prettyprint_node(pm_buffer_t *output_buffer, const pm_parser_t *parser, const pm
                     pm_buffer_append_string(output_buffer, " variable_call", 14);
                     found = true;
                 }
+                if (cast->base.flags & PM_CALL_NODE_FLAGS_ATTRIBUTE_WRITE) {
+                    if (found) pm_buffer_append_byte(output_buffer, ',');
+                    pm_buffer_append_string(output_buffer, " attribute_write", 16);
+                    found = true;
+                }
                 if (!found) pm_buffer_append_string(output_buffer, " \xe2\x88\x85", 4);
                 pm_buffer_append_byte(output_buffer, '\n');
             }
@@ -4533,6 +4646,109 @@ prettyprint_node(pm_buffer_t *output_buffer, const pm_parser_t *parser, const pm
                 pm_buffer_concat(output_buffer, prefix_buffer);
                 prettyprint_node(output_buffer, parser, (pm_node_t *) cast->value, prefix_buffer);
                 prefix_buffer->length = prefix_length;
+            }
+
+            break;
+        }
+        case PM_INDEX_TARGET_NODE: {
+            pm_index_target_node_t *cast = (pm_index_target_node_t *) node;
+            pm_buffer_append_string(output_buffer, "@ IndexTargetNode (location: ", 29);
+            prettyprint_location(output_buffer, parser, &node->location);
+            pm_buffer_append_string(output_buffer, ")\n", 2);
+
+            // flags
+            {
+                pm_buffer_concat(output_buffer, prefix_buffer);
+                pm_buffer_append_string(output_buffer, "\xe2\x94\x9c\xe2\x94\x80\xe2\x94\x80 flags:", 16);
+                bool found = false;
+                if (cast->base.flags & PM_CALL_NODE_FLAGS_SAFE_NAVIGATION) {
+                    if (found) pm_buffer_append_byte(output_buffer, ',');
+                    pm_buffer_append_string(output_buffer, " safe_navigation", 16);
+                    found = true;
+                }
+                if (cast->base.flags & PM_CALL_NODE_FLAGS_VARIABLE_CALL) {
+                    if (found) pm_buffer_append_byte(output_buffer, ',');
+                    pm_buffer_append_string(output_buffer, " variable_call", 14);
+                    found = true;
+                }
+                if (cast->base.flags & PM_CALL_NODE_FLAGS_ATTRIBUTE_WRITE) {
+                    if (found) pm_buffer_append_byte(output_buffer, ',');
+                    pm_buffer_append_string(output_buffer, " attribute_write", 16);
+                    found = true;
+                }
+                if (!found) pm_buffer_append_string(output_buffer, " \xe2\x88\x85", 4);
+                pm_buffer_append_byte(output_buffer, '\n');
+            }
+
+            // receiver
+            {
+                pm_buffer_concat(output_buffer, prefix_buffer);
+                pm_buffer_append_string(output_buffer, "\xe2\x94\x9c\xe2\x94\x80\xe2\x94\x80 receiver:", 19);
+                pm_buffer_append_byte(output_buffer, '\n');
+
+                size_t prefix_length = prefix_buffer->length;
+                pm_buffer_append_string(prefix_buffer, "\xe2\x94\x82   ", 6);
+                pm_buffer_concat(output_buffer, prefix_buffer);
+                prettyprint_node(output_buffer, parser, (pm_node_t *) cast->receiver, prefix_buffer);
+                prefix_buffer->length = prefix_length;
+            }
+
+            // opening_loc
+            {
+                pm_buffer_concat(output_buffer, prefix_buffer);
+                pm_buffer_append_string(output_buffer, "\xe2\x94\x9c\xe2\x94\x80\xe2\x94\x80 opening_loc:", 22);
+                pm_location_t *location = &cast->opening_loc;
+                pm_buffer_append_byte(output_buffer, ' ');
+                prettyprint_location(output_buffer, parser, location);
+                pm_buffer_append_string(output_buffer, " = \"", 4);
+                prettyprint_source(output_buffer, location->start, (size_t) (location->end - location->start));
+                pm_buffer_append_string(output_buffer, "\"\n", 2);
+            }
+
+            // arguments
+            {
+                pm_buffer_concat(output_buffer, prefix_buffer);
+                pm_buffer_append_string(output_buffer, "\xe2\x94\x9c\xe2\x94\x80\xe2\x94\x80 arguments:", 20);
+                if (cast->arguments == NULL) {
+                    pm_buffer_append_string(output_buffer, " \xe2\x88\x85\n", 5);
+                } else {
+                    pm_buffer_append_byte(output_buffer, '\n');
+
+                    size_t prefix_length = prefix_buffer->length;
+                    pm_buffer_append_string(prefix_buffer, "\xe2\x94\x82   ", 6);
+                    pm_buffer_concat(output_buffer, prefix_buffer);
+                    prettyprint_node(output_buffer, parser, (pm_node_t *) cast->arguments, prefix_buffer);
+                    prefix_buffer->length = prefix_length;
+                }
+            }
+
+            // closing_loc
+            {
+                pm_buffer_concat(output_buffer, prefix_buffer);
+                pm_buffer_append_string(output_buffer, "\xe2\x94\x9c\xe2\x94\x80\xe2\x94\x80 closing_loc:", 22);
+                pm_location_t *location = &cast->closing_loc;
+                pm_buffer_append_byte(output_buffer, ' ');
+                prettyprint_location(output_buffer, parser, location);
+                pm_buffer_append_string(output_buffer, " = \"", 4);
+                prettyprint_source(output_buffer, location->start, (size_t) (location->end - location->start));
+                pm_buffer_append_string(output_buffer, "\"\n", 2);
+            }
+
+            // block
+            {
+                pm_buffer_concat(output_buffer, prefix_buffer);
+                pm_buffer_append_string(output_buffer, "\xe2\x94\x94\xe2\x94\x80\xe2\x94\x80 block:", 16);
+                if (cast->block == NULL) {
+                    pm_buffer_append_string(output_buffer, " \xe2\x88\x85\n", 5);
+                } else {
+                    pm_buffer_append_byte(output_buffer, '\n');
+
+                    size_t prefix_length = prefix_buffer->length;
+                    pm_buffer_append_string(prefix_buffer, "    ", 4);
+                    pm_buffer_concat(output_buffer, prefix_buffer);
+                    prettyprint_node(output_buffer, parser, (pm_node_t *) cast->block, prefix_buffer);
+                    prefix_buffer->length = prefix_length;
+                }
             }
 
             break;
@@ -5267,6 +5483,20 @@ prettyprint_node(pm_buffer_t *output_buffer, const pm_parser_t *parser, const pm
             pm_buffer_append_string(output_buffer, "@ KeywordHashNode (location: ", 29);
             prettyprint_location(output_buffer, parser, &node->location);
             pm_buffer_append_string(output_buffer, ")\n", 2);
+
+            // flags
+            {
+                pm_buffer_concat(output_buffer, prefix_buffer);
+                pm_buffer_append_string(output_buffer, "\xe2\x94\x9c\xe2\x94\x80\xe2\x94\x80 flags:", 16);
+                bool found = false;
+                if (cast->base.flags & PM_KEYWORD_HASH_NODE_FLAGS_STATIC_KEYS) {
+                    if (found) pm_buffer_append_byte(output_buffer, ',');
+                    pm_buffer_append_string(output_buffer, " static_keys", 12);
+                    found = true;
+                }
+                if (!found) pm_buffer_append_string(output_buffer, " \xe2\x88\x85", 4);
+                pm_buffer_append_byte(output_buffer, '\n');
+            }
 
             // elements
             {

@@ -2993,8 +2993,7 @@ ruby_vm_destruct(rb_vm_t *vm)
     if (vm) {
         rb_thread_t *th = vm->ractor.main_thread;
         VALUE *stack = th->ec->vm_stack;
-        if (rb_free_on_exit) {
-            rb_free_default_rand_key();
+        if (rb_free_at_exit) {
             rb_free_encoded_insn_data();
             rb_free_global_enc_table();
             rb_free_loaded_builtin_table();
@@ -3006,9 +3005,6 @@ ruby_vm_destruct(rb_vm_t *vm)
             rb_free_warning();
             rb_free_rb_global_tbl();
             rb_free_loaded_features_index(vm);
-            rb_ractor_t *r = vm->ractor.main_ractor;
-            xfree(r->sync.recv_queue.baskets);
-            xfree(r->sync.takers_queue.baskets);
 
             rb_id_table_free(vm->negative_cme_table);
             st_free_table(vm->overloaded_cme_table);
@@ -3056,11 +3052,12 @@ ruby_vm_destruct(rb_vm_t *vm)
         }
         RB_ALTSTACK_FREE(vm->main_altstack);
         if (objspace) {
-            if (rb_free_on_exit) {
+            if (rb_free_at_exit) {
                 rb_objspace_free_objects(objspace);
                 rb_free_generic_iv_tbl_();
-                if (th) {
-                    xfree(th->ractor);
+                rb_free_default_rand_key();
+                if (th && vm->fork_gen == 0) {
+                    /* If we have forked, main_thread may not be the initial thread */
                     xfree(stack);
                     ruby_mimfree(th);
                 }
@@ -3765,6 +3762,7 @@ f_sprintf(int c, const VALUE *v, VALUE _)
     return rb_f_sprintf(c, v);
 }
 
+/* :nodoc: */
 static VALUE
 vm_mtbl(VALUE self, VALUE obj, VALUE sym)
 {
@@ -3772,6 +3770,7 @@ vm_mtbl(VALUE self, VALUE obj, VALUE sym)
     return Qnil;
 }
 
+/* :nodoc: */
 static VALUE
 vm_mtbl2(VALUE self, VALUE obj, VALUE sym)
 {
@@ -4260,6 +4259,14 @@ rb_ruby_verbose_ptr(void)
     return &cr->verbose;
 }
 
+static bool prism;
+
+bool *
+rb_ruby_prism_ptr(void)
+{
+    return &prism;
+}
+
 VALUE *
 rb_ruby_debug_ptr(void)
 {
@@ -4267,7 +4274,7 @@ rb_ruby_debug_ptr(void)
     return &cr->debug;
 }
 
-bool rb_free_on_exit = false;
+bool rb_free_at_exit = false;
 
 /* iseq.c */
 VALUE rb_insn_operand_intern(const rb_iseq_t *iseq,

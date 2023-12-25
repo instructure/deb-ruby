@@ -287,6 +287,19 @@ class TestRubyOptions < Test::Unit::TestCase
     end
   end
 
+  def test_parser_flag
+    warning = /compiler based on the Prism parser is currently experimental/
+
+    assert_in_out_err(%w(--parser=prism -e) + ["puts :hi"], "", %w(hi), warning)
+
+    assert_in_out_err(%w(--parser=parse.y -e) + ["puts :hi"], "", %w(hi), [])
+    assert_norun_with_rflag('--parser=parse.y', '--version', "")
+
+    assert_in_out_err(%w(--parser=notreal -e) + ["puts :hi"], "", [], /unknown parser notreal/)
+
+    assert_in_out_err(%w(--parser=prism --version), "", /\+PRISM/, warning)
+  end
+
   def test_eval
     assert_in_out_err(%w(-e), "", [], /no code specified for -e \(RuntimeError\)/)
   end
@@ -1228,9 +1241,9 @@ class TestRubyOptions < Test::Unit::TestCase
     assert_in_out_err([IO::NULL], success: true)
   end
 
-  def test_free_on_exit_env_var
-    env = {"RUBY_FREE_ON_EXIT"=>"1"}
+  def test_free_at_exit_env_var
+    env = {"RUBY_FREE_AT_EXIT"=>"1"}
     assert_ruby_status([env, "-e;"])
-    assert_in_out_err([env, "-W"], "", [], /Free on exit is experimental and may be unstable/)
+    assert_in_out_err([env, "-W"], "", [], /Free at exit is experimental and may be unstable/)
   end
 end

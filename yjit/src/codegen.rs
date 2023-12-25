@@ -4395,7 +4395,7 @@ fn jit_rb_kernel_is_a(
     let sample_rhs = jit.peek_at_stack(&asm.ctx, 0);
     let sample_lhs = jit.peek_at_stack(&asm.ctx, 1);
 
-    // We are not allowing module here because the module hierachy can change at runtime.
+    // We are not allowing module here because the module hierarchy can change at runtime.
     if !unsafe { RB_TYPE_P(sample_rhs, RUBY_T_CLASS) } {
         return false;
     }
@@ -5720,15 +5720,15 @@ fn get_array_ptr(asm: &mut Assembler, array_reg: Opnd) -> Opnd {
 }
 
 /// Pushes arguments from an array to the stack. Differs from push splat because
-/// the array can have items left over.
-fn move_rest_args_to_stack(array: Opnd, num_args: u32, asm: &mut Assembler) {
-    asm_comment!(asm, "move_rest_args_to_stack");
+/// the array can have items left over. Array is assumed to be T_ARRAY without guards.
+fn copy_splat_args_for_rest_callee(array: Opnd, num_args: u32, asm: &mut Assembler) {
+    asm_comment!(asm, "copy_splat_args_for_rest_callee");
 
     let array_len_opnd = get_array_len(asm, array);
 
-    asm_comment!(asm, "Side exit if length is less than required");
+    asm_comment!(asm, "guard splat array large enough");
     asm.cmp(array_len_opnd, num_args.into());
-    asm.jl(Target::side_exit(Counter::guard_send_iseq_has_rest_and_splat_not_equal));
+    asm.jl(Target::side_exit(Counter::guard_send_iseq_has_rest_and_splat_too_few));
 
     // Unused operands cause the backend to panic
     if num_args == 0 {
@@ -6116,13 +6116,18 @@ fn gen_send_iseq(
             unsafe { rb_yjit_array_len(array) as u32}
         };
 
-        if opt_num == 0 && required_num != array_length as i32 + argc - 1 && !iseq_has_rest {
-            gen_counter_incr(asm, Counter::send_iseq_splat_arity_error);
-            return None;
+        // Arity check accounting for size of the splat. When callee has rest parameters, we insert
+        // runtime guards later in copy_splat_args_for_rest_callee()
+        if !iseq_has_rest {
+            let supplying = argc - 1 + array_length as i32;
+            if (required_num..=required_num + opt_num).contains(&supplying) == false {
+                gen_counter_incr(asm, Counter::send_iseq_splat_arity_error);
+                return None;
+            }
         }
 
         if iseq_has_rest && opt_num > 0 {
-            // If we have a rest and option arugments
+            // If we have a rest and option arguments
             // we are going to set the pc_offset for where
             // to jump in the called method.
             // If the number of args change, that would need to
@@ -6158,7 +6163,7 @@ fn gen_send_iseq(
     assert_eq!(opts_missing + opts_filled, opt_num);
     assert!(opts_filled >= 0);
 
-    // ISeq with optional paramters start at different
+    // ISeq with optional parameters start at different
     // locations depending on the number of optionals given.
     if opt_num > 0 {
         assert!(opts_filled >= 0);
@@ -6364,8 +6369,8 @@ fn gen_send_iseq(
                 let diff: u32 = (required_num - non_rest_arg_count + opts_filled)
                     .try_into().unwrap();
 
-                // This moves the arguments onto the stack. But it doesn't modify the array.
-                move_rest_args_to_stack(array, diff, asm);
+                // Copy required arguments to the stack without modifying the array
+                copy_splat_args_for_rest_callee(array, diff, asm);
 
                 // We will now slice the array to give us a new array of the correct size
                 let sliced = asm.ccall(rb_yjit_rb_ary_subseq_length as *const u8, vec![array, Opnd::UImm(diff as u64)]);

@@ -24,7 +24,7 @@ void Init_builtin_yjit(void)
     RB_BUILTIN_FUNCTION(1, rb_yjit_stats_enabled_p, rb_yjit_stats_enabled_p, 0),
     RB_BUILTIN_FUNCTION(2, rb_yjit_trace_exit_locations_enabled_p, rb_yjit_trace_exit_locations_enabled_p, 0),
     RB_BUILTIN_FUNCTION(3, rb_yjit_reset_stats_bang, rb_yjit_reset_stats_bang, 0),
-    RB_BUILTIN_FUNCTION(4, rb_yjit_enable, rb_yjit_enable, 0),
+    RB_BUILTIN_FUNCTION(4, rb_yjit_enable, rb_yjit_enable, 2),
     RB_BUILTIN_FUNCTION(5, rb_yjit_get_exit_locations, rb_yjit_get_exit_locations, 0),
     RB_BUILTIN_FUNCTION(6, rb_yjit_get_stats, rb_yjit_get_stats, 1),
     RB_BUILTIN_FUNCTION(7, object_shape_count, object_shape_count, 0),
@@ -45,7 +45,7 @@ COMPILER_WARNING_ERROR(-Wincompatible-pointer-types)
   if (0) rb_builtin_function_check_arity0(rb_yjit_stats_enabled_p);
   if (0) rb_builtin_function_check_arity0(rb_yjit_trace_exit_locations_enabled_p);
   if (0) rb_builtin_function_check_arity0(rb_yjit_reset_stats_bang);
-  if (0) rb_builtin_function_check_arity0(rb_yjit_enable);
+  if (0) rb_builtin_function_check_arity2(rb_yjit_enable);
   if (0) rb_builtin_function_check_arity0(rb_yjit_get_exit_locations);
   if (0) rb_builtin_function_check_arity1(rb_yjit_get_stats);
   if (0) rb_builtin_function_check_arity0(object_shape_count);

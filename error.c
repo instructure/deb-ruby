@@ -1066,6 +1066,7 @@ rb_bug_for_fatal_signal(ruby_sighandler_t default_sighandler, int sig, const voi
 
     if (default_sighandler) default_sighandler(sig);
 
+    ruby_default_signal(sig);
     die();
 }
 
@@ -3060,7 +3061,7 @@ syserr_eqq(VALUE self, VALUE exc)
  *
  *  <em>raises the exception:</em>
  *
- *     NoMethodError: undefined method `to_ary' for "hello":String
+ *     NoMethodError: undefined method `to_ary' for an instance of String
  */
 
 /*

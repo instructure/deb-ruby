@@ -190,7 +190,7 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 1961 "parse.y"
+#line 1963 "parse.y"
 
     VALUE val;
     NODE *node;

@@ -17,7 +17,7 @@ require_relative "bundler/build_metadata"
 # Bundler provides a consistent environment for Ruby projects by
 # tracking and installing the exact gems and versions that are needed.
 #
-# Since Ruby 2.6, Bundler is a part of Ruby's standard library.
+# Bundler is a part of Ruby's standard library.
 #
 # Bundler is used by creating _gemfiles_ listing all the project dependencies
 # and (optionally) their versions and then using
@@ -100,9 +100,7 @@ module Bundler
     end
 
     def create_bundle_path
-      SharedHelpers.filesystem_access(bundle_path.to_s) do |p|
-        mkdir_p(p)
-      end unless bundle_path.exist?
+      mkdir_p(bundle_path) unless bundle_path.exist?
 
       @bundle_path = bundle_path.realpath
     rescue Errno::EEXIST
@@ -119,7 +117,7 @@ module Bundler
       @bin_path ||= begin
         path = settings[:bin] || "bin"
         path = Pathname.new(path).expand_path(root).expand_path
-        SharedHelpers.filesystem_access(path) {|p| FileUtils.mkdir_p(p) }
+        mkdir_p(path)
         path
       end
     end
@@ -483,7 +481,7 @@ module Bundler
       configured_bundle_path.use_system_gems?
     end
 
-    def mkdir_p(path, options = {})
+    def mkdir_p(path)
       SharedHelpers.filesystem_access(path, :write) do |p|
         FileUtils.mkdir_p(p)
       end

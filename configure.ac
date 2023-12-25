@@ -89,7 +89,7 @@ AS_IF([test "$HAVE_BASERUBY" != no -a "`RUBYOPT=- $BASERUBY --disable=gems -e 'p
 ])
 AS_IF([test "$HAVE_BASERUBY" = no], [
     AS_IF([test "$cross_compiling" = yes], [AC_MSG_ERROR([executable host ruby is required for cross-compiling])])
-    BASERUBY="echo executable host ruby is required.  use --with-baseruby option.; false"
+    BASERUBY=$srcdir/tool/missing-baseruby.bat
 ])
 AC_SUBST(BASERUBY)
 AC_SUBST(HAVE_BASERUBY)
@@ -461,7 +461,7 @@ AC_SUBST(CC_VERSION_MESSAGE, $cc_version_message)
 : ${DLDFLAGS="$LDFLAGS"}
 
 RUBY_UNIVERSAL_ARCH
-AS_IF([test "$target_cpu" != "$host_cpu" -a "$GCC" = yes -a "$cross_compiling" = no -a "${universal_binary:-no}" = no], [
+AS_IF([test "$target_cpu" != "$host_cpu" -a "$GCC" = yes -a "${universal_binary:-no}" = no], [
     RUBY_DEFAULT_ARCH("$target_cpu")
 ])
 host_os=$target_os
@@ -1352,6 +1352,7 @@ AC_CHECK_HEADERS(time.h)
 AC_CHECK_HEADERS(ucontext.h)
 AC_CHECK_HEADERS(utime.h)
 AC_CHECK_HEADERS(sys/epoll.h)
+AC_CHECK_HEADERS(sys/event.h)
 
 AS_CASE("$target_cpu", [x64|x86_64|i[3-6]86*], [
   AC_CHECK_HEADERS(x86intrin.h)
@@ -3916,47 +3917,40 @@ AC_SUBST(CARGO_BUILD_ARGS)dnl for selecting Rust build profiles
 AC_SUBST(YJIT_LIBS)dnl for optionally building the Rust parts of YJIT
 AC_SUBST(YJIT_OBJ)dnl for optionally building the C parts of YJIT
 
-dnl Currently, RJIT only supports Unix x86_64 platforms.
+dnl RJIT supports only x86_64 platforms, but allows arm64/aarch64 for custom JITs.
 RJIT_TARGET_OK=no
 AS_IF([test "$cross_compiling" = no],
     AS_CASE(["$target_cpu-$target_os"],
         [*android*], [
             RJIT_TARGET_OK=no
         ],
-        [x86_64-darwin*], [
+        [arm64-darwin*|aarch64-darwin*|x86_64-darwin*], [
             RJIT_TARGET_OK=yes
         ],
-        [x86_64-*linux*], [
+        [arm64-*linux*|aarch64-*linux*|x86_64-*linux*], [
             RJIT_TARGET_OK=yes
         ],
-        [x86_64-*bsd*], [
+        [arm64-*bsd*|aarch64-*bsd*|x86_64-*bsd*], [
             RJIT_TARGET_OK=yes
         ]
     )
 )
 
-dnl Build RJIT on Unix x86_64 platforms or if --enable-rjit is specified.
+dnl Build RJIT on supported platforms or if --enable-rjit is specified.
 AC_ARG_ENABLE(rjit,
     AS_HELP_STRING([--enable-rjit],
     [enable pure-Ruby JIT compiler. enabled by default on Unix x86_64 platforms]),
     [RJIT_SUPPORT=$enableval],
-    [AS_CASE(["$YJIT_TARGET_OK"],
+    [AS_CASE(["$RJIT_TARGET_OK"],
         [yes], [RJIT_SUPPORT=yes],
         [RJIT_SUPPORT=no]
     )]
 )
 
 AS_CASE(["$RJIT_SUPPORT"],
-[yes|dev|disasm], [
+[yes|dev], [
     AS_CASE(["$RJIT_SUPPORT"],
     [dev], [
-        # Link libcapstone for --rjit-dump-disasm
-        AC_CHECK_LIB([capstone], [cs_disasm])
-
-        # Enable extra stats (vm_insns_count, ratio_in_rjit)
-        AC_DEFINE(RJIT_STATS, 1)
-    ],
-    [disasm], [
         # Link libcapstone for --rjit-dump-disasm
         AC_CHECK_LIB([capstone], [cs_disasm])
     ])

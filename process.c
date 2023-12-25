@@ -576,7 +576,6 @@ proc_get_ppid(VALUE _)
  *    stat = $?       # => #<Process::Status: pid 1262862 exit 99>
  *    stat.class      # => Process::Status
  *    stat.to_i       # => 25344
- *    stat >> 8       # => 99
  *    stat.stopped?   # => false
  *    stat.exited?    # => true
  *    stat.exitstatus # => 99
@@ -878,7 +877,9 @@ pst_equal(VALUE st1, VALUE st2)
  *  call-seq:
  *    stat & mask -> integer
  *
- *  This method is deprecated; use other attribute methods.
+ *  This method is deprecated as #to_i value is system-specific; use
+ *  predicate methods like #exited? or #stopped?, or getters like #exitstatus
+ *  or #stopsig.
  *
  *  Returns the logical AND of the value of #to_i with +mask+:
  *
@@ -930,7 +931,9 @@ pst_bitand(VALUE st1, VALUE st2)
  *  call-seq:
  *    stat >> places -> integer
  *
- *  This method is deprecated; use other predicate methods.
+ *  This method is deprecated as #to_i value is system-specific; use
+ *  predicate methods like #exited? or #stopped?, or getters like #exitstatus
+ *  or #stopsig.
  *
  *  Returns the value of #to_i, shifted +places+ to the right:
  *
@@ -3350,6 +3353,13 @@ run_exec_dup2(VALUE ary, VALUE tmpbuf, struct rb_execarg *sargp, char *errmsg, s
             if (extra_fd == -1) {
                 ERRMSG("dup");
                 goto fail;
+            }
+            // without this, kqueue timer_th.event_fd fails with a reserved FD did not have close-on-exec
+            //   in #assert_close_on_exec because the FD_CLOEXEC is not dup'd by default
+            if (fd_get_cloexec(pairs[i].oldfd, errmsg, errmsg_buflen)) {
+                if (fd_set_cloexec(extra_fd, errmsg, errmsg_buflen)) {
+                    goto fail;
+                }
             }
             rb_update_max_fd(extra_fd);
         }

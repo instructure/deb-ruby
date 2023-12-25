@@ -164,6 +164,15 @@ module Prism
       assert_equal expr.closing, ""
     end
 
+    def test_unterminated_empty_string
+      expr = expression('"')
+      assert_errors expr, '"', [
+        ["expected a closing delimiter for the string literal", 1..1]
+      ]
+      assert_equal expr.unescaped, ""
+      assert_equal expr.closing, ""
+    end
+
     def test_incomplete_instance_var_string
       assert_errors expression('%@#@@#'), '%@#@@#', [
         ["incomplete instance variable", 4..5],
@@ -358,7 +367,7 @@ module Prism
         Location(),
         Location(),
         ArgumentsNode(1, [
-          KeywordHashNode([AssocSplatNode(expression("kwargs"), Location())]),
+          KeywordHashNode(0, [AssocSplatNode(expression("kwargs"), Location())]),
           SplatNode(Location(), expression("args"))
         ]),
         Location(),
@@ -405,13 +414,13 @@ module Prism
         Location(),
         Location(),
         ArgumentsNode(0, [
-          KeywordHashNode(
-            [AssocNode(
+          KeywordHashNode(1, [
+            AssocNode(
               SymbolNode(0, nil, Location(), Location(), "foo"),
               expression("bar"),
               nil
-            )]
-          ),
+            )
+          ]),
           SplatNode(Location(), expression("args"))
         ]),
         Location(),
@@ -1971,10 +1980,54 @@ module Prism
       end
     end
 
+    def test_range_and_bin_op
+      sources = <<~RUBY.lines
+        1..2..3
+        1..2..
+        1.. || 2
+        1.. & 2
+        1.. * 2
+        1.. / 2
+        1.. % 2
+        1.. ** 2
+      RUBY
+      sources.each do |source|
+        assert_nil Ripper.sexp_raw(source)
+        assert_false(Prism.parse(source).success?)
+      end
+    end
+
     def test_constant_assignment_in_method
       source = 'def foo();A=1;end'
       assert_errors expression(source), source, [
         ['dynamic constant assignment', 10..13]
+      ]
+    end
+
+    def test_non_assoc_equality
+      source = <<~RUBY
+        1 == 2 == 3
+        1 != 2 != 3
+        1 === 2 === 3
+        1 =~ 2 =~ 3
+        1 !~ 2 !~ 3
+        1 <=> 2 <=> 3
+      RUBY
+      message1 = 'expected a newline or semicolon after the statement'
+      message2 = 'cannot parse the expression'
+      assert_errors expression(source), source, [
+        [message1, 6..6],
+        [message2, 6..6],
+        [message1, 18..18],
+        [message2, 18..18],
+        [message1, 31..31],
+        [message2, 31..31],
+        [message1, 44..44],
+        [message2, 44..44],
+        [message1, 56..56],
+        [message2, 56..56],
+        [message1, 69..69],
+        [message2, 69..69],
       ]
     end
 
