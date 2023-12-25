@@ -27,6 +27,7 @@ libruby-3.3.so.3.3 libruby3.3 #MINVER#
  dln_find_exe_r@Base 3.3.0~preview1
  dln_find_file_r@Base 3.3.0~preview1
  dln_load@Base 3.3.0~preview1
+ dln_symbol@Base 3.3.0
  onig_add_end_call@Base 3.3.0~preview1
  onig_bbuf_init@Base 3.3.0~preview1
  onig_check_linear_time@Base 3.3.0~preview1
@@ -652,6 +653,7 @@ libruby-3.3.so.3.3 libruby3.3 #MINVER#
  rb_execarg_setenv@Base 3.3.0~preview1
  rb_exit@Base 3.3.0~preview1
  rb_ext_ractor_safe@Base 3.3.0~preview1
+ rb_ext_resolve_symbol@Base 3.3.0
  rb_extend_object@Base 3.3.0~preview1
  rb_external_str_new@Base 3.3.0~preview1
  rb_external_str_new_cstr@Base 3.3.0~preview1
@@ -857,6 +859,7 @@ libruby-3.3.so.3.3 libruby3.3 #MINVER#
  rb_imemo_name@Base 3.3.0~preview1
  rb_imemo_new@Base 3.3.0~preview1
  rb_include_module@Base 3.3.0~preview1
+ rb_init_ractor_selector@Base 3.3.0
  rb_inspect@Base 3.3.0~preview1
  rb_int2big@Base 3.3.0~preview1
  rb_int2inum@Base 3.3.0~preview1
@@ -1585,6 +1588,7 @@ libruby-3.3.so.3.3 libruby3.3 #MINVER#
  rb_thread_fd_select@Base 3.3.0~preview1
  rb_thread_fd_writable@Base 3.3.0~preview1
  rb_thread_interrupted@Base 3.3.0~preview1
+ rb_thread_io_blocking_call@Base 3.3.0
  rb_thread_io_blocking_region@Base 3.3.0~preview1
  rb_thread_kill@Base 3.3.0~preview1
  rb_thread_local_aref@Base 3.3.0~preview1
@@ -1719,7 +1723,6 @@ libruby-3.3.so.3.3 libruby3.3 #MINVER#
  rb_yjit_tracing_invalidate_all@Base 3.3.0~preview1
  rb_yytnamerr@Base 3.3.0~preview1
  ruby_Init_Continuation_body@Base 3.3.0~preview1
- ruby_abi_version@Base 3.3.0~preview1
  ruby_api_version@Base 3.3.0~preview1
  ruby_brace_glob@Base 3.3.0~preview1
  ruby_cleanup@Base 3.3.0~preview1
