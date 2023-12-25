@@ -1,3 +1,9 @@
+ruby3.3 (3.3.0-1ppa2) focal; urgency=medium
+
+  * Refresh patches
+
+ -- Jacob Burroughs <jburroughs@instructure.com>  Mon, 25 Dec 2023 10:49:14 -0600
+
 ruby3.3 (3.3.0-1ppa1) focal; urgency=medium
 
   * New upstream version 3.3.0
