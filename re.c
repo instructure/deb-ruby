@@ -450,7 +450,7 @@ rb_reg_expr_str(VALUE str, const char *s, long len,
 }
 
 static VALUE
-rb_reg_desc(const char *s, long len, VALUE re)
+rb_reg_desc(VALUE re)
 {
     rb_encoding *enc = rb_enc_get(re);
     VALUE str = rb_str_buf_new2("/");
@@ -463,7 +463,11 @@ rb_reg_desc(const char *s, long len, VALUE re)
     else {
         rb_enc_associate(str, rb_usascii_encoding());
     }
-    rb_reg_expr_str(str, s, len, enc, resenc, '/');
+
+    VALUE src_str = RREGEXP_SRC(re);
+    rb_reg_expr_str(str, RSTRING_PTR(src_str), RSTRING_LEN(src_str), enc, resenc, '/');
+    RB_GC_GUARD(src_str);
+
     rb_str_buf_cat2(str, "/");
     if (re) {
         char opts[OPTBUF_SIZE];
@@ -522,7 +526,7 @@ rb_reg_inspect(VALUE re)
     if (!RREGEXP_PTR(re) || !RREGEXP_SRC(re) || !RREGEXP_SRC_PTR(re)) {
         return rb_any_to_s(re);
     }
-    return rb_reg_desc(RREGEXP_SRC_PTR(re), RREGEXP_SRC_LEN(re), re);
+    return rb_reg_desc(re);
 }
 
 static VALUE rb_reg_str_with_term(VALUE re, int term);
@@ -565,8 +569,6 @@ rb_reg_str_with_term(VALUE re, int term)
 {
     int options, opt;
     const int embeddable = ONIG_OPTION_MULTILINE|ONIG_OPTION_IGNORECASE|ONIG_OPTION_EXTEND;
-    long len;
-    const UChar* ptr;
     VALUE str = rb_str_buf_new2("(?");
     char optbuf[OPTBUF_SIZE + 1]; /* for '-' */
     rb_encoding *enc = rb_enc_get(re);
@@ -575,8 +577,9 @@ rb_reg_str_with_term(VALUE re, int term)
 
     rb_enc_copy(str, re);
     options = RREGEXP_PTR(re)->options;
-    ptr = (UChar*)RREGEXP_SRC_PTR(re);
-    len = RREGEXP_SRC_LEN(re);
+    VALUE src_str = RREGEXP_SRC(re);
+    const UChar *ptr = (UChar *)RSTRING_PTR(src_str);
+    long len = RSTRING_LEN(src_str);
   again:
     if (len >= 4 && ptr[0] == '(' && ptr[1] == '?') {
         int err = 1;
@@ -666,15 +669,17 @@ rb_reg_str_with_term(VALUE re, int term)
     }
     rb_enc_copy(str, re);
 
+    RB_GC_GUARD(src_str);
+
     return str;
 }
 
-NORETURN(static void rb_reg_raise(const char *s, long len, const char *err, VALUE re));
+NORETURN(static void rb_reg_raise(const char *err, VALUE re));
 
 static void
-rb_reg_raise(const char *s, long len, const char *err, VALUE re)
+rb_reg_raise(const char *err, VALUE re)
 {
-    VALUE desc = rb_reg_desc(s, len, re);
+    VALUE desc = rb_reg_desc(re);
 
     rb_raise(rb_eRegexpError, "%s: %"PRIsVALUE, err, desc);
 }
@@ -1580,7 +1585,6 @@ rb_reg_prepare_re(VALUE re, VALUE str)
 {
     int r;
     OnigErrorInfo einfo;
-    const char *pattern;
     VALUE unescaped;
     rb_encoding *fixed_enc = 0;
     rb_encoding *enc = rb_reg_prepare_enc(re, str, 1);
@@ -1589,11 +1593,13 @@ rb_reg_prepare_re(VALUE re, VALUE str)
     if (reg->enc == enc) return reg;
 
     rb_reg_check(re);
-    pattern = RREGEXP_SRC_PTR(re);
+
+    VALUE src_str = RREGEXP_SRC(re);
+    const char *pattern = RSTRING_PTR(src_str);
 
     onig_errmsg_buffer err = "";
     unescaped = rb_reg_preprocess(
-        pattern, pattern + RREGEXP_SRC_LEN(re), enc,
+        pattern, pattern + RSTRING_LEN(src_str), enc,
         &fixed_enc, err, 0);
 
     if (NIL_P(unescaped)) {
@@ -1632,12 +1638,13 @@ rb_reg_prepare_re(VALUE re, VALUE str)
 
     if (r) {
         onig_error_code_to_str((UChar*)err, r, &einfo);
-        rb_reg_raise(pattern, RREGEXP_SRC_LEN(re), err, re);
+        rb_reg_raise(err, re);
     }
 
     reg->timelimit = timelimit;
 
     RB_GC_GUARD(unescaped);
+    RB_GC_GUARD(src_str);
     return reg;
 }
 
@@ -1664,7 +1671,7 @@ rb_reg_onig_match(VALUE re, VALUE str,
         if (result != ONIG_MISMATCH) {
             onig_errmsg_buffer err = "";
             onig_error_code_to_str((UChar*)err, (int)result);
-            rb_reg_raise(RREGEXP_SRC_PTR(re), RREGEXP_SRC_LEN(re), err, re);
+            rb_reg_raise(err, re);
         }
     }
 
@@ -2151,6 +2158,17 @@ match_ary_aref(VALUE match, VALUE idx, VALUE result)
  *    m['foo'] # => "h"
  *    m[:bar]  # => "ge"
  *
+ *  If multiple captures have the same name, returns the last matched
+ *  substring.
+ *
+ *    m = /(?<foo>.)(?<foo>.+)/.match("hoge")
+ *    # => #<MatchData "hoge" foo:"h" foo:"oge">
+ *    m[:foo] #=> "oge"
+ *
+ *    m = /\W(?<foo>.+)|\w(?<foo>.+)|(?<foo>.+)/.match("hoge")
+ *    #<MatchData "hoge" foo:nil foo:"oge" foo:nil>
+ *    m[:foo] #=> "oge"
+ *
  */
 
 static VALUE
@@ -2334,8 +2352,8 @@ match_named_captures_iter(const OnigUChar *name, const OnigUChar *name_end,
  *    # => #<MatchData "01" a:"0" a:"1">
  *    m.named_captures #=> {"a" => "1"}
  *
- * If keyword argument +symbolize_names+ is given
- * a true value, the keys in the resulting hash are Symbols:
+ *  If keyword argument +symbolize_names+ is given
+ *  a true value, the keys in the resulting hash are Symbols:
  *
  *    m = /(?<a>.)(?<a>.)/.match("01")
  *    # => #<MatchData "01" a:"0" a:"1">

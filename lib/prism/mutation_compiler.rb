@@ -115,6 +115,11 @@ module Prism
       node.copy(receiver: visit(node.receiver), value: visit(node.value))
     end
 
+    # Copy a CallTargetNode node
+    def visit_call_target_node(node)
+      node.copy(receiver: visit(node.receiver))
+    end
+
     # Copy a CapturePatternNode node
     def visit_capture_pattern_node(node)
       node.copy(value: visit(node.value), target: visit(node.target))
@@ -373,6 +378,11 @@ module Prism
     # Copy a IndexOrWriteNode node
     def visit_index_or_write_node(node)
       node.copy(receiver: visit(node.receiver), arguments: visit(node.arguments), block: visit(node.block), value: visit(node.value))
+    end
+
+    # Copy a IndexTargetNode node
+    def visit_index_target_node(node)
+      node.copy(receiver: visit(node.receiver), arguments: visit(node.arguments), block: visit(node.block))
     end
 
     # Copy a InstanceVariableAndWriteNode node

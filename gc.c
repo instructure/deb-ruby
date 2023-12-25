@@ -1342,6 +1342,9 @@ int ruby_gc_debug_indent = 0;
 VALUE rb_mGC;
 int ruby_disable_gc = 0;
 int ruby_enable_autocompact = 0;
+#if RGENGC_CHECK_MODE
+gc_compact_compare_func ruby_autocompact_compare_func;
+#endif
 
 void rb_iseq_mark_and_move(rb_iseq_t *iseq, bool referece_updating);
 void rb_iseq_free(const rb_iseq_t *iseq);
@@ -4426,16 +4429,20 @@ run_finalizer(rb_objspace_t *objspace, VALUE obj, VALUE table)
         VALUE objid;
         VALUE final;
         rb_control_frame_t *cfp;
+        VALUE *sp;
         long finished;
     } saved;
+
     rb_execution_context_t * volatile ec = GET_EC();
 #define RESTORE_FINALIZER() (\
         ec->cfp = saved.cfp, \
+        ec->cfp->sp = saved.sp, \
         ec->errinfo = saved.errinfo)
 
     saved.errinfo = ec->errinfo;
     saved.objid = rb_obj_id(obj);
     saved.cfp = ec->cfp;
+    saved.sp = ec->cfp->sp;
     saved.finished = 0;
     saved.final = Qundef;
 
@@ -4565,6 +4572,12 @@ gc_abort(rb_objspace_t *objspace)
         }
     }
 
+    for (int i = 0; i < SIZE_POOL_COUNT; i++) {
+        rb_size_pool_t *size_pool = &size_pools[i];
+        rb_heap_t *heap = SIZE_POOL_EDEN_HEAP(size_pool);
+        rgengc_mark_and_rememberset_clear(objspace, heap);
+    }
+
     gc_mode_set(objspace, gc_mode_none);
 }
 
@@ -4601,8 +4614,8 @@ rb_objspace_free_objects(rb_objspace_t *objspace)
             VALUE vp = (VALUE)p;
             switch (BUILTIN_TYPE(vp)) {
               case T_DATA: {
-                if (rb_obj_is_mutex(vp) || rb_obj_is_thread(vp)) {
-                    rb_data_free(objspace, vp);
+                if (rb_obj_is_mutex(vp) || rb_obj_is_thread(vp) || rb_obj_is_main_ractor(vp)) {
+                    obj_free(objspace, vp);
                 }
                 break;
               }
@@ -4676,19 +4689,17 @@ rb_objspace_call_finalizer(rb_objspace_t *objspace)
                 if (rb_obj_is_fiber(vp)) break;
                 if (rb_obj_is_main_ractor(vp)) break;
 
-                rb_data_free(objspace, vp);
+                obj_free(objspace, vp);
                 break;
               case T_FILE:
-                if (RANY(p)->as.file.fptr) {
-                    make_io_zombie(objspace, vp);
-                }
+                obj_free(objspace, vp);
                 break;
               case T_SYMBOL:
               case T_ARRAY:
               case T_NONE:
                 break;
               default:
-                if (rb_free_on_exit) {
+                if (rb_free_at_exit) {
                     obj_free(objspace, vp);
                 }
                 break;
@@ -5387,7 +5398,9 @@ try_move(rb_objspace_t *objspace, rb_heap_t *heap, struct heap_page *free_page, 
          * full */
         return false;
     }
+    asan_unlock_freelist(free_page);
     free_page->freelist = RANY(dest)->as.free.next;
+    asan_lock_freelist(free_page);
 
     GC_ASSERT(RB_BUILTIN_TYPE(dest) == T_NONE);
 
@@ -7073,6 +7086,7 @@ gc_pin(rb_objspace_t *objspace, VALUE obj)
     if (UNLIKELY(objspace->flags.during_compacting)) {
         if (LIKELY(during_gc)) {
             if (!MARKED_IN_BITMAP(GET_HEAP_PINNED_BITS(obj), obj)) {
+                GC_ASSERT(GET_HEAP_PAGE(obj)->pinned_slots <= GET_HEAP_PAGE(obj)->total_slots);
                 GET_HEAP_PAGE(obj)->pinned_slots++;
                 MARK_IN_BITMAP(GET_HEAP_PINNED_BITS(obj), obj);
             }
@@ -7430,7 +7444,7 @@ gc_mark_children(rb_objspace_t *objspace, VALUE obj)
                 if (RTYPEDDATA_P(obj) && gc_declarative_marking_p(any->as.typeddata.type)) {
                     size_t *offset_list = (size_t *)RANY(obj)->as.typeddata.type->function.dmark;
 
-                    for (size_t offset = *offset_list; *offset_list != RUBY_REF_END; offset = *offset_list++) {
+                    for (size_t offset = *offset_list; offset != RUBY_REF_END; offset = *offset_list++) {
                         rb_gc_mark_movable(*(VALUE *)((char *)ptr + offset));
                     }
                 }
@@ -8327,6 +8341,14 @@ gc_marks_start(rb_objspace_t *objspace, int full_mark)
             rb_heap_t *heap = SIZE_POOL_EDEN_HEAP(size_pool);
             rgengc_mark_and_rememberset_clear(objspace, heap);
             heap_move_pooled_pages_to_free_pages(heap);
+
+            if (objspace->flags.during_compacting) {
+                struct heap_page *page = NULL;
+
+                ccan_list_for_each(&heap->pages, page, page_node) {
+                    page->pinned_slots = 0;
+                }
+            }
         }
     }
     else {
@@ -9530,6 +9552,9 @@ gc_start(rb_objspace_t *objspace, unsigned int reason)
     /* Explicitly enable compaction (GC.compact) */
     if (do_full_mark && ruby_enable_autocompact) {
         objspace->flags.during_compacting = TRUE;
+#if RGENGC_CHECK_MODE
+        objspace->rcompactor.compare_func = ruby_autocompact_compare_func;
+#endif
     }
     else {
         objspace->flags.during_compacting = !!(reason & GPR_FLAG_COMPACT);
@@ -10733,8 +10758,7 @@ gc_update_object_references(rb_objspace_t *objspace, VALUE obj)
         break;
 
       case T_ICLASS:
-        if (FL_TEST(obj, RICLASS_IS_ORIGIN) &&
-                !FL_TEST(obj, RICLASS_ORIGIN_SHARED_MTBL)) {
+        if (RICLASS_OWNS_M_TBL_P(obj)) {
             update_m_tbl(objspace, RCLASS_M_TBL(obj));
         }
         if (RCLASS_SUPER((VALUE)obj)) {
@@ -10790,7 +10814,7 @@ gc_update_object_references(rb_objspace_t *objspace, VALUE obj)
                 if (RTYPEDDATA_P(obj) && gc_declarative_marking_p(any->as.typeddata.type)) {
                     size_t *offset_list = (size_t *)RANY(obj)->as.typeddata.type->function.dmark;
 
-                    for (size_t offset = *offset_list; *offset_list != RUBY_REF_END; offset = *offset_list++) {
+                    for (size_t offset = *offset_list; offset != RUBY_REF_END; offset = *offset_list++) {
                         VALUE *ref = (VALUE *)((char *)ptr + offset);
                         if (SPECIAL_CONST_P(*ref)) continue;
                         *ref = rb_gc_location(*ref);
@@ -11865,6 +11889,18 @@ gc_set_auto_compact(VALUE _, VALUE v)
     GC_ASSERT(GC_COMPACTION_SUPPORTED);
 
     ruby_enable_autocompact = RTEST(v);
+
+#if RGENGC_CHECK_MODE
+    ruby_autocompact_compare_func = NULL;
+
+    if (SYMBOL_P(v)) {
+        ID id = RB_SYM2ID(v);
+        if (id == rb_intern("empty")) {
+            ruby_autocompact_compare_func = compare_free_slots;
+        }
+    }
+#endif
+
     return v;
 }
 #else

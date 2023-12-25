@@ -22,7 +22,7 @@
         │   ├── opening_loc: (1,0)-(1,1) = "["
         │   └── closing_loc: (1,3)-(1,4) = "]"
         ├── @ CallNode (location: (3,0)-(3,23))
-        │   ├── flags: ∅
+        │   ├── flags: attribute_write
         │   ├── receiver:
         │   │   @ CallNode (location: (3,0)-(3,3))
         │   │   ├── flags: variable_call
@@ -79,6 +79,7 @@
         │   ├── flags: ∅
         │   ├── elements: (length: 1)
         │   │   └── @ KeywordHashNode (location: (5,1)-(5,12))
+        │   │       ├── flags: static_keys
         │   │       └── elements: (length: 1)
         │   │           └── @ AssocNode (location: (5,1)-(5,12))
         │   │               ├── key:
@@ -175,6 +176,7 @@
         │   ├── flags: ∅
         │   ├── elements: (length: 1)
         │   │   └── @ KeywordHashNode (location: (28,1)-(28,11))
+        │   │       ├── flags: ∅
         │   │       └── elements: (length: 1)
         │   │           └── @ AssocNode (location: (28,1)-(28,11))
         │   │               ├── key:
@@ -203,7 +205,7 @@
         │   ├── opening_loc: (28,0)-(28,1) = "["
         │   └── closing_loc: (28,11)-(28,12) = "]"
         ├── @ CallNode (location: (30,0)-(30,19))
-        │   ├── flags: ∅
+        │   ├── flags: attribute_write
         │   ├── receiver:
         │   │   @ CallNode (location: (30,0)-(30,8))
         │   │   ├── flags: ∅
@@ -373,7 +375,7 @@
         │   ├── closing_loc: (37,12)-(37,13) = "]"
         │   └── block: ∅
         ├── @ CallNode (location: (39,0)-(39,19))
-        │   ├── flags: ∅
+        │   ├── flags: attribute_write
         │   ├── receiver:
         │   │   @ CallNode (location: (39,0)-(39,3))
         │   │   ├── flags: variable_call
@@ -427,7 +429,7 @@
         │   └── block: ∅
         ├── @ MultiWriteNode (location: (41,0)-(41,21))
         │   ├── lefts: (length: 2)
-        │   │   ├── @ CallNode (location: (41,0)-(41,6))
+        │   │   ├── @ IndexTargetNode (location: (41,0)-(41,6))
         │   │   │   ├── flags: ∅
         │   │   │   ├── receiver:
         │   │   │   │   @ CallNode (location: (41,0)-(41,3))
@@ -440,9 +442,6 @@
         │   │   │   │   ├── arguments: ∅
         │   │   │   │   ├── closing_loc: ∅
         │   │   │   │   └── block: ∅
-        │   │   │   ├── call_operator_loc: ∅
-        │   │   │   ├── name: :[]=
-        │   │   │   ├── message_loc: (41,3)-(41,6) = "[0]"
         │   │   │   ├── opening_loc: (41,3)-(41,4) = "["
         │   │   │   ├── arguments:
         │   │   │   │   @ ArgumentsNode (location: (41,4)-(41,5))
@@ -452,7 +451,7 @@
         │   │   │   │           └── flags: decimal
         │   │   │   ├── closing_loc: (41,5)-(41,6) = "]"
         │   │   │   └── block: ∅
-        │   │   └── @ CallNode (location: (41,8)-(41,14))
+        │   │   └── @ IndexTargetNode (location: (41,8)-(41,14))
         │   │       ├── flags: ∅
         │   │       ├── receiver:
         │   │       │   @ CallNode (location: (41,8)-(41,11))
@@ -465,9 +464,6 @@
         │   │       │   ├── arguments: ∅
         │   │       │   ├── closing_loc: ∅
         │   │       │   └── block: ∅
-        │   │       ├── call_operator_loc: ∅
-        │   │       ├── name: :[]=
-        │   │       ├── message_loc: (41,11)-(41,14) = "[0]"
         │   │       ├── opening_loc: (41,11)-(41,12) = "["
         │   │       ├── arguments:
         │   │       │   @ ArgumentsNode (location: (41,12)-(41,13))
@@ -514,7 +510,7 @@
         │   │   ├── flags: ∅
         │   │   └── arguments: (length: 1)
         │   │       └── @ CallNode (location: (43,4)-(43,18))
-        │   │           ├── flags: ∅
+        │   │           ├── flags: attribute_write
         │   │           ├── receiver:
         │   │           │   @ CallNode (location: (43,4)-(43,7))
         │   │           │   ├── flags: variable_call
@@ -592,7 +588,7 @@
         │   ├── closing_loc: (45,7)-(45,8) = "]"
         │   └── block: ∅
         ├── @ CallNode (location: (47,0)-(47,14))
-        │   ├── flags: ∅
+        │   ├── flags: attribute_write
         │   ├── receiver:
         │   │   @ CallNode (location: (47,0)-(47,3))
         │   │   ├── flags: variable_call
@@ -638,6 +634,7 @@
         │   ├── flags: ∅
         │   ├── elements: (length: 1)
         │   │   └── @ KeywordHashNode (location: (49,1)-(49,5))
+        │   │       ├── flags: ∅
         │   │       └── elements: (length: 1)
         │   │           └── @ AssocSplatNode (location: (49,1)-(49,5))
         │   │               ├── value:
@@ -652,6 +649,7 @@
         │   ├── flags: ∅
         │   ├── elements: (length: 1)
         │   │   └── @ KeywordHashNode (location: (51,1)-(51,5))
+        │   │       ├── flags: ∅
         │   │       └── elements: (length: 1)
         │   │           └── @ AssocSplatNode (location: (51,1)-(51,5))
         │   │               ├── value:
@@ -674,6 +672,7 @@
         │   │   ├── @ IntegerNode (location: (53,1)-(53,2))
         │   │   │   └── flags: decimal
         │   │   └── @ KeywordHashNode (location: (53,4)-(53,8))
+        │   │       ├── flags: ∅
         │   │       └── elements: (length: 1)
         │   │           └── @ AssocSplatNode (location: (53,4)-(53,8))
         │   │               ├── value:
@@ -696,6 +695,7 @@
         │   │   ├── @ IntegerNode (location: (55,1)-(55,2))
         │   │   │   └── flags: decimal
         │   │   └── @ KeywordHashNode (location: (55,4)-(55,20))
+        │   │       ├── flags: ∅
         │   │       └── elements: (length: 3)
         │   │           ├── @ AssocSplatNode (location: (55,4)-(55,8))
         │   │           │   ├── value:
@@ -736,6 +736,7 @@
         │   ├── flags: ∅
         │   ├── elements: (length: 1)
         │   │   └── @ KeywordHashNode (location: (58,2)-(58,12))
+        │   │       ├── flags: ∅
         │   │       └── elements: (length: 1)
         │   │           └── @ AssocNode (location: (58,2)-(58,12))
         │   │               ├── key:
@@ -931,7 +932,7 @@
         │   ├── opening_loc: (82,0)-(82,3) = "%w["
         │   └── closing_loc: (82,6)-(82,7) = "]"
         ├── @ CallNode (location: (84,0)-(84,13))
-        │   ├── flags: ∅
+        │   ├── flags: attribute_write
         │   ├── receiver:
         │   │   @ CallNode (location: (84,0)-(84,3))
         │   │   ├── flags: variable_call
@@ -969,7 +970,7 @@
         │       │   └── block: ∅
         │       └── operator_loc: (84,4)-(84,5) = "&"
         ├── @ CallNode (location: (86,0)-(86,17))
-        │   ├── flags: ∅
+        │   ├── flags: attribute_write
         │   ├── receiver:
         │   │   @ CallNode (location: (86,0)-(86,7))
         │   │   ├── flags: ∅
@@ -1037,7 +1038,7 @@
         │   │   @ StatementsNode (location: (89,2)-(89,12))
         │   │   └── body: (length: 1)
         │   │       └── @ CallNode (location: (89,2)-(89,12))
-        │   │           ├── flags: ∅
+        │   │           ├── flags: attribute_write
         │   │           ├── receiver:
         │   │           │   @ CallNode (location: (89,2)-(89,5))
         │   │           │   ├── flags: variable_call
@@ -1929,7 +1930,7 @@
         │   │   @ StatementsNode (location: (132,10)-(132,18))
         │   │   └── body: (length: 1)
         │   │       └── @ CallNode (location: (132,10)-(132,18))
-        │   │           ├── flags: ∅
+        │   │           ├── flags: attribute_write
         │   │           ├── receiver:
         │   │           │   @ CallNode (location: (132,10)-(132,11))
         │   │           │   ├── flags: variable_call
@@ -1985,7 +1986,7 @@
         │   │   @ StatementsNode (location: (134,10)-(134,21))
         │   │   └── body: (length: 1)
         │   │       └── @ CallNode (location: (134,10)-(134,21))
-        │   │           ├── flags: ∅
+        │   │           ├── flags: attribute_write
         │   │           ├── receiver:
         │   │           │   @ CallNode (location: (134,10)-(134,11))
         │   │           │   ├── flags: variable_call
@@ -2164,7 +2165,7 @@
         │   │   │   ├── exceptions: (length: 0)
         │   │   │   ├── operator_loc: (140,17)-(140,19) = "=>"
         │   │   │   ├── reference:
-        │   │   │   │   @ CallNode (location: (140,20)-(140,24))
+        │   │   │   │   @ IndexTargetNode (location: (140,20)-(140,24))
         │   │   │   │   ├── flags: ∅
         │   │   │   │   ├── receiver:
         │   │   │   │   │   @ CallNode (location: (140,20)-(140,21))
@@ -2177,9 +2178,6 @@
         │   │   │   │   │   ├── arguments: ∅
         │   │   │   │   │   ├── closing_loc: ∅
         │   │   │   │   │   └── block: ∅
-        │   │   │   │   ├── call_operator_loc: ∅
-        │   │   │   │   ├── name: :[]=
-        │   │   │   │   ├── message_loc: (140,21)-(140,24) = "[*]"
         │   │   │   │   ├── opening_loc: (140,21)-(140,22) = "["
         │   │   │   │   ├── arguments:
         │   │   │   │   │   @ ArgumentsNode (location: (140,22)-(140,23))
@@ -2230,7 +2228,7 @@
             │   │   ├── exceptions: (length: 0)
             │   │   ├── operator_loc: (142,17)-(142,19) = "=>"
             │   │   ├── reference:
-            │   │   │   @ CallNode (location: (142,20)-(142,27))
+            │   │   │   @ IndexTargetNode (location: (142,20)-(142,27))
             │   │   │   ├── flags: ∅
             │   │   │   ├── receiver:
             │   │   │   │   @ CallNode (location: (142,20)-(142,21))
@@ -2243,9 +2241,6 @@
             │   │   │   │   ├── arguments: ∅
             │   │   │   │   ├── closing_loc: ∅
             │   │   │   │   └── block: ∅
-            │   │   │   ├── call_operator_loc: ∅
-            │   │   │   ├── name: :[]=
-            │   │   │   ├── message_loc: (142,21)-(142,27) = "[1, *]"
             │   │   │   ├── opening_loc: (142,21)-(142,22) = "["
             │   │   │   ├── arguments:
             │   │   │   │   @ ArgumentsNode (location: (142,22)-(142,26))

@@ -147,6 +147,11 @@ module Prism
       CallOrWriteNode.new(flags, receiver, call_operator_loc, message_loc, read_name, write_name, operator_loc, value, location)
     end
 
+    # Create a new CallTargetNode node
+    def CallTargetNode(flags, receiver, call_operator_loc, name, message_loc, location = Location())
+      CallTargetNode.new(flags, receiver, call_operator_loc, name, message_loc, location)
+    end
+
     # Create a new CapturePatternNode node
     def CapturePatternNode(value, target, operator_loc, location = Location())
       CapturePatternNode.new(value, target, operator_loc, location)
@@ -407,6 +412,11 @@ module Prism
       IndexOrWriteNode.new(flags, receiver, call_operator_loc, opening_loc, arguments, closing_loc, block, operator_loc, value, location)
     end
 
+    # Create a new IndexTargetNode node
+    def IndexTargetNode(flags, receiver, opening_loc, arguments, closing_loc, block, location = Location())
+      IndexTargetNode.new(flags, receiver, opening_loc, arguments, closing_loc, block, location)
+    end
+
     # Create a new InstanceVariableAndWriteNode node
     def InstanceVariableAndWriteNode(name, name_loc, operator_loc, value, location = Location())
       InstanceVariableAndWriteNode.new(name, name_loc, operator_loc, value, location)
@@ -468,8 +478,8 @@ module Prism
     end
 
     # Create a new KeywordHashNode node
-    def KeywordHashNode(elements, location = Location())
-      KeywordHashNode.new(elements, location)
+    def KeywordHashNode(flags, elements, location = Location())
+      KeywordHashNode.new(flags, elements, location)
     end
 
     # Create a new KeywordRestParameterNode node

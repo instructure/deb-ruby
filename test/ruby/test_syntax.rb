@@ -76,97 +76,104 @@ class TestSyntax < Test::Unit::TestCase
 
   def test_anonymous_block_forwarding
     assert_syntax_error("def b; c(&); end", /no anonymous block parameter/)
+    assert_syntax_error("def b(&) ->(&) {c(&)} end", /anonymous block parameter is also used/)
     assert_separately([], "#{<<-"begin;"}\n#{<<-'end;'}")
     begin;
-        def b(&); c(&) end
-        def c(&); yield 1 end
-        a = nil
-        b{|c| a = c}
-        assert_equal(1, a)
+      def b(&); c(&) end
+      def c(&); yield 1 end
+      a = nil
+      b{|c| a = c}
+      assert_equal(1, a)
 
-        def inner
-          yield
-        end
+      def inner
+        yield
+      end
 
-        def block_only(&)
-          inner(&)
-        end
-        assert_equal(1, block_only{1})
+      def block_only(&)
+        inner(&)
+      end
+      assert_equal(1, block_only{1})
 
-        def pos(arg1, &)
-          inner(&)
-        end
-        assert_equal(2, pos(nil){2})
+      def pos(arg1, &)
+        inner(&)
+      end
+      assert_equal(2, pos(nil){2})
 
-        def pos_kwrest(arg1, **kw, &)
-          inner(&)
-        end
-        assert_equal(3, pos_kwrest(nil){3})
+      def pos_kwrest(arg1, **kw, &)
+        inner(&)
+      end
+      assert_equal(3, pos_kwrest(nil){3})
 
-        def no_kw(arg1, **nil, &)
-          inner(&)
-        end
-        assert_equal(4, no_kw(nil){4})
+      def no_kw(arg1, **nil, &)
+        inner(&)
+      end
+      assert_equal(4, no_kw(nil){4})
 
-        def rest_kw(*a, kwarg: 1, &)
-          inner(&)
-        end
-        assert_equal(5, rest_kw{5})
+      def rest_kw(*a, kwarg: 1, &)
+        inner(&)
+      end
+      assert_equal(5, rest_kw{5})
 
-        def kw(kwarg:1, &)
-          inner(&)
-        end
-        assert_equal(6, kw{6})
+      def kw(kwarg:1, &)
+        inner(&)
+      end
+      assert_equal(6, kw{6})
 
-        def pos_kw_kwrest(arg1, kwarg:1, **kw, &)
-          inner(&)
-        end
-        assert_equal(7, pos_kw_kwrest(nil){7})
+      def pos_kw_kwrest(arg1, kwarg:1, **kw, &)
+        inner(&)
+      end
+      assert_equal(7, pos_kw_kwrest(nil){7})
 
-        def pos_rkw(arg1, kwarg1:, &)
-          inner(&)
-        end
-        assert_equal(8, pos_rkw(nil, kwarg1: nil){8})
+      def pos_rkw(arg1, kwarg1:, &)
+        inner(&)
+      end
+      assert_equal(8, pos_rkw(nil, kwarg1: nil){8})
 
-        def all(arg1, arg2, *rest, post1, post2, kw1: 1, kw2: 2, okw1:, okw2:, &)
-          inner(&)
-        end
-        assert_equal(9, all(nil, nil, nil, nil, okw1: nil, okw2: nil){9})
+      def all(arg1, arg2, *rest, post1, post2, kw1: 1, kw2: 2, okw1:, okw2:, &)
+        inner(&)
+      end
+      assert_equal(9, all(nil, nil, nil, nil, okw1: nil, okw2: nil){9})
 
-        def all_kwrest(arg1, arg2, *rest, post1, post2, kw1: 1, kw2: 2, okw1:, okw2:, **kw, &)
-          inner(&)
-        end
-        assert_equal(10, all_kwrest(nil, nil, nil, nil, okw1: nil, okw2: nil){10})
+      def all_kwrest(arg1, arg2, *rest, post1, post2, kw1: 1, kw2: 2, okw1:, okw2:, **kw, &)
+        inner(&)
+      end
+      assert_equal(10, all_kwrest(nil, nil, nil, nil, okw1: nil, okw2: nil){10})
     end;
   end
 
   def test_anonymous_rest_forwarding
     assert_syntax_error("def b; c(*); end", /no anonymous rest parameter/)
     assert_syntax_error("def b; c(1, *); end", /no anonymous rest parameter/)
+    assert_syntax_error("def b(*) ->(*) {c(*)} end", /anonymous rest parameter is also used/)
+    assert_syntax_error("def b(a, *) ->(*) {c(1, *)} end", /anonymous rest parameter is also used/)
+    assert_syntax_error("def b(*) ->(a, *) {c(*)} end", /anonymous rest parameter is also used/)
     assert_separately([], "#{<<-"begin;"}\n#{<<-'end;'}")
     begin;
-        def b(*); c(*) end
-        def c(*a); a end
-        def d(*); b(*, *) end
-        assert_equal([1, 2], b(1, 2))
-        assert_equal([1, 2, 1, 2], d(1, 2))
+      def b(*); c(*) end
+      def c(*a); a end
+      def d(*); b(*, *) end
+      assert_equal([1, 2], b(1, 2))
+      assert_equal([1, 2, 1, 2], d(1, 2))
     end;
   end
 
   def test_anonymous_keyword_rest_forwarding
     assert_syntax_error("def b; c(**); end", /no anonymous keyword rest parameter/)
     assert_syntax_error("def b; c(k: 1, **); end", /no anonymous keyword rest parameter/)
+    assert_syntax_error("def b(**) ->(**) {c(**)} end", /anonymous keyword rest parameter is also used/)
+    assert_syntax_error("def b(k:, **) ->(**) {c(k: 1, **)} end", /anonymous keyword rest parameter is also used/)
+    assert_syntax_error("def b(**) ->(k:, **) {c(**)} end", /anonymous keyword rest parameter is also used/)
     assert_separately([], "#{<<-"begin;"}\n#{<<-'end;'}")
     begin;
-        def b(**); c(**) end
-        def c(**kw); kw end
-        def d(**); b(k: 1, **) end
-        def e(**); b(**, k: 1) end
-        def f(a: nil, **); b(**) end
-        assert_equal({a: 1, k: 3}, b(a: 1, k: 3))
-        assert_equal({a: 1, k: 3}, d(a: 1, k: 3))
-        assert_equal({a: 1, k: 1}, e(a: 1, k: 3))
-        assert_equal({k: 3}, f(a: 1, k: 3))
+      def b(**); c(**) end
+      def c(**kw); kw end
+      def d(**); b(k: 1, **) end
+      def e(**); b(**, k: 1) end
+      def f(a: nil, **); b(**) end
+      assert_equal({a: 1, k: 3}, b(a: 1, k: 3))
+      assert_equal({a: 1, k: 3}, d(a: 1, k: 3))
+      assert_equal({a: 1, k: 1}, e(a: 1, k: 3))
+      assert_equal({k: 3}, f(a: 1, k: 3))
     end;
   end
 
@@ -642,6 +649,8 @@ WARN
     assert_equal(42, obj.foo(42))
     assert_equal(42, obj.foo(2, _: 0))
     assert_equal(2, obj.foo(x: 2, _: 0))
+  ensure
+    self.class.remove_method(:foo)
   end
 
   def test_duplicated_opt_kw
@@ -1765,6 +1774,7 @@ eom
 
     assert_valid_syntax("proc {def foo(_);end;_1}")
     assert_valid_syntax("p { [_1 **2] }")
+    assert_valid_syntax("proc {_1;def foo();end;_1}")
   end
 
   def test_it
@@ -1776,6 +1786,8 @@ eom
     assert_warn(/`it`/)       {eval('0.times { it; it = 1; it }')}
     assert_no_warning(/`it`/) {eval('0.times { it = 1; it }')}
     assert_no_warning(/`it`/) {eval('it = 1; 0.times { it }')}
+  ensure
+    self.class.remove_method(:foo)
   end
 
   def test_value_expr_in_condition

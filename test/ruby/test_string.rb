@@ -587,6 +587,8 @@ CODE
     assert_equal("foo", s.chomp!("\n"))
     s = "foo\r"
     assert_equal("foo", s.chomp!("\n"))
+
+    assert_raise(ArgumentError) {String.new.chomp!("", "")}
   ensure
     $/ = save
     $VERBOSE = verbose
@@ -1342,6 +1344,9 @@ CODE
     assert_not_equal(S("a").hash, S("a\0").hash, bug4104)
     bug9172 = '[ruby-core:58658] [Bug #9172]'
     assert_not_equal(S("sub-setter").hash, S("discover").hash, bug9172)
+    assert_equal(S("").hash, S("".encode(Encoding::UTF_32BE)).hash)
+    h1, h2 = ["\x80", "\x81"].map {|c| c.b.hash ^ c.hash}
+    assert_not_equal(h1, h2)
   end
 
   def test_hex
@@ -2074,6 +2079,15 @@ CODE
     assert_raise_with_message(IndexError, /oops/, bug) {
       S('hello').gsub('hello', '\k<oops>')
     }
+  end
+
+  def test_sub_gc_compact_stress
+    EnvUtil.under_gc_compact_stress do
+      m = /&(?<foo>.*?);/.match(S("aaa &amp; yyy"))
+      assert_equal("amp", m["foo"])
+
+      assert_equal("aaa [amp] yyy", S("aaa &amp; yyy").sub(/&(?<foo>.*?);/, S('[\k<foo>]')))
+    end
   end
 
   def test_sub!

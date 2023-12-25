@@ -35,6 +35,7 @@ static VALUE rb_cPrismCallAndWriteNode;
 static VALUE rb_cPrismCallNode;
 static VALUE rb_cPrismCallOperatorWriteNode;
 static VALUE rb_cPrismCallOrWriteNode;
+static VALUE rb_cPrismCallTargetNode;
 static VALUE rb_cPrismCapturePatternNode;
 static VALUE rb_cPrismCaseMatchNode;
 static VALUE rb_cPrismCaseNode;
@@ -87,6 +88,7 @@ static VALUE rb_cPrismInNode;
 static VALUE rb_cPrismIndexAndWriteNode;
 static VALUE rb_cPrismIndexOperatorWriteNode;
 static VALUE rb_cPrismIndexOrWriteNode;
+static VALUE rb_cPrismIndexTargetNode;
 static VALUE rb_cPrismInstanceVariableAndWriteNode;
 static VALUE rb_cPrismInstanceVariableOperatorWriteNode;
 static VALUE rb_cPrismInstanceVariableOrWriteNode;
@@ -399,6 +401,12 @@ pm_ast_new(pm_parser_t *parser, pm_node_t *node, rb_encoding *encoding) {
                     break;
                 }
 #line 118 "api_node.c.erb"
+                case PM_CALL_TARGET_NODE: {
+                    pm_call_target_node_t *cast = (pm_call_target_node_t *) node;
+                    pm_node_stack_push(&node_stack, (pm_node_t *) cast->receiver);
+                    break;
+                }
+#line 118 "api_node.c.erb"
                 case PM_CAPTURE_PATTERN_NODE: {
                     pm_capture_pattern_node_t *cast = (pm_capture_pattern_node_t *) node;
                     pm_node_stack_push(&node_stack, (pm_node_t *) cast->value);
@@ -687,6 +695,14 @@ pm_ast_new(pm_parser_t *parser, pm_node_t *node, rb_encoding *encoding) {
                     pm_node_stack_push(&node_stack, (pm_node_t *) cast->arguments);
                     pm_node_stack_push(&node_stack, (pm_node_t *) cast->block);
                     pm_node_stack_push(&node_stack, (pm_node_t *) cast->value);
+                    break;
+                }
+#line 118 "api_node.c.erb"
+                case PM_INDEX_TARGET_NODE: {
+                    pm_index_target_node_t *cast = (pm_index_target_node_t *) node;
+                    pm_node_stack_push(&node_stack, (pm_node_t *) cast->receiver);
+                    pm_node_stack_push(&node_stack, (pm_node_t *) cast->arguments);
+                    pm_node_stack_push(&node_stack, (pm_node_t *) cast->block);
                     break;
                 }
 #line 118 "api_node.c.erb"
@@ -1655,6 +1671,38 @@ pm_ast_new(pm_parser_t *parser, pm_node_t *node, rb_encoding *encoding) {
                     argv[8] = pm_location_new(parser, node->location.start, node->location.end, source);
 
                     rb_ary_push(value_stack, rb_class_new_instance(9, argv, rb_cPrismCallOrWriteNode));
+                    break;
+                }
+#line 144 "api_node.c.erb"
+                case PM_CALL_TARGET_NODE: {
+                    pm_call_target_node_t *cast = (pm_call_target_node_t *) node;
+                    VALUE argv[6];
+
+                    // flags
+#line 192 "api_node.c.erb"
+                    argv[0] = ULONG2NUM(node->flags & ~PM_NODE_FLAG_COMMON_MASK);
+
+                    // receiver
+#line 155 "api_node.c.erb"
+                    argv[1] = rb_ary_pop(value_stack);
+
+                    // call_operator_loc
+#line 180 "api_node.c.erb"
+                    argv[2] = pm_location_new(parser, cast->call_operator_loc.start, cast->call_operator_loc.end, source);
+
+                    // name
+#line 167 "api_node.c.erb"
+                    assert(cast->name != 0);
+                    argv[3] = rb_id2sym(constants[cast->name - 1]);
+
+                    // message_loc
+#line 180 "api_node.c.erb"
+                    argv[4] = pm_location_new(parser, cast->message_loc.start, cast->message_loc.end, source);
+
+                    // location
+                    argv[5] = pm_location_new(parser, node->location.start, node->location.end, source);
+
+                    rb_ary_push(value_stack, rb_class_new_instance(6, argv, rb_cPrismCallTargetNode));
                     break;
                 }
 #line 144 "api_node.c.erb"
@@ -3034,6 +3082,41 @@ pm_ast_new(pm_parser_t *parser, pm_node_t *node, rb_encoding *encoding) {
                     break;
                 }
 #line 144 "api_node.c.erb"
+                case PM_INDEX_TARGET_NODE: {
+                    pm_index_target_node_t *cast = (pm_index_target_node_t *) node;
+                    VALUE argv[7];
+
+                    // flags
+#line 192 "api_node.c.erb"
+                    argv[0] = ULONG2NUM(node->flags & ~PM_NODE_FLAG_COMMON_MASK);
+
+                    // receiver
+#line 155 "api_node.c.erb"
+                    argv[1] = rb_ary_pop(value_stack);
+
+                    // opening_loc
+#line 180 "api_node.c.erb"
+                    argv[2] = pm_location_new(parser, cast->opening_loc.start, cast->opening_loc.end, source);
+
+                    // arguments
+#line 155 "api_node.c.erb"
+                    argv[3] = rb_ary_pop(value_stack);
+
+                    // closing_loc
+#line 180 "api_node.c.erb"
+                    argv[4] = pm_location_new(parser, cast->closing_loc.start, cast->closing_loc.end, source);
+
+                    // block
+#line 155 "api_node.c.erb"
+                    argv[5] = rb_ary_pop(value_stack);
+
+                    // location
+                    argv[6] = pm_location_new(parser, node->location.start, node->location.end, source);
+
+                    rb_ary_push(value_stack, rb_class_new_instance(7, argv, rb_cPrismIndexTargetNode));
+                    break;
+                }
+#line 144 "api_node.c.erb"
                 case PM_INSTANCE_VARIABLE_AND_WRITE_NODE: {
                     pm_instance_variable_and_write_node_t *cast = (pm_instance_variable_and_write_node_t *) node;
                     VALUE argv[5];
@@ -3337,19 +3420,23 @@ pm_ast_new(pm_parser_t *parser, pm_node_t *node, rb_encoding *encoding) {
 #line 144 "api_node.c.erb"
                 case PM_KEYWORD_HASH_NODE: {
                     pm_keyword_hash_node_t *cast = (pm_keyword_hash_node_t *) node;
-                    VALUE argv[2];
+                    VALUE argv[3];
+
+                    // flags
+#line 192 "api_node.c.erb"
+                    argv[0] = ULONG2NUM(node->flags & ~PM_NODE_FLAG_COMMON_MASK);
 
                     // elements
 #line 158 "api_node.c.erb"
-                    argv[0] = rb_ary_new_capa(cast->elements.size);
+                    argv[1] = rb_ary_new_capa(cast->elements.size);
                     for (size_t index = 0; index < cast->elements.size; index++) {
-                        rb_ary_push(argv[0], rb_ary_pop(value_stack));
+                        rb_ary_push(argv[1], rb_ary_pop(value_stack));
                     }
 
                     // location
-                    argv[1] = pm_location_new(parser, node->location.start, node->location.end, source);
+                    argv[2] = pm_location_new(parser, node->location.start, node->location.end, source);
 
-                    rb_ary_push(value_stack, rb_class_new_instance(2, argv, rb_cPrismKeywordHashNode));
+                    rb_ary_push(value_stack, rb_class_new_instance(3, argv, rb_cPrismKeywordHashNode));
                     break;
                 }
 #line 144 "api_node.c.erb"
@@ -4862,6 +4949,7 @@ Init_prism_api_node(void) {
     rb_cPrismCallNode = rb_define_class_under(rb_cPrism, "CallNode", rb_cPrismNode);
     rb_cPrismCallOperatorWriteNode = rb_define_class_under(rb_cPrism, "CallOperatorWriteNode", rb_cPrismNode);
     rb_cPrismCallOrWriteNode = rb_define_class_under(rb_cPrism, "CallOrWriteNode", rb_cPrismNode);
+    rb_cPrismCallTargetNode = rb_define_class_under(rb_cPrism, "CallTargetNode", rb_cPrismNode);
     rb_cPrismCapturePatternNode = rb_define_class_under(rb_cPrism, "CapturePatternNode", rb_cPrismNode);
     rb_cPrismCaseMatchNode = rb_define_class_under(rb_cPrism, "CaseMatchNode", rb_cPrismNode);
     rb_cPrismCaseNode = rb_define_class_under(rb_cPrism, "CaseNode", rb_cPrismNode);
@@ -4914,6 +5002,7 @@ Init_prism_api_node(void) {
     rb_cPrismIndexAndWriteNode = rb_define_class_under(rb_cPrism, "IndexAndWriteNode", rb_cPrismNode);
     rb_cPrismIndexOperatorWriteNode = rb_define_class_under(rb_cPrism, "IndexOperatorWriteNode", rb_cPrismNode);
     rb_cPrismIndexOrWriteNode = rb_define_class_under(rb_cPrism, "IndexOrWriteNode", rb_cPrismNode);
+    rb_cPrismIndexTargetNode = rb_define_class_under(rb_cPrism, "IndexTargetNode", rb_cPrismNode);
     rb_cPrismInstanceVariableAndWriteNode = rb_define_class_under(rb_cPrism, "InstanceVariableAndWriteNode", rb_cPrismNode);
     rb_cPrismInstanceVariableOperatorWriteNode = rb_define_class_under(rb_cPrism, "InstanceVariableOperatorWriteNode", rb_cPrismNode);
     rb_cPrismInstanceVariableOrWriteNode = rb_define_class_under(rb_cPrism, "InstanceVariableOrWriteNode", rb_cPrismNode);

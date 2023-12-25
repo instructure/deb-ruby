@@ -3785,7 +3785,7 @@ then :
 then :
   as_fn_error $? "executable host ruby is required for cross-compiling" "$LINENO" 5
 fi
-    BASERUBY="echo executable host ruby is required.  use --with-baseruby option.; false"
+    BASERUBY=$srcdir/tool/missing-baseruby.bat
 
 fi
 
@@ -8595,20 +8595,33 @@ elif test -z "$ARCH_FLAG"
 then :
 
 
+# Set ARCH_FLAG for different width but family CPU
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking arch option" >&5
 printf %s "checking arch option... " >&6; }
-case "$target_archs" in #(
-  arm64) :
-     ;; #(
-  *64) :
+case "$target_archs":"$host_cpu" in #(
+  arm64:arm*) :
     ARCH_FLAG=-m64 ;; #(
-  i[3-6]86) :
+  arm*:arm*) :
     ARCH_FLAG=-m32 ;; #(
-  ppc) :
+  x86_64:i[3-6]86) :
+    ARCH_FLAG=-m64 ;; #(
+  x64:x86_64) :
+     ;; #(
+  i[3-6]86:x86_64) :
+    ARCH_FLAG=-m32 ;; #(
+  ppc64:ppc*) :
+    ARCH_FLAG=-m64 ;; #(
+  ppc*:ppc64) :
     ARCH_FLAG=-m32 ;; #(
   *) :
-    as_fn_error $? "unknown target architecture: $target_archs" "$LINENO" 5
-	 ;;
+    case $build_os in #(
+  darwin*) :
+    ARCH_FLAG="-arch ""$target_archs" ;; #(
+  *) :
+    ARCH_FLAG=-march="$target_archs"
+     ;;
+esac
+ ;;
 esac
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $ARCH_FLAG" >&5
     colorize_result "$ARCH_FLAG" ; }
@@ -8693,24 +8706,37 @@ then :
 fi
 # RUBY_UNIVERSAL_ARCH end
 
-if test "$target_cpu" != "$host_cpu" -a "$GCC" = yes -a "$cross_compiling" = no -a "${universal_binary:-no}" = no
+if test "$target_cpu" != "$host_cpu" -a "$GCC" = yes -a "${universal_binary:-no}" = no
 then :
 
 
+# Set ARCH_FLAG for different width but family CPU
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking arch option" >&5
 printf %s "checking arch option... " >&6; }
-case "$target_cpu" in #(
-  arm64) :
-     ;; #(
-  *64) :
+case "$target_cpu":"$host_cpu" in #(
+  arm64:arm*) :
     ARCH_FLAG=-m64 ;; #(
-  i[3-6]86) :
+  arm*:arm*) :
     ARCH_FLAG=-m32 ;; #(
-  ppc) :
+  x86_64:i[3-6]86) :
+    ARCH_FLAG=-m64 ;; #(
+  x64:x86_64) :
+     ;; #(
+  i[3-6]86:x86_64) :
+    ARCH_FLAG=-m32 ;; #(
+  ppc64:ppc*) :
+    ARCH_FLAG=-m64 ;; #(
+  ppc*:ppc64) :
     ARCH_FLAG=-m32 ;; #(
   *) :
-    as_fn_error $? "unknown target architecture: $target_archs" "$LINENO" 5
-	 ;;
+    case $build_os in #(
+  darwin*) :
+    ARCH_FLAG="-arch ""$target_cpu" ;; #(
+  *) :
+    ARCH_FLAG=-march="$target_cpu"
+     ;;
+esac
+ ;;
 esac
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $ARCH_FLAG" >&5
     colorize_result "$ARCH_FLAG" ; }
@@ -13831,6 +13857,13 @@ ac_fn_c_check_header_compile "$LINENO" "sys/epoll.h" "ac_cv_header_sys_epoll_h" 
 if test "x$ac_cv_header_sys_epoll_h" = xyes
 then :
   printf "%s\n" "#define HAVE_SYS_EPOLL_H 1" >>confdefs.h
+
+fi
+
+ac_fn_c_check_header_compile "$LINENO" "sys/event.h" "ac_cv_header_sys_event_h" "$ac_includes_default"
+if test "x$ac_cv_header_sys_event_h" = xyes
+then :
+  printf "%s\n" "#define HAVE_SYS_EVENT_H 1" >>confdefs.h
 
 fi
 
@@ -33089,15 +33122,15 @@ then :
 
             RJIT_TARGET_OK=no
          ;; #(
-  x86_64-darwin*) :
+  arm64-darwin*|aarch64-darwin*|x86_64-darwin*) :
 
             RJIT_TARGET_OK=yes
          ;; #(
-  x86_64-*linux*) :
+  arm64-*linux*|aarch64-*linux*|x86_64-*linux*) :
 
             RJIT_TARGET_OK=yes
          ;; #(
-  x86_64-*bsd*) :
+  arm64-*bsd*|aarch64-*bsd*|x86_64-*bsd*) :
 
             RJIT_TARGET_OK=yes
 
@@ -33113,7 +33146,7 @@ if test ${enable_rjit+y}
 then :
   enableval=$enable_rjit; RJIT_SUPPORT=$enableval
 else $as_nop
-  case "$YJIT_TARGET_OK" in #(
+  case "$RJIT_TARGET_OK" in #(
   yes) :
     RJIT_SUPPORT=yes ;; #(
   *) :
@@ -33125,61 +33158,10 @@ fi
 
 
 case "$RJIT_SUPPORT" in #(
-  yes|dev|disasm) :
+  yes|dev) :
 
     case "$RJIT_SUPPORT" in #(
   dev) :
-
-        # Link libcapstone for --rjit-dump-disasm
-        { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for cs_disasm in -lcapstone" >&5
-printf %s "checking for cs_disasm in -lcapstone... " >&6; }
-if test ${ac_cv_lib_capstone_cs_disasm+y}
-then :
-  printf %s "(cached) " >&6
-else $as_nop
-  ac_check_lib_save_LIBS=$LIBS
-LIBS="-lcapstone  $LIBS"
-cat confdefs.h - <<_ACEOF >conftest.$ac_ext
-/* end confdefs.h.  */
-
-/* Override any GCC internal prototype to avoid an error.
-   Use char because int might match the return type of a GCC
-   builtin and then its argument prototype would still apply.  */
-char cs_disasm ();
-int
-main (void)
-{
-return cs_disasm ();
-  ;
-  return 0;
-}
-_ACEOF
-if ac_fn_c_try_link "$LINENO"
-then :
-  ac_cv_lib_capstone_cs_disasm=yes
-else $as_nop
-  ac_cv_lib_capstone_cs_disasm=no
-fi
-rm -f core conftest.err conftest.$ac_objext conftest.beam \
-    conftest$ac_exeext conftest.$ac_ext
-LIBS=$ac_check_lib_save_LIBS
-fi
-{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_capstone_cs_disasm" >&5
-    colorize_result "$ac_cv_lib_capstone_cs_disasm" ; }
-if test "x$ac_cv_lib_capstone_cs_disasm" = xyes
-then :
-  printf "%s\n" "#define HAVE_LIBCAPSTONE 1" >>confdefs.h
-
-  LIBS="-lcapstone $LIBS"
-
-fi
-
-
-        # Enable extra stats (vm_insns_count, ratio_in_rjit)
-        printf "%s\n" "#define RJIT_STATS 1" >>confdefs.h
-
-     ;; #(
-  disasm) :
 
         # Link libcapstone for --rjit-dump-disasm
         { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for cs_disasm in -lcapstone" >&5

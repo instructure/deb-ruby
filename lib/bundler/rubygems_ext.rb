@@ -78,24 +78,6 @@ module Gem
       end
     end
 
-    alias_method :rg_missing_extensions?, :missing_extensions?
-    def missing_extensions?
-      # When we use this methods with local gemspec, we don't handle
-      # build status of extension correctly. So We need to find extension
-      # files in require_paths.
-      # TODO: Gem::Specification couldn't access extension name from extconf.rb
-      #       so we find them with heuristic way. We should improve it.
-      if source.respond_to?(:root)
-        return false if raw_require_paths.any? do |path|
-          ext_dir = File.join(full_gem_path, path)
-          File.exist?(File.join(ext_dir, "#{name}.#{RbConfig::CONFIG["DLEXT"]}")) ||
-          !Dir.glob(File.join(ext_dir, name, "*.#{RbConfig::CONFIG["DLEXT"]}")).empty?
-        end
-      end
-
-      rg_missing_extensions?
-    end
-
     remove_method :gem_dir
     def gem_dir
       full_gem_path
@@ -197,37 +179,7 @@ module Gem
     end
   end
 
-  # comparison is done order independently since rubygems 3.2.0.rc.2
-  unless Gem::Requirement.new("> 1", "< 2") == Gem::Requirement.new("< 2", "> 1")
-    class Requirement
-      module OrderIndependentComparison
-        def ==(other)
-          return unless Gem::Requirement === other
-
-          if _requirements_sorted? && other._requirements_sorted?
-            super
-          else
-            _with_sorted_requirements == other._with_sorted_requirements
-          end
-        end
-
-        protected
-
-        def _requirements_sorted?
-          return @_requirements_sorted if defined?(@_requirements_sorted)
-          strings = as_list
-          @_requirements_sorted = strings == strings.sort
-        end
-
-        def _with_sorted_requirements
-          @_with_sorted_requirements ||= _requirements_sorted? ? self : self.class.new(as_list.sort)
-        end
-      end
-
-      prepend OrderIndependentComparison
-    end
-  end
-
+  # Requirements using lambda operator differentiate trailing zeros since rubygems 3.2.6
   if Gem::Requirement.new("~> 2.0").hash == Gem::Requirement.new("~> 2.0.0").hash
     class Requirement
       module CorrectHashForLambdaOperator
@@ -352,11 +304,16 @@ module Gem
   require "rubygems/name_tuple"
 
   class NameTuple
-    def self.new(name, version, platform="ruby")
-      if Gem::Platform === platform
-        super(name, version, platform.to_s)
-      else
-        super
+    # Versions of RubyGems before about 3.5.0 don't to_s the platform.
+    unless Gem::NameTuple.new("a", Gem::Version.new("1"), Gem::Platform.new("x86_64-linux")).platform.is_a?(String)
+      alias_method :initialize_with_platform, :initialize
+
+      def initialize(name, version, platform=Gem::Platform::RUBY)
+        if Gem::Platform === platform
+          initialize_with_platform(name, version, platform.to_s)
+        else
+          initialize_with_platform(name, version, platform)
+        end
       end
     end
 
@@ -366,16 +323,6 @@ module Gem
       else
         "#{name} (#{version}-#{platform})"
       end
-    end
-  end
-
-  require "rubygems/util"
-
-  Util.singleton_class.module_eval do
-    remove_method :glob_files_in_dir
-
-    def glob_files_in_dir(glob, base_path)
-      Dir.glob(glob, base: base_path).map! {|f| File.expand_path(f, base_path) }
     end
   end
 end

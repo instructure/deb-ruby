@@ -11,7 +11,7 @@
 # define RUBY_VERSION_MINOR RUBY_API_VERSION_MINOR
 #define RUBY_VERSION_TEENY 0
 #define RUBY_RELEASE_DATE RUBY_RELEASE_YEAR_STR"-"RUBY_RELEASE_MONTH_STR"-"RUBY_RELEASE_DAY_STR
-#define RUBY_PATCHLEVEL -1
+#define RUBY_PATCHLEVEL 0
 
 #include "ruby/version.h"
 #include "ruby/internal/abi.h"
@@ -58,7 +58,7 @@
 # ifdef RUBY_PATCHLEVEL_NAME
 #  define RUBY_PATCHLEVEL_STR STRINGIZE(RUBY_PATCHLEVEL_NAME)
 # else
-#  define RUBY_PATCHLEVEL_STR "rc1"
+#  define RUBY_PATCHLEVEL_STR "dev"
 # endif
 #elif defined RUBY_ABI_VERSION
 # error RUBY_ABI_VERSION is defined in non-development branch
