@@ -1,3 +1,9 @@
+ruby3.3 (3.3.0-1ppa3) focal; urgency=medium
+
+  * Update symbols
+
+ -- Jacob Burroughs <jburroughs@instructure.com>  Mon, 25 Dec 2023 11:30:24 -0600
+
 ruby3.3 (3.3.0-1ppa2) focal; urgency=medium
 
   * Refresh patches
