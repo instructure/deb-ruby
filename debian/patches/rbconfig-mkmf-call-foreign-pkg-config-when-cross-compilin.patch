@@ -27,7 +27,7 @@ Forwarded: https://github.com/ruby/ruby/pull/6355
 
 --- a/lib/mkmf.rb
 +++ b/lib/mkmf.rb
-@@ -1866,7 +1866,7 @@
+@@ -1871,7 +1871,7 @@
        if pkgconfig = with_config("#{pkg}-config") and find_executable0(pkgconfig)
        # if and only if package specific config command is given
        elsif ($PKGCONFIG ||=

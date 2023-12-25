@@ -7,5 +7,4 @@
 0007-Port-to-kfreebsd-amd64.patch
 0009-Fix-FTBFS-on-x32-misdetected-as-i386-or-amd64.patch
 0011-don-t-try-to-download-stuff-in-configure.patch
-ruby_default_arch.m4-don-t-require-arhitectures-to-be-kno.patch
 rbconfig-mkmf-call-foreign-pkg-config-when-cross-compilin.patch

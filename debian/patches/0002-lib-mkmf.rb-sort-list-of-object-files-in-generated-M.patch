@@ -15,7 +15,7 @@ Signed-off-by: Reiner Herrmann <reiner@reiner-h.de>
 
 --- a/lib/mkmf.rb
 +++ b/lib/mkmf.rb
-@@ -2363,7 +2363,7 @@
+@@ -2368,7 +2368,7 @@
  LIBS = #{$LIBRUBYARG} #{$libs} #{$LIBS}
  ORIG_SRCS = #{orig_srcs.collect(&File.method(:basename)).join(' ')}
  SRCS = $(ORIG_SRCS) #{(srcs - orig_srcs).collect(&File.method(:basename)).join(' ')}

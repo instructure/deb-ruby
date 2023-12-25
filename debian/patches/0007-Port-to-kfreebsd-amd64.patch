@@ -25,7 +25,7 @@ Signed-off-by: Svante Signell <svante.signell@gmail.com>
      defined(_WIN32) || \
 --- a/ext/socket/raddrinfo.c
 +++ b/ext/socket/raddrinfo.c
-@@ -1722,10 +1722,21 @@
+@@ -2138,10 +2138,21 @@
          INIT_SOCKADDR_UN(&uaddr, sizeof(struct sockaddr_un));
  
          StringValue(v);
@@ -47,7 +47,7 @@ Signed-off-by: Svante Signell <svante.signell@gmail.com>
          memcpy(uaddr.sun_path, RSTRING_PTR(v), RSTRING_LEN(v));
          len = (socklen_t)sizeof(uaddr);
          memcpy(&ss, &uaddr, len);
-@@ -2369,10 +2380,21 @@
+@@ -2785,10 +2796,21 @@
      if (n < 0)
          rb_raise(rb_eSocket, "too short AF_UNIX address: %"PRIuSIZE" bytes given for minimum %"PRIuSIZE" bytes.",
                   (size_t)rai->sockaddr_len, offsetof(struct sockaddr_un, sun_path));
@@ -90,7 +90,7 @@ Signed-off-by: Svante Signell <svante.signell@gmail.com>
        # https://github.com/ruby/fiddle/actions/runs/3202406059/jobs/5231356410
 --- a/test/socket/test_socket.rb
 +++ b/test/socket/test_socket.rb
-@@ -545,7 +545,7 @@
+@@ -549,7 +549,7 @@
    end
  
    def test_bintime
