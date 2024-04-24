@@ -1,3 +1,9 @@
+ruby3.3 (3.3.1-1ppa3) focal; urgency=medium
+
+  * Update symbol list
+
+ -- Jacob Burroughs <jburroughs@instructure.com>  Wed, 24 Apr 2024 11:24:30 -0500
+
 ruby3.3 (3.3.1-1ppa2) focal; urgency=medium
 
   * Skip another rubygems-update spec
