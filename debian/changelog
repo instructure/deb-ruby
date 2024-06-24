@@ -1,3 +1,10 @@
+ruby3.3 (3.3.3-1ppa1) focal; urgency=medium
+
+  * New upstream version 3.3.3
+  * restore github action
+
+ -- Jacob Burroughs <jburroughs@instructure.com>  Mon, 24 Jun 2024 09:03:49 -0500
+
 ruby3.3 (3.3.1-1ppa3) focal; urgency=medium
 
   * Update symbol list
