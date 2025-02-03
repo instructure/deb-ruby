@@ -1,3 +1,9 @@
+ruby3.4 (3.4.1-1ppa2) focal; urgency=medium
+
+  * skip new test
+
+ -- aogata <aogata@instructure.com>  Mon, 03 Feb 2025 13:49:16 -0800
+
 ruby3.4 (3.4.1-1ppa1) focal; urgency=medium
 
   [ root ]
