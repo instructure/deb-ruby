@@ -15,7 +15,7 @@ module SyntaxSuggest
   #
   # 1. Sanitize/format input source
   # 2. Search for invalid blocks
-  # 3. Format invalid blocks into something meaninful
+  # 3. Format invalid blocks into something meaningful
   #
   # This class handles the third part.
   #
@@ -26,7 +26,7 @@ module SyntaxSuggest
   # they can't add extra data that's not present.
   #
   # In the case of known ambiguious cases, this class adds context
-  # back to the ambiguitiy so the programmer has full information.
+  # back to the ambiguity so the programmer has full information.
   #
   # Beyond handling these ambiguities, it also captures surrounding
   # code context information:

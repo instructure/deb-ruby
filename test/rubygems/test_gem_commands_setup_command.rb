@@ -31,7 +31,6 @@ class TestGemCommandsSetupCommand < Gem::TestCase
       bundler/lib/bundler/man/gemfile.5
       bundler/lib/bundler/man/gemfile.5.ronn
       bundler/lib/bundler/templates/.circleci/config.yml
-      bundler/lib/bundler/templates/.travis.yml
     ]
 
     create_dummy_files(filelist)
@@ -195,7 +194,6 @@ class TestGemCommandsSetupCommand < Gem::TestCase
       assert_path_exist File.join(dir, "bundler/b.rb")
 
       assert_path_exist File.join(dir, "bundler/templates/.circleci/config.yml")
-      assert_path_exist File.join(dir, "bundler/templates/.travis.yml")
     end
   end
 
@@ -226,8 +224,10 @@ class TestGemCommandsSetupCommand < Gem::TestCase
     # expect to remove normal gem that was same version. because it's promoted default gems.
     assert_path_not_exist File.join(Gem.dir, "specifications", "bundler-#{bundler_version}.gemspec")
 
+    # expect to remove the previous default version
+    assert_path_not_exist "#{Gem.dir}/gems/bundler-1.15.4"
+
     assert_path_exist "#{Gem.dir}/gems/bundler-#{bundler_version}"
-    assert_path_exist "#{Gem.dir}/gems/bundler-1.15.4"
     assert_path_exist "#{Gem.dir}/gems/bundler-audit-1.0.0"
   end
 

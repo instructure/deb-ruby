@@ -61,6 +61,20 @@ class TestWeakKeyMap < Test::Unit::TestCase
     refute @wm[k]
   end
 
+  def test_clear_bug_20691
+    assert_normal_exit(<<~RUBY)
+      map = ObjectSpace::WeakKeyMap.new
+
+      1_000.times do
+        1_000.times do
+          map[Object.new] = nil
+        end
+
+        map.clear
+      end
+    RUBY
+  end
+
   def test_inspect
     x = Object.new
     k = Object.new
@@ -87,7 +101,7 @@ class TestWeakKeyMap < Test::Unit::TestCase
     assert_nothing_raised(FrozenError) {@wm['foo'] = o}
   end
 
-  def test_inconsistent_hash_key
+  def test_inconsistent_hash_key_memory_leak
     assert_no_memory_leak [], '', <<~RUBY
       class BadHash
         def initialize

@@ -9,7 +9,7 @@ RSpec.describe "bundle outdated" do
       end
 
       install_gemfile <<-G
-        source "#{file_uri_for(gem_repo2)}"
+        source "https://gem.repo2"
         gem "zebra", :git => "#{lib_path("zebra")}"
         gem "foo", :git => "#{lib_path("foo")}"
         gem "activesupport", "2.3.5"
@@ -46,7 +46,7 @@ RSpec.describe "bundle outdated" do
       end
 
       install_gemfile <<-G
-        source "#{file_uri_for(gem_repo2)}"
+        source "https://gem.repo2"
         gem "AAA", "1.0.0"
       G
 
@@ -77,7 +77,7 @@ RSpec.describe "bundle outdated" do
 
     it "adds gem group to dependency output when repo is updated" do
       install_gemfile <<-G
-        source "#{file_uri_for(gem_repo2)}"
+        source "https://gem.repo2"
 
         gem "terranova", '8'
 
@@ -109,7 +109,7 @@ RSpec.describe "bundle outdated" do
       end
 
       install_gemfile <<-G
-        source "#{file_uri_for(gem_repo2)}"
+        source "https://gem.repo2"
         gem "zebra", :git => "#{lib_path("zebra")}"
         gem "foo", :git => "#{lib_path("foo")}"
         gem "activesupport", "2.3.5"
@@ -126,14 +126,14 @@ RSpec.describe "bundle outdated" do
       update_repo2 { build_gem "terranova", "9" }
 
       install_gemfile <<-G
-        source "#{file_uri_for(gem_repo2)}"
+        source "https://gem.repo2"
 
         gem "terranova", '9'
         gem 'activesupport', '2.3.5'
       G
 
       gemfile <<-G
-        source "#{file_uri_for(gem_repo2)}"
+        source "https://gem.repo2"
 
         gem "terranova", '8'
         gem 'activesupport', '2.3.5'
@@ -162,7 +162,7 @@ RSpec.describe "bundle outdated" do
         build_gem "vcr", "6.0.0"
       end
 
-      build_repo gem_repo3 do
+      build_repo3 do
         build_gem "pkg-gem-flowbyte-with-dep", "1.0.0" do |s|
           s.add_dependency "oj"
         end
@@ -225,7 +225,7 @@ RSpec.describe "bundle outdated" do
       end
 
       install_gemfile <<-G
-        source "#{file_uri_for(gem_repo2)}"
+        source "https://gem.repo2"
 
         gem "weakling", "~> 0.0.1"
         gem "terranova", '8'
@@ -248,6 +248,14 @@ RSpec.describe "bundle outdated" do
 
     it "works when the bundle is up to date" do
       bundle "outdated --group"
+      expect(out).to end_with("Bundle up to date!")
+    end
+
+    it "works when only out of date gems are not in given group" do
+      update_repo2 do
+        build_gem "terranova", "9"
+      end
+      bundle "outdated --group development"
       expect(out).to end_with("Bundle up to date!")
     end
 
@@ -301,7 +309,7 @@ RSpec.describe "bundle outdated" do
       end
 
       install_gemfile <<-G
-        source "#{file_uri_for(gem_repo2)}"
+        source "https://gem.repo2"
 
         gem "bar_dependant", '7.0'
       G
@@ -331,7 +339,7 @@ RSpec.describe "bundle outdated" do
       end
 
       install_gemfile <<-G
-        source "#{file_uri_for(gem_repo2)}"
+        source "https://gem.repo2"
 
         gem "weakling", "~> 0.0.1"
         gem "terranova", '8'
@@ -375,7 +383,7 @@ RSpec.describe "bundle outdated" do
       end
 
       install_gemfile <<-G
-        source "#{file_uri_for(gem_repo2)}"
+        source "https://gem.repo2"
 
         gem "weakling", "~> 0.0.1"
         gem "terranova", '8'
@@ -394,7 +402,7 @@ RSpec.describe "bundle outdated" do
       bundle "config set clean false"
 
       install_gemfile <<-G
-        source "#{file_uri_for(gem_repo2)}"
+        source "https://gem.repo2"
         gem "activesupport", "2.3.4"
       G
 
@@ -428,7 +436,7 @@ RSpec.describe "bundle outdated" do
         end
 
         install_gemfile <<-G
-          source "#{file_uri_for(gem_repo2)}"
+          source "https://gem.repo2"
           gem "zebra", :git => "#{lib_path("zebra")}"
           gem "foo", :git => "#{lib_path("foo")}"
           gem "activesupport", "2.3.5"
@@ -438,18 +446,39 @@ RSpec.describe "bundle outdated" do
         G
       end
 
-      it "outputs a sorted list of outdated gems with a more minimal format" do
+      it "outputs a sorted list of outdated gems with a more minimal format to stdout" do
         minimal_output = "activesupport (newest 3.0, installed 2.3.5, requested = 2.3.5)\n" \
                          "weakling (newest 0.2, installed 0.0.3, requested ~> 0.0.1)"
         subject
         expect(out).to eq(minimal_output)
       end
+
+      it "outputs progress to stderr" do
+        subject
+        expect(err).to include("Fetching gem metadata")
+      end
     end
 
     context "and no gems are outdated" do
-      it "has empty output" do
+      before do
+        build_repo2 do
+          build_gem "activesupport", "3.0"
+        end
+
+        install_gemfile <<-G
+          source "https://gem.repo2"
+          gem "activesupport", "3.0"
+        G
+      end
+
+      it "does not output to stdout" do
         subject
         expect(out).to be_empty
+      end
+
+      it "outputs progress to stderr" do
+        subject
+        expect(err).to include("Fetching gem metadata")
       end
     end
   end
@@ -474,7 +503,7 @@ RSpec.describe "bundle outdated" do
       end
 
       install_gemfile <<-G
-        source "#{file_uri_for(gem_repo2)}"
+        source "https://gem.repo2"
         gem "zebra", :git => "#{lib_path("zebra")}"
         gem "foo", :git => "#{lib_path("foo")}"
         gem "activesupport", "2.3.5"
@@ -507,7 +536,7 @@ RSpec.describe "bundle outdated" do
       end
 
       install_gemfile <<-G
-        source "#{file_uri_for(gem_repo2)}"
+        source "https://gem.repo2"
         gem "zebra", :git => "#{lib_path("zebra")}"
         gem "foo", :git => "#{lib_path("foo")}"
         gem "activesupport", "2.3.5"
@@ -554,7 +583,7 @@ RSpec.describe "bundle outdated" do
         end
 
         install_gemfile <<-G
-          source "#{file_uri_for(gem_repo2)}"
+          source "https://gem.repo2"
           gem "activesupport", "3.0.0.beta.1"
         G
 
@@ -578,7 +607,7 @@ RSpec.describe "bundle outdated" do
       end
 
       install_gemfile <<-G
-        source "#{file_uri_for(gem_repo2)}"
+        source "https://gem.repo2"
         gem "zebra", :git => "#{lib_path("zebra")}"
         gem "foo", :git => "#{lib_path("foo")}"
         gem "activesupport", "2.3.5"
@@ -622,7 +651,7 @@ RSpec.describe "bundle outdated" do
 
     it "doesn't crash when some deps unused on the current platform" do
       install_gemfile <<-G
-        source "#{file_uri_for(gem_repo2)}"
+        source "https://gem.repo2"
         gem "activesupport", platforms: [:ruby_22]
       G
 
@@ -633,8 +662,8 @@ RSpec.describe "bundle outdated" do
 
     it "only reports gem dependencies when they can actually be updated" do
       install_gemfile <<-G
-        source "#{file_uri_for(gem_repo2)}"
-        gem "rack_middleware", "1.0"
+        source "https://gem.repo2"
+        gem "myrack_middleware", "1.0"
       G
 
       bundle :outdated, "filter-strict": true
@@ -645,7 +674,7 @@ RSpec.describe "bundle outdated" do
     describe "and filter options" do
       it "only reports gems that match requirement and patch filter level" do
         install_gemfile <<-G
-          source "#{file_uri_for(gem_repo2)}"
+          source "https://gem.repo2"
           gem "activesupport", "~> 2.3"
           gem "weakling", ">= 0.0.1"
         G
@@ -667,7 +696,7 @@ RSpec.describe "bundle outdated" do
 
       it "only reports gems that match requirement and minor filter level" do
         install_gemfile <<-G
-          source "#{file_uri_for(gem_repo2)}"
+          source "https://gem.repo2"
           gem "activesupport", "~> 2.3"
           gem "weakling", ">= 0.0.1"
         G
@@ -689,7 +718,7 @@ RSpec.describe "bundle outdated" do
 
       it "only reports gems that match requirement and major filter level" do
         install_gemfile <<-G
-          source "#{file_uri_for(gem_repo2)}"
+          source "https://gem.repo2"
           gem "activesupport", "~> 2.3"
           gem "weakling", ">= 0.0.1"
         G
@@ -719,7 +748,7 @@ RSpec.describe "bundle outdated" do
       end
 
       install_gemfile <<-G
-        source "#{file_uri_for(gem_repo2)}"
+        source "https://gem.repo2"
         gem "zebra", :git => "#{lib_path("zebra")}"
         gem "foo", :git => "#{lib_path("foo")}"
         gem "activesupport", "2.3.5"
@@ -742,8 +771,8 @@ RSpec.describe "bundle outdated" do
 
   it "performs an automatic bundle install" do
     gemfile <<-G
-      source "#{file_uri_for(gem_repo1)}"
-      gem "rack", "0.9.1"
+      source "https://gem.repo1"
+      gem "myrack", "0.9.1"
       gem "foo"
     G
 
@@ -757,9 +786,9 @@ RSpec.describe "bundle outdated" do
       build_repo2
 
       gemfile <<-G
-        source "#{file_uri_for(gem_repo2)}"
+        source "https://gem.repo2"
 
-        gem "rack"
+        gem "myrack"
         gem "foo"
       G
       bundle :lock
@@ -786,9 +815,9 @@ RSpec.describe "bundle outdated" do
       end
 
       install_gemfile <<-G
-        source "#{file_uri_for(gem_repo2)}"
+        source "https://gem.repo2"
 
-        gem "rack"
+        gem "myrack"
         gem "foo"
       G
       bundle "config set --local deployment true"
@@ -811,7 +840,7 @@ RSpec.describe "bundle outdated" do
       build_repo2
 
       install_gemfile <<-G
-        source "#{file_uri_for(gem_repo2)}"
+        source "https://gem.repo2"
         gem "laduradura", '= 5.15.2'
       G
     end
@@ -829,7 +858,7 @@ RSpec.describe "bundle outdated" do
 
     it "reports that updates are available if the Ruby platform is used" do
       install_gemfile <<-G
-        source "#{file_uri_for(gem_repo2)}"
+        source "https://gem.repo2"
         gem "laduradura", '= 5.15.2', :platforms => [:ruby, :jruby]
       G
 
@@ -839,7 +868,7 @@ RSpec.describe "bundle outdated" do
 
     it "reports that updates are available if the JRuby platform is used", :jruby_only do
       install_gemfile <<-G
-        source "#{file_uri_for(gem_repo2)}"
+        source "https://gem.repo2"
         gem "laduradura", '= 5.15.2', :platforms => [:ruby, :jruby]
       G
 
@@ -872,7 +901,7 @@ RSpec.describe "bundle outdated" do
       end
 
       install_gemfile <<-G
-        source "#{file_uri_for(gem_repo2)}"
+        source "https://gem.repo2"
         gem "zebra", :git => "#{lib_path("zebra")}"
         gem "foo", :git => "#{lib_path("foo")}"
         gem "activesupport", "2.3.5"
@@ -898,7 +927,7 @@ RSpec.describe "bundle outdated" do
       end
 
       install_gemfile <<-G
-        source "#{file_uri_for(gem_repo2)}"
+        source "https://gem.repo2"
         gem "zebra", :git => "#{lib_path("zebra")}"
         gem "foo", :git => "#{lib_path("foo")}"
         gem "activesupport", "2.3.5"
@@ -928,7 +957,7 @@ RSpec.describe "bundle outdated" do
       end
 
       install_gemfile <<-G
-        source "#{file_uri_for(gem_repo2)}"
+        source "https://gem.repo2"
         gem "zebra", :git => "#{lib_path("zebra")}"
         gem "foo", :git => "#{lib_path("foo")}"
         gem "activesupport", "2.3.5"
@@ -954,7 +983,7 @@ RSpec.describe "bundle outdated" do
       end
 
       install_gemfile <<-G
-        source "#{file_uri_for(gem_repo2)}"
+        source "https://gem.repo2"
         gem "zebra", :git => "#{lib_path("zebra")}"
         gem "foo", :git => "#{lib_path("foo")}"
         gem "activesupport", "2.3.5"
@@ -987,7 +1016,7 @@ RSpec.describe "bundle outdated" do
       end
 
       install_gemfile <<-G
-        source "#{file_uri_for(gem_repo2)}"
+        source "https://gem.repo2"
         gem "zebra", :git => "#{lib_path("zebra")}"
         gem "foo", :git => "#{lib_path("foo")}"
         gem "activesupport", "2.3.5"
@@ -1013,7 +1042,7 @@ RSpec.describe "bundle outdated" do
       end
 
       install_gemfile <<-G
-        source "#{file_uri_for(gem_repo2)}"
+        source "https://gem.repo2"
         gem "zebra", :git => "#{lib_path("zebra")}"
         gem "foo", :git => "#{lib_path("foo")}"
         gem "activesupport", "2.3.5"
@@ -1039,7 +1068,7 @@ RSpec.describe "bundle outdated" do
       end
 
       install_gemfile <<-G
-        source "#{file_uri_for(gem_repo2)}"
+        source "https://gem.repo2"
         gem "zebra", :git => "#{lib_path("zebra")}"
         gem "foo", :git => "#{lib_path("foo")}"
         gem "activesupport", "2.3.5"
@@ -1123,7 +1152,7 @@ RSpec.describe "bundle outdated" do
 
       # establish a lockfile set to 1.0.0
       install_gemfile <<-G
-        source "#{file_uri_for(gem_repo4)}"
+        source "https://gem.repo4"
         gem 'patch', '1.0.0'
         gem 'minor', '1.0.0'
         gem 'major', '1.0.0'
@@ -1131,7 +1160,7 @@ RSpec.describe "bundle outdated" do
 
       # remove all version requirements
       gemfile <<-G
-        source "#{file_uri_for(gem_repo4)}"
+        source "https://gem.repo4"
         gem 'patch'
         gem 'minor'
         gem 'major'
@@ -1196,7 +1225,7 @@ RSpec.describe "bundle outdated" do
 
       # establish a lockfile set to 1.4.3
       install_gemfile <<-G
-        source "#{file_uri_for(gem_repo4)}"
+        source "https://gem.repo4"
         gem 'foo', '1.4.3'
         gem 'bar', '2.0.3'
         gem 'qux', '1.0.0'
@@ -1205,7 +1234,7 @@ RSpec.describe "bundle outdated" do
       # remove 1.4.3 requirement and bar altogether
       # to setup update specs below
       gemfile <<-G
-        source "#{file_uri_for(gem_repo4)}"
+        source "https://gem.repo4"
         gem 'foo'
         gem 'qux'
       G
@@ -1246,13 +1275,13 @@ RSpec.describe "bundle outdated" do
       end
 
       install_gemfile <<-G
-        source "#{file_uri_for(gem_repo4)}"
+        source "https://gem.repo4"
         gem 'weakling', '0.2'
         gem 'bar', '2.1'
       G
 
       gemfile  <<-G
-        source "#{file_uri_for(gem_repo4)}"
+        source "https://gem.repo4"
         gem 'weakling'
       G
 
@@ -1283,7 +1312,7 @@ RSpec.describe "bundle outdated" do
 
       lockfile <<~L
         GEM
-          remote: #{file_uri_for(gem_repo4)}/
+          remote: https://gem.repo4/
           specs:
             nokogiri (1.11.1)
             nokogiri (1.11.1-#{Bundler.local_platform})
@@ -1300,7 +1329,7 @@ RSpec.describe "bundle outdated" do
       L
 
       gemfile <<-G
-        source "#{file_uri_for(gem_repo4)}"
+        source "https://gem.repo4"
         gem "nokogiri"
       G
     end
@@ -1330,14 +1359,14 @@ RSpec.describe "bundle outdated" do
       end
 
       gemfile <<~G
-        source "#{file_uri_for(gem_repo4)}"
+        source "https://gem.repo4"
 
         gem "mini_portile2"
       G
 
       lockfile <<~L
         GEM
-          remote: #{file_uri_for(gem_repo4)}/
+          remote: https://gem.repo4/
           specs:
             mini_portile2 (2.5.2)
               net-ftp (~> 0.1)

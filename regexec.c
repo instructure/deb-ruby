@@ -240,11 +240,11 @@ Glossary for "match cache"
 The `Regexp#match` optimization by using a cache.
 
 "cache opcode"
-A cachable opcode (e.g. `OP_PUSH`, `OP_REPEAT`, etc).
+A cacheable opcode (e.g. `OP_PUSH`, `OP_REPEAT`, etc).
 It is corresponding to some cache points.
 
 "cache point"
-A cachable point on matching.
+A cacheable point on matching.
 Usually, one-to-one corresponding between a cache opcode and a cache point exists,
 but cache opcodes between `OP_REPEAT` and `OP_REPEAT_INC` have some corresponding
 cache points depending on repetition counts.
@@ -3534,7 +3534,7 @@ match_at(regex_t* reg, const UChar* str, const UChar* end,
 	n = pend - pstart;
 	DATA_ENSURE(n);
 	sprev = s;
-	STRING_CMP_IC(case_fold_flag, pstart, &s, (int)n, end);
+	STRING_CMP_IC(case_fold_flag, pstart, &s, n, end);
 	while (sprev + (len = enclen_approx(encode, sprev, end)) < s)
 	  sprev += len;
 
@@ -4158,7 +4158,7 @@ match_at(regex_t* reg, const UChar* str, const UChar* end,
 	  size_t length = (end - str) + 1;
 	  size_t num_match_cache_points = (size_t)msa->num_cache_points * length;
 #ifdef ONIG_DEBUG_MATCH_CACHE
-	  fprintf(stderr, "MATCH CACHE: #match cache points = %ld (length = %zu)\n", num_match_cache_points, length);
+	  fprintf(stderr, "MATCH CACHE: #match cache points = %zu (length = %zu)\n", num_match_cache_points, length);
 #endif
 	  /* Overflow check */
 	  if (num_match_cache_points / length != (size_t)msa->num_cache_points) {
@@ -4217,10 +4217,9 @@ match_at(regex_t* reg, const UChar* str, const UChar* end,
   return ONIGERR_UNEXPECTED_BYTECODE;
 
  timeout:
+  STACK_SAVE;
   xfree(xmalloc_base);
-  if (stk_base != stk_alloc || IS_NOT_NULL(msa->stack_p))
-      xfree(stk_base);
-  HANDLE_REG_TIMEOUT_IN_MATCH_AT;
+  return ONIGERR_TIMEOUT;
 }
 
 
@@ -5212,44 +5211,64 @@ onig_search_gpos(regex_t* reg, const UChar* str, const UChar* end,
 # ifdef USE_FIND_LONGEST_SEARCH_ALL_OF_RANGE
 #  define MATCH_AND_RETURN_CHECK(upper_range) \
   r = match_at(reg, str, end, (upper_range), s, prev, &msa); \
-  if (r != ONIG_MISMATCH) {\
-    if (r >= 0) {\
-      if (! IS_FIND_LONGEST(reg->options)) {\
-        goto match;\
+  switch (r) { \
+    case ONIG_MISMATCH: \
+      break; \
+    case ONIGERR_TIMEOUT: \
+      goto timeout; \
+    default: \
+      if (r >= 0) { \
+        if (! IS_FIND_LONGEST(reg->options)) { \
+          goto match; \
+        }\
       }\
-    }\
-    else goto finish; /* error */ \
+      else goto finish; /* error */ \
   }
 # else
 #  define MATCH_AND_RETURN_CHECK(upper_range) \
   r = match_at(reg, str, end, (upper_range), s, prev, &msa); \
-  if (r != ONIG_MISMATCH) {\
-    if (r >= 0) {\
-      goto match;\
-    }\
-    else goto finish; /* error */ \
+  switch (r) { \
+    case ONIG_MISMATCH: \
+      break; \
+    case ONIGERR_TIMEOUT: \
+      goto timeout; \
+    default: \
+      if (r >= 0) { \
+        goto match; \
+      }\
+      else goto finish; /* error */ \
   }
 # endif /* USE_FIND_LONGEST_SEARCH_ALL_OF_RANGE */
 #else
 # ifdef USE_FIND_LONGEST_SEARCH_ALL_OF_RANGE
 #  define MATCH_AND_RETURN_CHECK(none) \
   r = match_at(reg, str, end, s, prev, &msa);\
-  if (r != ONIG_MISMATCH) {\
-    if (r >= 0) {\
-      if (! IS_FIND_LONGEST(reg->options)) {\
-        goto match;\
-      }\
-    }\
-    else goto finish; /* error */ \
+  switch (r) { \
+    case ONIG_MISMATCH: \
+      break; \
+    case ONIGERR_TIMEOUT: \
+      goto timeout; \
+    default: \
+      if (r >= 0) { \
+        if (! IS_FIND_LONGEST(reg->options)) { \
+          goto match; \
+        } \
+      } \
+      else goto finish; /* error */ \
   }
 # else
 #  define MATCH_AND_RETURN_CHECK(none) \
   r = match_at(reg, str, end, s, prev, &msa);\
-  if (r != ONIG_MISMATCH) {\
-    if (r >= 0) {\
-      goto match;\
-    }\
-    else goto finish; /* error */ \
+  switch (r) { \
+    case ONIG_MISMATCH: \
+      break; \
+    case ONIGERR_TIMEOUT: \
+      goto timeout; \
+    default: \
+    if (r >= 0) { \
+        goto match; \
+      } \
+      else goto finish; /* error */ \
   }
 # endif /* USE_FIND_LONGEST_SEARCH_ALL_OF_RANGE */
 #endif /* USE_MATCH_RANGE_MUST_BE_INSIDE_OF_SPECIFIED_RANGE */
@@ -5552,6 +5571,10 @@ onig_search_gpos(regex_t* reg, const UChar* str, const UChar* end,
  match:
   MATCH_ARG_FREE(msa);
   return s - str;
+
+timeout:
+  MATCH_ARG_FREE(msa);
+  return ONIGERR_TIMEOUT;
 }
 
 extern OnigPosition

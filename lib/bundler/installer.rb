@@ -69,9 +69,7 @@ module Bundler
       Bundler.create_bundle_path
 
       ProcessLock.lock do
-        if Bundler.frozen_bundle?
-          @definition.ensure_equivalent_gemfile_and_lockfile(options[:deployment])
-        end
+        @definition.ensure_equivalent_gemfile_and_lockfile(options[:deployment])
 
         if @definition.dependencies.empty?
           Bundler.ui.warn "The Gemfile specifies no dependencies"
@@ -79,12 +77,9 @@ module Bundler
           return
         end
 
-        if resolve_if_needed(options)
+        if @definition.setup_domain!(options)
           ensure_specs_are_compatible!
-          load_plugins
-          options.delete(:jobs)
-        else
-          options[:jobs] = 1 # to avoid the overhead of Bundler::Worker
+          Bundler.load_plugins(@definition)
         end
         install(options)
 
@@ -196,35 +191,22 @@ module Bundler
     # that said, it's a rare situation (other than rake), and parallel
     # installation is SO MUCH FASTER. so we let people opt in.
     def install(options)
-      force = options["force"]
-      jobs = installation_parallelization(options)
-      install_in_parallel jobs, options[:standalone], force
+      standalone = options[:standalone]
+      force = options[:force]
+      local = options[:local]
+      jobs = installation_parallelization
+      spec_installations = ParallelInstaller.call(self, @definition.specs, jobs, standalone, force, local: local)
+      spec_installations.each do |installation|
+        post_install_messages[installation.name] = installation.post_install_message if installation.has_post_install_message?
+      end
     end
 
-    def installation_parallelization(options)
-      if jobs = options.delete(:jobs)
-        return jobs
-      end
-
+    def installation_parallelization
       if jobs = Bundler.settings[:jobs]
         return jobs
       end
 
       Bundler.settings.processor_count
-    end
-
-    def load_plugins
-      Gem.load_plugins
-
-      requested_path_gems = @definition.requested_specs.select {|s| s.source.is_a?(Source::Path) }
-      path_plugin_files = requested_path_gems.map do |spec|
-        Bundler.rubygems.spec_matches_for_glob(spec, "rubygems_plugin#{Bundler.rubygems.suffix_pattern}")
-      rescue TypeError
-        error_message = "#{spec.name} #{spec.version} has an invalid gemspec"
-        raise Gem::InvalidSpecificationException, error_message
-      end.flatten
-      Gem.load_plugin_files(path_plugin_files)
-      Gem.load_env_plugins
     end
 
     def ensure_specs_are_compatible!
@@ -237,26 +219,6 @@ module Bundler
           raise InstallError, "#{spec.full_name} requires rubygems version #{spec.required_rubygems_version}, " \
             "which is incompatible with the current version, #{Gem.rubygems_version}"
         end
-      end
-    end
-
-    def install_in_parallel(size, standalone, force = false)
-      spec_installations = ParallelInstaller.call(self, @definition.specs, size, standalone, force)
-      spec_installations.each do |installation|
-        post_install_messages[installation.name] = installation.post_install_message if installation.has_post_install_message?
-      end
-    end
-
-    # returns whether or not a re-resolve was needed
-    def resolve_if_needed(options)
-      @definition.prefer_local! if options["prefer-local"]
-
-      if options["local"] || (@definition.no_resolve_needed? && !@definition.missing_specs?)
-        @definition.resolve_with_cache!
-        false
-      else
-        @definition.resolve_remotely!
-        true
       end
     end
 

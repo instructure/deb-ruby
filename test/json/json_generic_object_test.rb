@@ -1,4 +1,4 @@
-#frozen_string_literal: false
+# frozen_string_literal: true
 require_relative 'test_helper'
 
 class JSONGenericObjectTest < Test::Unit::TestCase
@@ -79,4 +79,4 @@ class JSONGenericObjectTest < Test::Unit::TestCase
   ensure
     JSON::GenericObject.json_creatable = false
   end
-end
+end if defined?(JSON::GenericObject)
