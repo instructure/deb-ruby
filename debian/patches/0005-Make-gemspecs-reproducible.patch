@@ -5,23 +5,12 @@ Subject: Make gemspecs reproducible
 Without an explicit date, they will get the current date and make the
 build unreproducible
 ---
- ext/bigdecimal/bigdecimal.gemspec | 1 +
  ext/fiddle/fiddle.gemspec         | 1 +
  ext/io/console/io-console.gemspec | 1 +
  lib/ipaddr.gemspec                | 1 +
  lib/rdoc/rdoc.gemspec             | 1 +
- 5 files changed, 5 insertions(+)
+ 4 files changed, 4 insertions(+)
 
---- a/ext/bigdecimal/bigdecimal.gemspec
-+++ b/ext/bigdecimal/bigdecimal.gemspec
-@@ -14,6 +14,7 @@
-   s.name          = name
-   s.version       = source_version
-   s.authors       = ["Kenta Murata", "Zachary Scott", "Shigeo Kobayashi"]
-+  s.date          = RUBY_RELEASE_DATE
-   s.email         = ["mrkn@mrkn.jp"]
- 
-   s.summary       = "Arbitrary-precision decimal floating-point number library."
 --- a/ext/fiddle/fiddle.gemspec
 +++ b/ext/fiddle/fiddle.gemspec
 @@ -8,6 +8,7 @@
