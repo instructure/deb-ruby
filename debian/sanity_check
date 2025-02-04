@@ -9,8 +9,12 @@ archlibdir=usr/lib/${arch}
 
 # files that should NOT exist
 test '!' -f  debian/tmp/${libdir}/libruby-${RUBY_VERSION}.so.${RUBY_VERSION}
-ls -la debian/tmp/${libdir}/pkgconfig
-test '!' -f  debian/tmp/${libdir}/pkgconfig/ruby-${RUBY_VERSION}.pc
+
+# only run if this is not a symbolic link
+# https://github.com/ruby/ruby/commit/120c291fafd438e2bc58f098023c669dadc64b08
+if [ ! -L "debian/tmp/${libdir}/pkgconfig" ]; then
+  test '!' -f "debian/tmp/${libdir}/pkgconfig/ruby-${RUBY_VERSION}.pc"
+fi
 
 # files that should exist
 ls -1 debian/tmp/${archlibdir}/libruby-${RUBY_VERSION}.so.${RUBY_VERSION}

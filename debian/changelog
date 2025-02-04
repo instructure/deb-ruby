@@ -1,3 +1,10 @@
+ruby3.4 (3.4.1-1ppa5) focal; urgency=medium
+
+  [ Aaron Ogata ]
+  * only run check if parent directory isn’t symlink
+
+ -- root <aogata@instructure.com>  Tue, 04 Feb 2025 10:20:03 -0800
+
 ruby3.4 (3.4.1-1ppa4) focal; urgency=medium
 
   [ Aaron Ogata ]
