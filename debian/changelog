@@ -1,3 +1,10 @@
+ruby3.4 (3.4.1-1ppa4) focal; urgency=medium
+
+  [ Aaron Ogata ]
+  * check if this file is a symbolic link
+
+ -- root <aogata@instructure.com>  Tue, 04 Feb 2025 09:52:36 -0800
+
 ruby3.4 (3.4.1-1ppa3) focal; urgency=medium
 
   * enable trace logging on debian/sanity_check
