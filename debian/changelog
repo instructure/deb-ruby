@@ -1,3 +1,9 @@
+ruby3.4 (3.4.1-1ppa3) focal; urgency=medium
+
+  * enable trace logging on debian/sanity_check
+
+ -- aogata <aogata@instructure.com>  Tue, 04 Feb 2025 08:32:08 -0800
+
 ruby3.4 (3.4.1-1ppa2) focal; urgency=medium
 
   * skip new test
