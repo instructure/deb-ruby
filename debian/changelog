@@ -1,3 +1,10 @@
+ruby3.4 (3.4.1-1ppa11) focal; urgency=medium
+
+  [ Aaron Ogata ]
+  * read symlink directly
+
+ -- root <aogata@instructure.com>  Wed, 05 Feb 2025 11:25:17 -0800
+
 ruby3.4 (3.4.1-1ppa10) focal; urgency=medium
 
   [ Aaron Ogata ]

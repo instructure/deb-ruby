@@ -137,8 +137,12 @@ override_dh_auto_install-arch:
 	$(MAKE) install-nodoc V=1 DESTDIR=$(CURDIR)/debian/tmp
 	find $(CURDIR)/debian/tmp -ls
 	# restore previous behaviour from ruby 3.3
-	# rm -f $(CURDIR)/debian/tmp/usr/bin/ruby$(RUBY_VERSION)
-	# cp $(CURDIR)/debian/tmp/usr/$(DEB_HOST_MULTIARCH)/bin/ruby$(RUBY_VERSION) $(CURDIR)/debian/tmp/usr/bin/
+	# replace the symlink with the actual file - /usr/x86_64-pc-linux-gnu/bin
+	if [ -L $(CURDIR)/debian/tmp/usr/bin/ruby$(RUBY_VERSION) ]; then \
+		TARGET=$$(readlink -f $(CURDIR)/debian/tmp/usr/bin/ruby$(RUBY_VERSION)); \
+		rm -f $(CURDIR)/debian/tmp/usr/bin/ruby$(RUBY_VERSION); \
+		cp $$TARGET $(CURDIR)/debian/tmp/usr/bin/ruby$(RUBY_VERSION); \
+	fi
 	# handle embedded copy of jquery
 	$(RM) $(CURDIR)/debian/tmp/usr/lib/ruby/$(RUBY_API_VERSION)/rdoc/generator/template/darkfish/js/jquery.js
 	dh_link -plibruby$(RUBY_VERSION) /usr/share/javascript/jquery/jquery.min.js /usr/lib/ruby/$(RUBY_API_VERSION)/rdoc/generator/template/darkfish/js/jquery.js
