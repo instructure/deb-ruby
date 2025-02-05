@@ -1,3 +1,10 @@
+ruby3.4 (3.4.1-1ppa10) focal; urgency=medium
+
+  [ Aaron Ogata ]
+  * debug files
+
+ -- root <aogata@instructure.com>  Wed, 05 Feb 2025 10:37:59 -0800
+
 ruby3.4 (3.4.1-1ppa9) focal; urgency=medium
 
   [ Aaron Ogata ]
