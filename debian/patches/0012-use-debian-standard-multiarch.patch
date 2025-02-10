@@ -1,0 +1,32 @@
+Description: Avoid multiarching bins and linking multiarch lib data to global dirs
+  This reverts the effects of github.com/ruby/ruby/pull/10010 to remain in alignment with standard
+  debian multiarch filesystem layout
+Origin: https://github.com/sorah-rbpkg/ruby/commit/f482d322a9490cee80ac6af4e08cdfb1f4b7abbc (cleaned up)
+Last-Update: 2025-02-10
+---
+This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
+--- a/tool/rbinstall.rb
++++ b/tool/rbinstall.rb
+@@ -366,9 +366,7 @@
+ goruby_install_name = "go" + ruby_install_name
+ 
+ bindir = CONFIG["bindir", true]
+-if CONFIG["libdirname"] == "archlibdir"
+-  archbindir = bindir.sub(%r[/\K(?=[^/]+\z)]) {CONFIG["config_target"] + "/"}
+-end
++archbindir = nil
+ libdir = CONFIG[CONFIG.fetch("libdirname", "libdir"), true]
+ rubyhdrdir = CONFIG["rubyhdrdir", true]
+ archhdrdir = CONFIG["rubyarchhdrdir"] || (rubyhdrdir + "/" + CONFIG['arch'])
+@@ -898,11 +896,6 @@
+   if pc and File.file?(pc) and File.size?(pc)
+     prepare "pkgconfig data", pkgconfigdir = File.join(libdir, "pkgconfig")
+     install pc, pkgconfigdir, :mode => $data_mode
+-    if (pkgconfig_base = CONFIG["libdir", true]) != libdir
+-      prepare "pkgconfig data link", File.join(pkgconfig_base, "pkgconfig")
+-      ln_sf(File.join("..", Path.relative(pkgconfigdir, pkgconfig_base), pc),
+-            File.join(pkgconfig_base, "pkgconfig", pc))
+-    end
+   end
+ end
+ 
