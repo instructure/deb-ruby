@@ -1,3 +1,9 @@
+ruby3.4 (3.4.1-1ppa12) focal; urgency=medium
+
+  * Make multiarch behave in debian-standard way
+
+ -- Jacob Burroughs <jburroughs@instructure.com>  Mon, 10 Feb 2025 16:48:28 -0600
+
 ruby3.4 (3.4.1-1ppa11) focal; urgency=medium
 
   [ Aaron Ogata ]
