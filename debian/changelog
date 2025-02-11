@@ -1,3 +1,9 @@
+ruby3.3 (3.3.3-1ppa2) focal; urgency=medium
+
+  * Re-release for noble
+
+ -- Jacob Burroughs <jburroughs@instructure.com>  Mon, 11 Feb 2025 13:00:04 -0500
+
 ruby3.3 (3.3.3-1ppa1) focal; urgency=medium
 
   * New upstream version 3.3.3
