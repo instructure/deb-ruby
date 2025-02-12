@@ -1,3 +1,9 @@
+ruby3.3 (3.3.3-1ppa3) focal; urgency=medium
+
+  * Fix symbols for newer ubuntu
+
+ -- Jacob Burroughs <jburroughs@instructure.com>  Wed, 12 Feb 2025 09:59:58 -0600
+
 ruby3.3 (3.3.3-1ppa2) focal; urgency=medium
 
   * Re-release for noble
