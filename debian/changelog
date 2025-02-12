@@ -1,3 +1,10 @@
+ruby3.4 (3.4.1-1ppa14) focal; urgency=medium
+
+  [ Aaron Ogata ]
+  * fix symbols
+
+ -- root <aogata@instructure.com>  Wed, 12 Feb 2025 11:06:46 -0800
+
 ruby3.4 (3.4.1-1ppa13) focal; urgency=medium
 
   [ Jacob Burroughs ]
