@@ -1,3 +1,10 @@
+ruby3.4 (3.4.1-1ppa13) focal; urgency=medium
+
+  [ Jacob Burroughs ]
+  * Update publish.yml
+
+ -- root <aogata@instructure.com>  Wed, 12 Feb 2025 10:25:09 -0800
+
 ruby3.4 (3.4.1-1ppa12) focal; urgency=medium
 
   * Make multiarch behave in debian-standard way
