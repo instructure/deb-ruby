@@ -88,28 +88,32 @@ class TestIOBuffer < Test::Unit::TestCase
   def test_string_mapped
     string = "Hello World"
     buffer = IO::Buffer.for(string)
-    refute buffer.readonly?
-
-    # Cannot modify string as it's locked by the buffer:
-    assert_raise RuntimeError do
-      string[0] = "h"
-    end
-
-    buffer.set_value(:U8, 0, "h".ord)
-
-    # Buffer releases it's ownership of the string:
-    buffer.free
-
-    assert_equal "hello World", string
-    string[0] = "H"
-    assert_equal "Hello World", string
+    assert buffer.readonly?
   end
 
   def test_string_mapped_frozen
     string = "Hello World".freeze
     buffer = IO::Buffer.for(string)
-
     assert buffer.readonly?
+  end
+
+  def test_string_mapped_mutable
+    string = "Hello World"
+    IO::Buffer.for(string) do |buffer|
+      refute buffer.readonly?
+
+      # Cannot modify string as it's locked by the buffer:
+      assert_raise RuntimeError do
+        string[0] = "h"
+      end
+
+      buffer.set_value(:U8, 0, "h".ord)
+
+      # Buffer releases it's ownership of the string:
+      buffer.free
+
+      assert_equal "hello World", string
+    end
   end
 
   def test_non_string
@@ -136,6 +140,24 @@ class TestIOBuffer < Test::Unit::TestCase
     buffer.set_string(message)
     buffer.resize(2048)
     assert_equal message, buffer.get_string(0, message.bytesize)
+  end
+
+  def test_resize_zero_internal
+    buffer = IO::Buffer.new(1)
+
+    buffer.resize(0)
+    assert_equal 0, buffer.size
+
+    buffer.resize(1)
+    assert_equal 1, buffer.size
+  end
+
+  def test_resize_zero_external
+    buffer = IO::Buffer.for('1')
+
+    assert_raise IO::Buffer::AccessError do
+      buffer.resize(0)
+    end
   end
 
   def test_compare_same_size
@@ -205,6 +227,14 @@ class TestIOBuffer < Test::Unit::TestCase
 
     chunk = buffer.get_string(0, message.bytesize, Encoding::BINARY)
     assert_equal Encoding::BINARY, chunk.encoding
+
+    assert_raise_with_message(ArgumentError, /exceeds buffer size/) do
+      buffer.get_string(0, 129)
+    end
+
+    assert_raise_with_message(ArgumentError, /exceeds buffer size/) do
+      buffer.get_string(129)
+    end
   end
 
   # We check that values are correctly round tripped.

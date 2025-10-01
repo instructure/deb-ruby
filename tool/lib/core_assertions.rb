@@ -264,7 +264,7 @@ module Test
         src = <<eom
 # -*- coding: #{line += __LINE__; src.encoding}; -*-
 BEGIN {
-  require "test/unit";include Test::Unit::Assertions;include Test::Unit::CoreAssertions;require #{__FILE__.dump}
+  require "test/unit";include Test::Unit::Assertions;require #{__FILE__.dump};include Test::Unit::CoreAssertions
   separated_runner #{token_dump}, #{res_c&.fileno || 'nil'}
 }
 #{line -= __LINE__; src}
@@ -725,6 +725,64 @@ eom
         assert(all.pass?, message(msg) {all.message.chomp(".")})
       end
       alias all_assertions_foreach assert_all_assertions_foreach
+
+      %w[
+        CLOCK_THREAD_CPUTIME_ID CLOCK_PROCESS_CPUTIME_ID
+        CLOCK_MONOTONIC
+      ].find do |c|
+        if Process.const_defined?(c)
+          [c.to_sym, Process.const_get(c)].find do |clk|
+            begin
+              Process.clock_gettime(clk)
+            rescue
+              # Constants may be defined but not implemented, e.g., mingw.
+            else
+              PERFORMANCE_CLOCK = clk
+            end
+          end
+        end
+      end
+
+      # Expect +seq+ to respond to +first+ and +each+ methods, e.g.,
+      # Array, Range, Enumerator::ArithmeticSequence and other
+      # Enumerable-s, and each elements should be size factors.
+      #
+      # :yield: each elements of +seq+.
+      def assert_linear_performance(seq, rehearsal: nil, pre: ->(n) {n})
+        pend "No PERFORMANCE_CLOCK found" unless defined?(PERFORMANCE_CLOCK)
+
+        # Timeout testing generally doesn't work when RJIT compilation happens.
+        rjit_enabled = defined?(RubyVM::RJIT) && RubyVM::RJIT.enabled?
+        measure = proc do |arg, message|
+          st = Process.clock_gettime(PERFORMANCE_CLOCK)
+          yield(*arg)
+          t = (Process.clock_gettime(PERFORMANCE_CLOCK) - st)
+          assert_operator 0, :<=, t, message unless rjit_enabled
+          t
+        end
+
+        first = seq.first
+        *arg = pre.call(first)
+        times = (0..(rehearsal || (2 * first))).map do
+          measure[arg, "rehearsal"].nonzero?
+        end
+        times.compact!
+        tmin, tmax = times.minmax
+
+        # safe_factor * tmax * rehearsal_time_variance_factor(equals to 1 when variance is small)
+        tbase = 10 * tmax * [(tmax / tmin) ** 2 / 4, 1].max
+        info = "(tmin: #{tmin}, tmax: #{tmax}, tbase: #{tbase})"
+
+        seq.each do |i|
+          next if i == first
+          t = tbase * i.fdiv(first)
+          *arg = pre.call(i)
+          message = "[#{i}]: in #{t}s #{info}"
+          Timeout.timeout(t, Timeout::Error, message) do
+            measure[arg, message]
+          end
+        end
+      end
 
       def diff(exp, act)
         require 'pp'

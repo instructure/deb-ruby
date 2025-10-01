@@ -564,14 +564,24 @@ module URI
       end
     end
 
-    # Returns the user component.
+    # Returns the user component (without URI decoding).
     def user
       @user
     end
 
-    # Returns the password component.
+    # Returns the password component (without URI decoding).
     def password
       @password
+    end
+
+    # Returns the user component after URI decoding.
+    def decoded_user
+      URI.decode_uri_component(@user) if @user
+    end
+
+    # Returns the password component after URI decoding.
+    def decoded_password
+      URI.decode_uri_component(@password) if @password
     end
 
     #
@@ -1123,17 +1133,16 @@ module URI
       base.fragment=(nil)
 
       # RFC2396, Section 5.2, 4)
-      if !authority
-        base.set_path(merge_path(base.path, rel.path)) if base.path && rel.path
-      else
-        # RFC2396, Section 5.2, 4)
-        base.set_path(rel.path) if rel.path
+      if authority
+        base.set_userinfo(rel.userinfo)
+        base.set_host(rel.host)
+        base.set_port(rel.port || base.default_port)
+        base.set_path(rel.path)
+      elsif base.path && rel.path
+        base.set_path(merge_path(base.path, rel.path))
       end
 
       # RFC2396, Section 5.2, 7)
-      base.set_userinfo(rel.userinfo) if rel.userinfo
-      base.set_host(rel.host)         if rel.host
-      base.set_port(rel.port)         if rel.port
       base.query = rel.query       if rel.query
       base.fragment=(rel.fragment) if rel.fragment
 

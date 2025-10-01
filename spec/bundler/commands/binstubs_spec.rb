@@ -225,8 +225,11 @@ RSpec.describe "bundle binstubs <gem>" do
         before { lockfile.gsub(system_bundler_version, "1.1.1") }
 
         it "calls through to the latest bundler version" do
-          sys_exec "bin/bundle update --bundler", :env => { "DEBUG" => "1" }
-          expect(out).to include %(Using bundler #{system_bundler_version}\n)
+          sys_exec "bin/bundle update --bundler=#{Bundler::VERSION}", :env => { "DEBUG" => "1" }
+          using_bundler_line = /Using bundler ([\w\.]+)\n/.match(out)
+          expect(using_bundler_line).to_not be_nil
+          latest_version = using_bundler_line[1]
+          expect(Gem::Version.new(latest_version)).to be >= Gem::Version.new(system_bundler_version)
         end
 
         it "calls through to the explicit bundler version" do

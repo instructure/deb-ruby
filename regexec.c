@@ -1176,11 +1176,13 @@ static int string_cmp_ic(OnigEncoding enc, int case_fold_flag,
 # define DATA_ENSURE_CHECK1    (s < right_range)
 # define DATA_ENSURE_CHECK(n)  (s + (n) <= right_range)
 # define DATA_ENSURE(n)        if (s + (n) > right_range) goto fail
+# define DATA_ENSURE_CONTINUE(n) if (s + (n) > right_range) continue
 # define ABSENT_END_POS        right_range
 #else
 # define DATA_ENSURE_CHECK1    (s < end)
 # define DATA_ENSURE_CHECK(n)  (s + (n) <= end)
 # define DATA_ENSURE(n)        if (s + (n) > end) goto fail
+# define DATA_ENSURE_CONTINUE(n) if (s + (n) > end) continue
 # define ABSENT_END_POS        end
 #endif /* USE_MATCH_RANGE_MUST_BE_INSIDE_OF_SPECIFIED_RANGE */
 
@@ -2528,8 +2530,8 @@ match_at(regex_t* reg, const UChar* str, const UChar* end,
     CASE(OP_MEMORY_END_PUSH_REC)  MOP_IN(OP_MEMORY_END_PUSH_REC);
       GET_MEMNUM_INC(mem, p);
       STACK_GET_MEM_START(mem, stkp); /* should be before push mem-end. */
-      STACK_PUSH_MEM_END(mem, s);
       mem_start_stk[mem] = GET_STACK_INDEX(stkp);
+      STACK_PUSH_MEM_END(mem, s);
       MOP_OUT;
       JUMP;
 
@@ -2643,7 +2645,7 @@ match_at(regex_t* reg, const UChar* str, const UChar* end,
 		  ? STACK_AT(mem_end_stk[mem])->u.mem.pstr
 		  : (UChar* )((void* )mem_end_stk[mem]));
 	  n = pend - pstart;
-	  DATA_ENSURE(n);
+	  DATA_ENSURE_CONTINUE(n);
 	  sprev = s;
 	  swork = s;
 	  STRING_CMP_VALUE(pstart, swork, n, is_fail);
@@ -2682,7 +2684,7 @@ match_at(regex_t* reg, const UChar* str, const UChar* end,
 		  ? STACK_AT(mem_end_stk[mem])->u.mem.pstr
 		  : (UChar* )((void* )mem_end_stk[mem]));
 	  n = pend - pstart;
-	  DATA_ENSURE(n);
+	  DATA_ENSURE_CONTINUE(n);
 	  sprev = s;
 	  swork = s;
 	  STRING_CMP_VALUE_IC(case_fold_flag, pstart, &swork, n, end, is_fail);
@@ -3902,11 +3904,16 @@ forward_search_range(regex_t* reg, const UChar* str, const UChar* end, UChar* s,
 		     UChar* range, UChar** low, UChar** high, UChar** low_prev)
 {
   UChar *p, *pprev = (UChar* )NULL;
+  size_t input_len = end - str;
 
 #ifdef ONIG_DEBUG_SEARCH
   fprintf(stderr, "forward_search_range: str: %"PRIuPTR" (%p), end: %"PRIuPTR" (%p), s: %"PRIuPTR" (%p), range: %"PRIuPTR" (%p)\n",
 	  (uintptr_t )str, str, (uintptr_t )end, end, (uintptr_t )s, s, (uintptr_t )range, range);
 #endif
+
+  if (reg->dmin > input_len) {
+    return 0;
+  }
 
   p = s;
   if (reg->dmin > 0) {
@@ -4044,6 +4051,11 @@ backward_search_range(regex_t* reg, const UChar* str, const UChar* end,
 		      UChar** low, UChar** high)
 {
   UChar *p;
+  size_t input_len = end - str;
+
+  if (reg->dmin > input_len) {
+    return 0;
+  }
 
   range += reg->dmin;
   p = s;

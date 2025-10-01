@@ -1738,6 +1738,7 @@ rb_objspace_alloc(void)
 }
 
 static void free_stack_chunks(mark_stack_t *);
+static void mark_stack_free_cache(mark_stack_t *);
 static void heap_page_free(rb_objspace_t *objspace, struct heap_page *page);
 
 void
@@ -1777,7 +1778,10 @@ rb_objspace_free(rb_objspace_t *objspace)
     }
     st_free_table(objspace->id_to_obj_tbl);
     st_free_table(objspace->obj_to_id_tbl);
+
     free_stack_chunks(&objspace->mark_stack);
+    mark_stack_free_cache(&objspace->mark_stack);
+
     free(objspace);
 }
 
@@ -2214,6 +2218,7 @@ rb_objspace_set_event_hook(const rb_event_flag_t event)
 static void
 gc_event_hook_body(rb_execution_context_t *ec, rb_objspace_t *objspace, const rb_event_flag_t event, VALUE data)
 {
+    if (UNLIKELY(!ec->cfp)) return;
     const VALUE *pc = ec->cfp->pc;
     if (pc && VM_FRAME_RUBYFRAME_P(ec->cfp)) {
         /* increment PC because source line is calculated with PC-1 */
@@ -5997,9 +6002,8 @@ pop_mark_stack_chunk(mark_stack_t *stack)
 }
 
 static void
-free_stack_chunks(mark_stack_t *stack)
+mark_stack_chunk_list_free(stack_chunk_t *chunk)
 {
-    stack_chunk_t *chunk = stack->chunk;
     stack_chunk_t *next = NULL;
 
     while (chunk != NULL) {
@@ -6007,6 +6011,20 @@ free_stack_chunks(mark_stack_t *stack)
         free(chunk);
         chunk = next;
     }
+}
+
+static void
+free_stack_chunks(mark_stack_t *stack)
+{
+    mark_stack_chunk_list_free(stack->chunk);
+}
+
+static void
+mark_stack_free_cache(mark_stack_t *stack)
+{
+    mark_stack_chunk_list_free(stack->cache);
+    stack->cache_size = 0;
+    stack->unused_cache_size = 0;
 }
 
 static void
@@ -6863,6 +6881,8 @@ gc_mark_imemo(rb_objspace_t *objspace, VALUE obj)
     }
 }
 
+static void mark_cvc_tbl(rb_objspace_t *objspace, VALUE klass);
+
 static void
 gc_mark_children(rb_objspace_t *objspace, VALUE obj)
 {
@@ -6909,6 +6929,7 @@ gc_mark_children(rb_objspace_t *objspace, VALUE obj)
 	if (!RCLASS_EXT(obj)) break;
 
         mark_m_tbl(objspace, RCLASS_M_TBL(obj));
+        mark_cvc_tbl(objspace, obj);
         cc_table_mark(objspace, obj);
         mark_tbl_no_pin(objspace, RCLASS_IV_TBL(obj));
 	mark_const_tbl(objspace, RCLASS_CONST_TBL(obj));
@@ -9820,8 +9841,13 @@ static enum rb_id_table_iterator_result
 update_cvc_tbl_i(ID id, VALUE cvc_entry, void *data)
 {
     struct rb_cvar_class_tbl_entry *entry;
+    rb_objspace_t * objspace = (rb_objspace_t *)data;
 
     entry = (struct rb_cvar_class_tbl_entry *)cvc_entry;
+
+    if (entry->cref) {
+        TYPED_UPDATE_IF_MOVED(objspace, rb_cref_t *, entry->cref);
+    }
 
     entry->class_value = rb_gc_location(entry->class_value);
 
@@ -9834,6 +9860,28 @@ update_cvc_tbl(rb_objspace_t *objspace, VALUE klass)
     struct rb_id_table *tbl = RCLASS_CVC_TBL(klass);
     if (tbl) {
         rb_id_table_foreach_with_replace(tbl, update_cvc_tbl_i, 0, objspace);
+    }
+}
+
+static enum rb_id_table_iterator_result
+mark_cvc_tbl_i(VALUE cvc_entry, void *data)
+{
+    struct rb_cvar_class_tbl_entry *entry;
+
+    entry = (struct rb_cvar_class_tbl_entry *)cvc_entry;
+
+    RUBY_ASSERT(entry->cref == 0 || (BUILTIN_TYPE((VALUE)entry->cref) == T_IMEMO && IMEMO_TYPE_P(entry->cref, imemo_cref)));
+    rb_gc_mark((VALUE) entry->cref);
+
+    return ID_TABLE_CONTINUE;
+}
+
+static void
+mark_cvc_tbl(rb_objspace_t *objspace, VALUE klass)
+{
+    struct rb_id_table *tbl = RCLASS_CVC_TBL(klass);
+    if (tbl) {
+        rb_id_table_foreach_values(tbl, mark_cvc_tbl_i, objspace);
     }
 }
 
@@ -10844,24 +10892,25 @@ get_envparam_double(const char *name, double *default_value, double lower_bound,
 }
 
 static void
-gc_set_initial_pages(void)
+gc_set_initial_pages(rb_objspace_t *objspace)
 {
-    size_t min_pages;
-    rb_objspace_t *objspace = &rb_objspace;
-
     gc_rest(objspace);
-
-    min_pages = gc_params.heap_init_slots / HEAP_PAGE_OBJ_LIMIT;
-
-    size_t pages_per_class = (min_pages - heap_eden_total_pages(objspace)) / SIZE_POOL_COUNT;
 
     for (int i = 0; i < SIZE_POOL_COUNT; i++) {
         rb_size_pool_t *size_pool = &size_pools[i];
 
-        heap_add_pages(objspace, size_pool, SIZE_POOL_EDEN_HEAP(size_pool), pages_per_class);
+        if (gc_params.heap_init_slots > size_pool->eden_heap.total_slots) {
+            size_t slots = gc_params.heap_init_slots - size_pool->eden_heap.total_slots;
+            int multiple = size_pool->slot_size / sizeof(RVALUE);
+            size_pool->allocatable_pages = slots * multiple / HEAP_PAGE_OBJ_LIMIT;
+        }
+        else {
+            /* We already have more slots than heap_init_slots allows, so
+             * prevent creating more pages. */
+            size_pool->allocatable_pages = 0;
+        }
     }
-
-    heap_add_pages(objspace, &size_pools[0], SIZE_POOL_EDEN_HEAP(&size_pools[0]), min_pages - heap_eden_total_pages(objspace));
+    heap_pages_expand_sorted(objspace);
 }
 
 /*
@@ -10909,6 +10958,7 @@ gc_set_initial_pages(void)
 void
 ruby_gc_set_params(void)
 {
+    rb_objspace_t *objspace = &rb_objspace;
     /* RUBY_GC_HEAP_FREE_SLOTS */
     if (get_envparam_size("RUBY_GC_HEAP_FREE_SLOTS", &gc_params.heap_free_slots, 0)) {
 	/* ok */
@@ -10916,7 +10966,7 @@ ruby_gc_set_params(void)
 
     /* RUBY_GC_HEAP_INIT_SLOTS */
     if (get_envparam_size("RUBY_GC_HEAP_INIT_SLOTS", &gc_params.heap_init_slots, 0)) {
-	gc_set_initial_pages();
+        gc_set_initial_pages(objspace);
     }
 
     get_envparam_double("RUBY_GC_HEAP_GROWTH_FACTOR", &gc_params.growth_factor, 1.0, 0.0, FALSE);
@@ -11747,7 +11797,15 @@ void
 ruby_sized_xfree(void *x, size_t size)
 {
     if (x) {
-	objspace_xfree(&rb_objspace, x, size);
+        /* It's possible for a C extension's pthread destructor function set by pthread_key_create
+         * to be called after ruby_vm_destruct and attempt to free memory. Fall back to mimfree in
+         * that case. */
+        if (GET_VM()) {
+            objspace_xfree(&rb_objspace, x, size);
+        }
+        else {
+            ruby_mimfree(x);
+        }
     }
 }
 
@@ -11934,12 +11992,47 @@ wmap_mark_map(st_data_t key, st_data_t val, st_data_t arg)
 }
 #endif
 
+static int
+wmap_replace_ref(st_data_t *key, st_data_t *value, st_data_t _argp, int existing)
+{
+    *key = rb_gc_location((VALUE)*key);
+
+    VALUE *values = (VALUE *)*value;
+    VALUE size = values[0];
+
+    for (VALUE index = 1; index <= size; index++) {
+        values[index] = rb_gc_location(values[index]);
+    }
+
+    return ST_CONTINUE;
+}
+
+static int
+wmap_foreach_replace(st_data_t key, st_data_t value, st_data_t _argp, int error)
+{
+    if (rb_gc_location((VALUE)key) != (VALUE)key) {
+        return ST_REPLACE;
+    }
+
+    VALUE *values = (VALUE *)value;
+    VALUE size = values[0];
+
+    for (VALUE index = 1; index <= size; index++) {
+        VALUE val = values[index];
+        if (rb_gc_location(val) != val) {
+            return ST_REPLACE;
+        }
+    }
+
+    return ST_CONTINUE;
+}
+
 static void
 wmap_compact(void *ptr)
 {
     struct weakmap *w = ptr;
     if (w->wmap2obj) rb_gc_update_tbl_refs(w->wmap2obj);
-    if (w->obj2wmap) rb_gc_update_tbl_refs(w->obj2wmap);
+    if (w->obj2wmap) st_foreach_with_replace(w->obj2wmap, wmap_foreach_replace, wmap_replace_ref, (st_data_t)NULL);
     w->final = rb_gc_location(w->final);
 }
 
@@ -11968,6 +12061,7 @@ wmap_free(void *ptr)
     st_foreach(w->obj2wmap, wmap_free_map, 0);
     st_free_table(w->obj2wmap);
     st_free_table(w->wmap2obj);
+    xfree(w);
 }
 
 static int
@@ -12018,20 +12112,21 @@ static int
 wmap_live_p(rb_objspace_t *objspace, VALUE obj)
 {
     if (SPECIAL_CONST_P(obj)) return TRUE;
-    if (is_pointer_to_heap(objspace, (void *)obj)) {
-        void *poisoned = asan_unpoison_object_temporary(obj);
+    /* If is_pointer_to_heap returns false, the page could be in the tomb heap
+     * or have already been freed. */
+    if (!is_pointer_to_heap(objspace, (void *)obj)) return FALSE;
 
-        enum ruby_value_type t = BUILTIN_TYPE(obj);
-        int ret = (!(t == T_NONE || t >= T_FIXNUM || t == T_ICLASS) &&
-                   is_live_object(objspace, obj));
+    void *poisoned = asan_unpoison_object_temporary(obj);
 
-        if (poisoned) {
-            asan_poison_object(obj);
-        }
+    enum ruby_value_type t = BUILTIN_TYPE(obj);
+    int ret = (!(t == T_NONE || t >= T_FIXNUM || t == T_ICLASS) &&
+                is_live_object(objspace, obj));
 
-        return ret;
+    if (poisoned) {
+        asan_poison_object(obj);
     }
-    return TRUE;
+
+    return ret;
 }
 
 static int
@@ -12050,9 +12145,9 @@ wmap_final_func(st_data_t *key, st_data_t *value, st_data_t arg, int existing)
 	return ST_DELETE;
     }
     if (j < i) {
-        SIZED_REALLOC_N(ptr, VALUE, j + 1, i);
-	ptr[0] = j;
-	*value = (st_data_t)ptr;
+        SIZED_REALLOC_N(ptr, VALUE, j, i);
+        ptr[0] = j - 1;
+        *value = (st_data_t)ptr;
     }
     return ST_CONTINUE;
 }

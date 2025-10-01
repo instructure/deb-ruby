@@ -654,6 +654,7 @@ static uint32_t month_arg(VALUE arg);
 static VALUE validate_utc_offset(VALUE utc_offset);
 static VALUE validate_zone_name(VALUE zone_name);
 static void validate_vtm(struct vtm *vtm);
+static void vtm_add_day(struct vtm *vtm, int day);
 static uint32_t obj2subsecx(VALUE obj, VALUE *subsecx);
 
 static VALUE time_gmtime(VALUE);
@@ -1764,6 +1765,7 @@ PACKED_STRUCT_UNALIGNED(struct time_object {
      (tobj1)->vtm.utc_offset = (tobj2)->vtm.utc_offset, \
      (tobj1)->vtm.zone = (tobj2)->vtm.zone)
 
+static int zone_localtime(VALUE zone, VALUE time);
 static VALUE time_get_tm(VALUE, struct time_object *);
 #define MAKE_TM(time, tobj) \
   do { \
@@ -1775,10 +1777,20 @@ static VALUE time_get_tm(VALUE, struct time_object *);
     do { \
         MAKE_TM(time, tobj); \
         if (!(cond)) { \
-            VALUE zone = (tobj)->vtm.zone; \
-            if (!NIL_P(zone)) zone_localtime(zone, (time)); \
+            force_make_tm(time, tobj); \
         } \
     } while (0)
+
+static inline void
+force_make_tm(VALUE time, struct time_object *tobj)
+{
+    VALUE zone = tobj->vtm.zone;
+    if (!NIL_P(zone) && zone != str_empty && zone != str_utc) {
+        if (zone_localtime(zone, time)) return;
+    }
+    tobj->tm_got = 0;
+    time_get_tm(time, tobj);
+}
 
 static void
 time_mark(void *ptr)
@@ -2025,25 +2037,32 @@ vtm_add_offset(struct vtm *vtm, VALUE off, int sign)
         vtm->hour = hour;
     }
 
+    vtm_add_day(vtm, day);
+}
+
+static void
+vtm_add_day(struct vtm *vtm, int day)
+{
     if (day) {
         if (day < 0) {
             if (vtm->mon == 1 && vtm->mday == 1) {
                 vtm->mday = 31;
                 vtm->mon = 12; /* December */
                 vtm->year = subv(vtm->year, INT2FIX(1));
-                vtm->yday = leap_year_v_p(vtm->year) ? 366 : 365;
+                if (vtm->yday != 0)
+                    vtm->yday = leap_year_v_p(vtm->year) ? 366 : 365;
             }
             else if (vtm->mday == 1) {
                 const int8_t *days_in_month = days_in_month_in_v(vtm->year);
                 vtm->mon--;
                 vtm->mday = days_in_month[vtm->mon-1];
-                vtm->yday--;
+                if (vtm->yday != 0) vtm->yday--;
             }
             else {
                 vtm->mday--;
-                vtm->yday--;
+                if (vtm->yday != 0) vtm->yday--;
             }
-            vtm->wday = (vtm->wday + 6) % 7;
+            if (vtm->wday != VTM_WDAY_INITVAL) vtm->wday = (vtm->wday + 6) % 7;
         }
         else {
             int leap = leap_year_v_p(vtm->year);
@@ -2056,13 +2075,13 @@ vtm_add_offset(struct vtm *vtm, VALUE off, int sign)
             else if (vtm->mday == days_in_month_of(leap)[vtm->mon-1]) {
                 vtm->mon++;
                 vtm->mday = 1;
-                vtm->yday++;
+                if (vtm->yday != 0) vtm->yday++;
             }
             else {
                 vtm->mday++;
-                vtm->yday++;
+                if (vtm->yday != 0) vtm->yday++;
             }
-            vtm->wday = (vtm->wday + 1) % 7;
+            if (vtm->wday != VTM_WDAY_INITVAL) vtm->wday = (vtm->wday + 1) % 7;
         }
     }
 }
@@ -2317,6 +2336,19 @@ find_timezone(VALUE time, VALUE zone)
     return rb_check_funcall_default(klass, id_find_timezone, 1, &zone, Qnil);
 }
 
+/* Turn the special case 24:00:00 of already validated vtm into
+ * 00:00:00 the next day */
+static void
+vtm_day_wraparound(struct vtm *vtm)
+{
+    if (vtm->hour < 24) return;
+
+    /* Assuming UTC and no care of DST, just reset hour and advance
+     * date, not to discard the validated vtm. */
+    vtm->hour = 0;
+    vtm_add_day(vtm, 1);
+}
+
 static VALUE
 time_init_args(rb_execution_context_t *ec, VALUE time, VALUE year, VALUE mon, VALUE mday, VALUE hour, VALUE min, VALUE sec, VALUE zone)
 {
@@ -2372,6 +2404,7 @@ time_init_args(rb_execution_context_t *ec, VALUE time, VALUE year, VALUE mon, VA
 
     if (!NIL_P(zone)) {
         tobj->timew = timegmw(&vtm);
+        vtm_day_wraparound(&vtm);
         tobj->vtm = vtm;
         tobj->tm_got = 1;
         TZMODE_SET_LOCALTIME(tobj);
@@ -2386,6 +2419,8 @@ time_init_args(rb_execution_context_t *ec, VALUE time, VALUE year, VALUE mon, VA
 
     if (utc == UTC_ZONE) {
         tobj->timew = timegmw(&vtm);
+        vtm.isdst = 0; /* No DST in UTC */
+        vtm_day_wraparound(&vtm);
         tobj->vtm = vtm;
         tobj->tm_got = 1;
         TZMODE_SET_UTC(tobj);
@@ -4040,7 +4075,7 @@ time_inspect(VALUE time)
     GetTimeval(time, tobj);
     str = strftimev("%Y-%m-%d %H:%M:%S", time, rb_usascii_encoding());
     subsec = w2v(wmod(tobj->timew, WINT2FIXWV(TIME_SCALE)));
-    if (FIXNUM_P(subsec) && FIX2LONG(subsec) == 0) {
+    if (subsec == INT2FIX(0)) {
     }
     else if (FIXNUM_P(subsec) && FIX2LONG(subsec) < TIME_SCALE) {
         long len;

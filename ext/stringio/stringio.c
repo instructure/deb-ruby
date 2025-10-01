@@ -12,7 +12,7 @@
 
 **********************************************************************/
 
-#define STRINGIO_VERSION "3.0.1"
+#define STRINGIO_VERSION "3.0.1.2"
 
 #include "ruby.h"
 #include "ruby/io.h"
@@ -984,7 +984,7 @@ strio_unget_bytes(struct StringIO *ptr, const char *cp, long cl)
     len = RSTRING_LEN(str);
     rest = pos - len;
     if (cl > pos) {
-	long ex = (rest < 0 ? cl-pos : cl+rest);
+	long ex = cl - (rest < 0 ? pos : len);
 	rb_str_modify_expand(str, ex);
 	rb_str_set_len(str, len + ex);
 	s = RSTRING_PTR(str);
@@ -1233,8 +1233,9 @@ strio_getline(struct getline_arg *arg, struct StringIO *ptr)
 	str = strio_substr(ptr, ptr->pos, e - s - w, enc);
     }
     else {
-	if (n < e - s) {
-	    if (e - s < 1024) {
+	if (n < e - s + arg->chomp) {
+	    /* unless chomping, RS at the end does not matter */
+	    if (e - s < 1024 || n == e - s) {
 		for (p = s; p + n <= e; ++p) {
 		    if (MEMCMP(p, RSTRING_PTR(str), char, n) == 0) {
 			e = p + (arg->chomp ? 0 : n);

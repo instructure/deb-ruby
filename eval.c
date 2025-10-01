@@ -528,12 +528,16 @@ exc_setup_message(const rb_execution_context_t *ec, VALUE mesg, VALUE *cause)
     }
 
     if (!nocircular && !NIL_P(*cause) && *cause != Qundef && *cause != mesg) {
+#if 0 /* maybe critical for some cases */
+        rb_exc_check_circular_cause(*cause);
+#else
         VALUE c = *cause;
         while (!NIL_P(c = rb_attr_get(c, id_cause))) {
             if (c == mesg) {
                 rb_raise(rb_eArgError, "circular causes");
             }
         }
+#endif
     }
     return mesg;
 }
@@ -634,7 +638,11 @@ rb_ec_setup_exception(const rb_execution_context_t *ec, VALUE mesg, VALUE cause)
 	cause = get_ec_errinfo(ec);
     }
     if (cause != mesg) {
-	rb_ivar_set(mesg, id_cause, cause);
+        if (THROW_DATA_P(cause)) {
+            cause = Qnil;
+        }
+
+        rb_ivar_set(mesg, id_cause, cause);
     }
 }
 

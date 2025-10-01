@@ -1294,6 +1294,12 @@ class TestArray < Test::Unit::TestCase
 =end
   end
 
+  def test_pack_with_buffer
+    n = [ 65, 66, 67 ]
+    str = "a" * 100
+    assert_equal("aaaABC", n.pack("@3ccc", buffer: str.dup), "[Bug #19116]")
+  end
+
   def test_pop
     a = @cls[ 'cat', 'dog' ]
     assert_equal('dog', a.pop)
@@ -3212,6 +3218,8 @@ class TestArray < Test::Unit::TestCase
     assert_equal(nil, a.bsearch {|x|   1  * (2**100) })
     assert_equal(nil, a.bsearch {|x| (-1) * (2**100) })
 
+    assert_equal(4, a.bsearch {|x| (4 - x).to_r })
+
     assert_include([4, 7], a.bsearch {|x| (2**100).coerce((1 - x / 4) * (2**100)).first })
   end
 
@@ -3246,6 +3254,8 @@ class TestArray < Test::Unit::TestCase
     assert_include([1, 2], a.bsearch_index {|x| (1 - x / 4) * (2**100) })
     assert_equal(nil, a.bsearch_index {|x|   1  * (2**100) })
     assert_equal(nil, a.bsearch_index {|x| (-1) * (2**100) })
+
+    assert_equal(1, a.bsearch_index {|x| (4 - x).to_r })
 
     assert_include([1, 2], a.bsearch_index {|x| (2**100).coerce((1 - x / 4) * (2**100)).first })
   end

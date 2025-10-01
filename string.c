@@ -5435,6 +5435,7 @@ rb_str_slice_bang(int argc, VALUE *argv, VALUE str)
 	    slen -= len;
 	    STR_SET_LEN(str, slen);
 	    TERM_FILL(&sptr[slen], TERM_LEN(str));
+	    ENC_CODERANGE_CLEAR(str);
 	}
     }
     return result;
@@ -7109,6 +7110,8 @@ rb_str_casemap(VALUE source, OnigCaseFoldType *flags, rb_encoding *enc)
     current_buffer = DATA_PTR(buffer_anchor);
     DATA_PTR(buffer_anchor) = 0;
     mapping_buffer_free(current_buffer);
+
+    RB_GC_GUARD(buffer_anchor);
 
     /* TODO: check about string terminator character */
     str_enc_copy(target, source);

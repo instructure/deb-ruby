@@ -1364,6 +1364,10 @@ thread_value(VALUE self)
 {
     rb_thread_t *th = rb_thread_ptr(self);
     thread_join(th, Qnil, 0);
+    if (th->value == Qundef) {
+        // If the thread is dead because we forked th->value is still Qundef.
+        return Qnil;
+    }
     return th->value;
 }
 
@@ -4501,7 +4505,11 @@ select_single_cleanup(VALUE ptr)
 {
     struct select_args *args = (struct select_args *)ptr;
 
-    list_del(&args->wfd.wfd_node);
+    RB_VM_LOCK_ENTER();
+    {
+        list_del(&args->wfd.wfd_node);
+    }
+    RB_VM_LOCK_LEAVE();
     if (args->read) rb_fd_term(args->read);
     if (args->write) rb_fd_term(args->write);
     if (args->except) rb_fd_term(args->except);
@@ -5030,6 +5038,17 @@ rb_thread_shield_new(void)
     VALUE thread_shield = thread_shield_alloc(rb_cThreadShield);
     rb_mutex_lock((VALUE)DATA_PTR(thread_shield));
     return thread_shield;
+}
+
+bool
+rb_thread_shield_owned(VALUE self)
+{
+    VALUE mutex = GetThreadShieldPtr(self);
+    if (!mutex) return false;
+
+    rb_mutex_t *m = mutex_ptr(mutex);
+
+    return m->fiber == GET_EC()->fiber_ptr;
 }
 
 /*

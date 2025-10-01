@@ -348,6 +348,30 @@ class_init_copy_check(VALUE clone, VALUE orig)
     }
 }
 
+struct cvc_table_copy_ctx {
+    VALUE clone;
+    struct rb_id_table * new_table;
+};
+
+static enum rb_id_table_iterator_result
+cvc_table_copy(ID id, VALUE val, void *data) {
+    struct cvc_table_copy_ctx *ctx = (struct cvc_table_copy_ctx *)data;
+    struct rb_cvar_class_tbl_entry * orig_entry;
+    orig_entry = (struct rb_cvar_class_tbl_entry *)val;
+
+    struct rb_cvar_class_tbl_entry *ent;
+
+    ent = ALLOC(struct rb_cvar_class_tbl_entry);
+    ent->class_value = ctx->clone;
+    ent->cref = orig_entry->cref;
+    ent->global_cvar_state = orig_entry->global_cvar_state;
+    rb_id_table_insert(ctx->new_table, id, (VALUE)ent);
+
+    RB_OBJ_WRITTEN(ctx->clone, Qundef, ent->cref);
+
+    return ID_TABLE_CONTINUE;
+}
+
 static void
 copy_tables(VALUE clone, VALUE orig)
 {
@@ -358,6 +382,16 @@ copy_tables(VALUE clone, VALUE orig)
     if (RCLASS_CONST_TBL(clone)) {
 	rb_free_const_table(RCLASS_CONST_TBL(clone));
 	RCLASS_CONST_TBL(clone) = 0;
+    }
+    if (RCLASS_CVC_TBL(orig)) {
+        struct rb_id_table *rb_cvc_tbl = RCLASS_CVC_TBL(orig);
+        struct rb_id_table *rb_cvc_tbl_dup = rb_id_table_create(rb_id_table_size(rb_cvc_tbl));
+
+        struct cvc_table_copy_ctx ctx;
+        ctx.clone = clone;
+        ctx.new_table = rb_cvc_tbl_dup;
+        rb_id_table_foreach(rb_cvc_tbl, cvc_table_copy, &ctx);
+        RCLASS_CVC_TBL(clone) = rb_cvc_tbl_dup;
     }
     RCLASS_M_TBL(clone) = 0;
     if (RCLASS_IV_TBL(orig)) {
@@ -1060,17 +1094,24 @@ rb_include_module(VALUE klass, VALUE module)
         int do_include = 1;
         while (iclass) {
             VALUE check_class = iclass->klass;
-            while (check_class) {
-                if (RB_TYPE_P(check_class, T_ICLASS) &&
-                        (RBASIC(check_class)->klass == module)) {
-                    do_include = 0;
+            /* During lazy sweeping, iclass->klass could be a dead object that
+             * has not yet been swept. */
+            if (!rb_objspace_garbage_object_p(check_class)) {
+                while (check_class) {
+                    RUBY_ASSERT(!rb_objspace_garbage_object_p(check_class));
+
+                    if (RB_TYPE_P(check_class, T_ICLASS) &&
+                            (RBASIC(check_class)->klass == module)) {
+                        do_include = 0;
+                    }
+                    check_class = RCLASS_SUPER(check_class);
                 }
-                check_class = RCLASS_SUPER(check_class);
+
+                if (do_include) {
+                    include_modules_at(iclass->klass, RCLASS_ORIGIN(iclass->klass), module, TRUE);
+                }
             }
 
-            if (do_include) {
-                include_modules_at(iclass->klass, RCLASS_ORIGIN(iclass->klass), module, TRUE);
-            }
             iclass = iclass->next;
         }
     }
@@ -1306,17 +1347,22 @@ rb_prepend_module(VALUE klass, VALUE module)
         struct rb_id_table *klass_m_tbl = RCLASS_M_TBL(klass);
         struct rb_id_table *klass_origin_m_tbl = RCLASS_M_TBL(klass_origin);
         while (iclass) {
-            if (klass_had_no_origin && klass_origin_m_tbl == RCLASS_M_TBL(iclass->klass)) {
-                // backfill an origin iclass to handle refinements and future prepends
-                rb_id_table_foreach(RCLASS_M_TBL(iclass->klass), clear_module_cache_i, (void *)iclass->klass);
-                RCLASS_M_TBL(iclass->klass) = klass_m_tbl;
-                VALUE origin = rb_include_class_new(klass_origin, RCLASS_SUPER(iclass->klass));
-                RCLASS_SET_SUPER(iclass->klass, origin);
-                RCLASS_SET_INCLUDER(origin, RCLASS_INCLUDER(iclass->klass));
-                RCLASS_SET_ORIGIN(iclass->klass, origin);
-                RICLASS_SET_ORIGIN_SHARED_MTBL(origin);
+            /* During lazy sweeping, iclass->klass could be a dead object that
+             * has not yet been swept. */
+            if (!rb_objspace_garbage_object_p(iclass->klass)) {
+                if (klass_had_no_origin && klass_origin_m_tbl == RCLASS_M_TBL(iclass->klass)) {
+                    // backfill an origin iclass to handle refinements and future prepends
+                    rb_id_table_foreach(RCLASS_M_TBL(iclass->klass), clear_module_cache_i, (void *)iclass->klass);
+                    RCLASS_M_TBL(iclass->klass) = klass_m_tbl;
+                    VALUE origin = rb_include_class_new(klass_origin, RCLASS_SUPER(iclass->klass));
+                    RCLASS_SET_SUPER(iclass->klass, origin);
+                    RCLASS_SET_INCLUDER(origin, RCLASS_INCLUDER(iclass->klass));
+                    RCLASS_SET_ORIGIN(iclass->klass, origin);
+                    RICLASS_SET_ORIGIN_SHARED_MTBL(origin);
+                }
+                include_modules_at(iclass->klass, iclass->klass, module, FALSE);
             }
-            include_modules_at(iclass->klass, iclass->klass, module, FALSE);
+
             iclass = iclass->next;
         }
     }

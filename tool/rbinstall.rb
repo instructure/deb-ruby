@@ -899,6 +899,13 @@ module RbInstall
       RbInstall.no_write(options) {super}
     end
 
+    if RbConfig::CONFIG["LIBRUBY_RELATIVE"] == "yes" || RbConfig::CONFIG["CROSS_COMPILING"] == "yes" || ENV["DESTDIR"]
+      # TODO: always build extensions in bundled gems by build-ext and
+      # install the built binaries.
+      def build_extensions
+      end
+    end
+
     def generate_bin_script(filename, bindir)
       name = formatted_program_filename(filename)
       unless $dryrun
@@ -930,13 +937,12 @@ install?(:ext, :arch, :gem, :'default-gems', :'default-gems-arch') do
   install_default_gem('ext', srcdir, bindir)
 end
 
-def load_gemspec(file, expanded = false)
+def load_gemspec(file, base = nil)
   file = File.realpath(file)
   code = File.read(file, encoding: "utf-8:-")
   code.gsub!(/(?:`git[^\`]*`|%x\[git[^\]]*\])\.split\([^\)]*\)/m) do
     files = []
-    if expanded
-      base = File.dirname(file)
+    if base
       Dir.glob("**/*", File::FNM_DOTMATCH, base: base) do |n|
         case File.basename(n); when ".", ".."; next; end
         next if File.directory?(File.join(base, n))
@@ -949,7 +955,7 @@ def load_gemspec(file, expanded = false)
   unless Gem::Specification === spec
     raise TypeError, "[#{file}] isn't a Gem::Specification (#{spec.class} instead)."
   end
-  spec.loaded_from = file
+  spec.loaded_from = base ? File.join(base, File.basename(file)) : file
   spec.files.reject! {|n| n.end_with?(".gemspec") or n.start_with?(".git")}
 
   spec
@@ -1004,20 +1010,6 @@ def install_default_gem(dir, srcdir, bindir)
 end
 
 install?(:ext, :comm, :gem, :'bundled-gems') do
-  if CONFIG['CROSS_COMPILING'] == 'yes'
-    # The following hacky steps set "$ruby = BASERUBY" in tool/fake.rb
-    $hdrdir = ''
-    $extmk = nil
-    $ruby = nil  # ...
-    ruby_path = $ruby + " -I#{Dir.pwd}" # $baseruby + " -I#{Dir.pwd}"
-  else
-    # ruby_path = File.expand_path(with_destdir(File.join(bindir, ruby_install_name)))
-    ENV['RUBYLIB'] = nil
-    ENV['RUBYOPT'] = nil
-    ruby_path = File.expand_path(with_destdir(File.join(bindir, ruby_install_name))) + " --disable=gems -I#{with_destdir(archlibdir)}"
-  end
-  Gem.instance_variable_set(:@ruby, ruby_path) if Gem.ruby != ruby_path
-
   gem_dir = Gem.default_dir
   install_dir = with_destdir(gem_dir)
   prepare "bundled gems", gem_dir
@@ -1026,6 +1018,7 @@ install?(:ext, :comm, :gem, :'bundled-gems') do
   end
 
   installed_gems = {}
+  skipped = {}
   options = {
     :install_dir => install_dir,
     :bin_dir => with_destdir(bindir),
@@ -1037,40 +1030,56 @@ install?(:ext, :comm, :gem, :'bundled-gems') do
     :wrappers => true,
     :format_executable => true,
   }
-  gem_ext_dir = "#$extout/gems/#{CONFIG['arch']}"
-  extensions_dir = with_destdir(Gem::StubSpecification.gemspec_stub("", gem_dir, gem_dir).extensions_dir)
+
+  extensions_dir = Gem::StubSpecification.gemspec_stub("", gem_dir, gem_dir).extensions_dir
+  specifications_dir = File.join(gem_dir, "specifications")
+  build_dir = Gem::StubSpecification.gemspec_stub("", ".bundle", ".bundle").extensions_dir
+
+  # We are about to build extensions, and want to configure extensions with the
+  # newly installed ruby.
+  Gem.instance_variable_set(:@ruby, with_destdir(File.join(bindir, ruby_install_name)))
+  # Prevent fake.rb propagation. It conflicts with the natural mkmf configs of
+  # the newly installed ruby.
+  ENV.delete('RUBYOPT')
 
   File.foreach("#{srcdir}/gems/bundled_gems") do |name|
     next if /^\s*(?:#|$)/ =~ name
     next unless /^(\S+)\s+(\S+).*/ =~ name
+    gem = $1
     gem_name = "#$1-#$2"
-    path = "#{srcdir}/.bundle/gems/#{gem_name}/#{gem_name}.gemspec"
-    if File.exist?(path)
-      spec = load_gemspec(path)
-    else
-      path = "#{srcdir}/.bundle/gems/#{gem_name}/#$1.gemspec"
-      next unless File.exist?(path)
-      spec = load_gemspec(path, true)
+    # Try to find the original gemspec file
+    path = "#{srcdir}/.bundle/gems/#{gem_name}/#{gem}.gemspec"
+    unless File.exist?(path)
+      # Try to find the gemspec file for C ext gems
+      # ex .bundle/gems/debug-1.7.1/debug-1.7.1.gemspec
+      # This gemspec keep the original dependencies
+      path = "#{srcdir}/.bundle/gems/#{gem_name}/#{gem_name}.gemspec"
+      unless File.exist?(path)
+        # Try to find the gemspec file for gems that hasn't own gemspec
+        path = "#{srcdir}/.bundle/specifications/#{gem_name}.gemspec"
+        unless File.exist?(path)
+          skipped[gem_name] = "gemspec not found"
+          next
+        end
+      end
     end
-    next unless spec.platform == Gem::Platform::RUBY
-    next unless spec.full_name == gem_name
-    if !spec.extensions.empty? && CONFIG["EXTSTATIC"] == "static"
-      puts "skip installation of #{spec.name} #{spec.version}; bundled gem with an extension library is not supported on --with-static-linked-ext"
+    spec = load_gemspec(path, "#{srcdir}/.bundle/gems/#{gem_name}")
+    unless spec.platform == Gem::Platform::RUBY
+      skipped[gem_name] = "not ruby platform (#{spec.platform})"
+      next
+    end
+    unless spec.full_name == gem_name
+      skipped[gem_name] = "full name unmatch #{spec.full_name}"
       next
     end
     spec.extension_dir = "#{extensions_dir}/#{spec.full_name}"
-    if File.directory?(ext = "#{gem_ext_dir}/#{spec.full_name}")
-      spec.extensions[0] ||= "-"
-    end
     package = RbInstall::DirPackage.new spec
     ins = RbInstall::UnpackedInstaller.new(package, options)
     puts "#{INDENT}#{spec.name} #{spec.version}"
     ins.install
-    unless $dryrun
-      File.chmod($data_mode, File.join(install_dir, "specifications", "#{spec.full_name}.gemspec"))
-    end
-    unless spec.extensions.empty?
-      install_recursive(ext, spec.extension_dir)
+    install_recursive("#{build_dir}/#{gem_name}", "#{extensions_dir}/#{gem_name}") do |src, dest|
+      # puts "#{INDENT}    #{dest[extensions_dir.size+gem_name.size+2..-1]}"
+      install src, dest, :mode => (File.executable?(src) ? $prog_mode : $data_mode)
     end
     installed_gems[spec.full_name] = true
   end
@@ -1081,7 +1090,6 @@ install?(:ext, :comm, :gem, :'bundled-gems') do
   end
   next if gems.empty?
   if defined?(Zlib)
-    Gem.instance_variable_set(:@ruby, with_destdir(File.join(bindir, ruby_install_name)))
     silent = Gem::SilentUI.new
     gems.each do |gem|
       package = Gem::Package.new(gem)
@@ -1121,6 +1129,7 @@ installs = $install.map do |inst|
 end
 installs.flatten!
 installs -= $exclude.map {|exc| $install_procs[exc]}.flatten
+puts "Installing to #$destdir" unless installs.empty?
 installs.each do |block|
   dir = Dir.pwd
   begin

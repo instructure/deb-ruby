@@ -518,6 +518,10 @@ struct rb_iseq_struct {
     } aux;
 };
 
+#ifndef EXTSTATIC
+#define EXTSTATIC 0
+#endif
+
 #ifndef USE_LAZY_LOAD
 #define USE_LAZY_LOAD 0
 #endif
@@ -677,8 +681,14 @@ typedef struct rb_vm_struct {
     VALUE loaded_features;
     VALUE loaded_features_snapshot;
     VALUE loaded_features_realpaths;
+    VALUE loaded_features_realpath_map;
     struct st_table *loaded_features_index;
     struct st_table *loading_table;
+#if EXTSTATIC
+    // For running the init function of statically linked
+    // extensions when they are loaded
+    struct st_table *static_ext_inits;
+#endif
 
     /* signal */
     struct {

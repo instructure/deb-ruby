@@ -208,9 +208,11 @@ io_buffer_free(struct rb_io_buffer *data)
             io_buffer_unmap(data->base, data->size);
         }
 
-        if (RB_TYPE_P(data->source, T_STRING)) {
-            rb_str_unlocktmp(data->source);
-        }
+        // Previously we had this, but we found out due to the way GC works, we
+        // can't refer to any other Ruby objects here.
+        // if (RB_TYPE_P(data->source, T_STRING)) {
+        //     rb_str_unlocktmp(data->source);
+        // }
 
         data->base = NULL;
 
@@ -282,21 +284,78 @@ rb_io_buffer_type_allocate(VALUE self)
     return instance;
 }
 
+static VALUE io_buffer_for_make_instance(VALUE klass, VALUE string, enum rb_io_buffer_flags flags)
+{
+    VALUE instance = rb_io_buffer_type_allocate(klass);
+
+    struct rb_io_buffer *data = NULL;
+    TypedData_Get_Struct(instance, struct rb_io_buffer, &rb_io_buffer_type, data);
+
+    flags |= RB_IO_BUFFER_EXTERNAL;
+
+    if (RB_OBJ_FROZEN(string))
+        flags |= RB_IO_BUFFER_READONLY;
+
+    if (!(flags & RB_IO_BUFFER_READONLY))
+        rb_str_modify(string);
+
+    io_buffer_initialize(data, RSTRING_PTR(string), RSTRING_LEN(string), flags, string);
+
+    return instance;
+}
+
+struct io_buffer_for_yield_instance_arguments {
+    VALUE klass;
+    VALUE string;
+    VALUE instance;
+    enum rb_io_buffer_flags flags;
+};
+
+static VALUE
+io_buffer_for_yield_instance(VALUE _arguments) {
+    struct io_buffer_for_yield_instance_arguments *arguments = (struct io_buffer_for_yield_instance_arguments *)_arguments;
+
+    arguments->instance = io_buffer_for_make_instance(arguments->klass, arguments->string, arguments->flags);
+
+    rb_str_locktmp(arguments->string);
+
+    return rb_yield(arguments->instance);
+}
+
+static VALUE
+io_buffer_for_yield_instance_ensure(VALUE _arguments)
+{
+    struct io_buffer_for_yield_instance_arguments *arguments = (struct io_buffer_for_yield_instance_arguments *)_arguments;
+
+    if (arguments->instance != Qnil) {
+        rb_io_buffer_free(arguments->instance);
+    }
+
+    rb_str_unlocktmp(arguments->string);
+
+    return Qnil;
+}
+
 /*
- *  call-seq: IO::Buffer.for(string) -> io_buffer
+ *  call-seq:
+ *    IO::Buffer.for(string) -> readonly io_buffer
+ *    IO::Buffer.for(string) {|io_buffer| ... read/write io_buffer ...}
  *
- *  Creates a IO::Buffer from the given string's memory. The buffer remains
- *  associated with the string, and writing to a buffer will update the string's
- *  contents.
+ *  Creates a IO::Buffer from the given string's memory. Without a block a
+ *  frozen internal copy of the string is created efficiently and used as the
+ *  buffer source. When a block is provided, the buffer is associated directly
+ *  with the string's internal data and updating the buffer will update the
+ *  string.
  *
  *  Until #free is invoked on the buffer, either explicitly or via the garbage
  *  collector, the source string will be locked and cannot be modified.
  *
  *  If the string is frozen, it will create a read-only buffer which cannot be
- *  modified.
+ *  modified. If the string is shared, it may trigger a copy-on-write when
+ *  using the block form.
  *
  *    string = 'test'
- *    buffer = IO::Buffer.for(str)
+ *    buffer = IO::Buffer.for(string)
  *    buffer.external? #=> true
  *
  *    buffer.get_string(0, 1)
@@ -306,29 +365,34 @@ rb_io_buffer_type_allocate(VALUE self)
  *
  *    buffer.resize(100)
  *    # in `resize': Cannot resize external buffer! (IO::Buffer::AccessError)
+ *
+ *    IO::Buffer.for(string) do |buffer|
+ *      buffer.set_string("T")
+ *      string
+ *      # => "Test"
+ *    end
  */
 VALUE
 rb_io_buffer_type_for(VALUE klass, VALUE string)
 {
-    io_buffer_experimental();
-
     StringValue(string);
 
-    VALUE instance = rb_io_buffer_type_allocate(klass);
+    // If the string is frozen, both code paths are okay.
+    // If the string is not frozen, if a block is not given, it must be frozen.
+    if (rb_block_given_p()) {
+        struct io_buffer_for_yield_instance_arguments arguments = {
+            .klass = klass,
+            .string = string,
+            .instance = Qnil,
+            .flags = 0,
+        };
 
-    struct rb_io_buffer *data = NULL;
-    TypedData_Get_Struct(instance, struct rb_io_buffer, &rb_io_buffer_type, data);
-
-    rb_str_locktmp(string);
-
-    enum rb_io_buffer_flags flags = RB_IO_BUFFER_EXTERNAL;
-
-    if (RB_OBJ_FROZEN(string))
-        flags |= RB_IO_BUFFER_READONLY;
-
-    io_buffer_initialize(data, RSTRING_PTR(string), RSTRING_LEN(string), flags, string);
-
-    return instance;
+      return rb_ensure(io_buffer_for_yield_instance, (VALUE)&arguments, io_buffer_for_yield_instance_ensure, (VALUE)&arguments);
+    } else {
+        // This internally returns the source string if it's already frozen.
+        string = rb_str_tmp_frozen_acquire(string);
+        return io_buffer_for_make_instance(klass, string, RB_IO_BUFFER_READONLY);
+    }
 }
 
 VALUE
@@ -999,8 +1063,11 @@ rb_io_buffer_free(VALUE self)
 static inline void
 io_buffer_validate_range(struct rb_io_buffer *data, size_t offset, size_t length)
 {
+    if (offset > data->size) {
+        rb_raise(rb_eArgError, "Specified offset exceeds buffer size!");
+    }
     if (offset + length > data->size) {
-        rb_raise(rb_eArgError, "Specified offset+length exceeds data size!");
+        rb_raise(rb_eArgError, "Specified offset+length exceeds buffer size!");
     }
 }
 
@@ -1249,6 +1316,11 @@ rb_io_buffer_resize(VALUE self, size_t size)
 #endif
 
     if (data->flags & RB_IO_BUFFER_INTERNAL) {
+        if (size == 0) {
+            io_buffer_free(data);
+            return;
+        }
+
         void *base = realloc(data->base, size);
 
         if (!base) {
