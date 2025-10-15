@@ -818,7 +818,6 @@ libruby-3.2.so.3.2 libruby3.2 #MINVER#
  rb_gc_mark_values@Base 3.2.0
  rb_gc_mark_vm_stack_values@Base 3.2.0
  rb_gc_obj_slot_size@Base 3.2.0
- rb_gc_ractor_newobj_cache_clear@Base 3.2.3.2
  rb_gc_register_address@Base 3.2.0
  rb_gc_register_mark_object@Base 3.2.0
  rb_gc_start@Base 3.2.0
@@ -1885,7 +1884,6 @@ libruby-3.2.so.3.2 libruby3.2 #MINVER#
  ruby_xrealloc@Base 3.2.0
  rust_begin_unwind@Base 3.2.0
  rust_eh_personality@Base 3.2.0
- rust_oom@Base 3.2.0
  rust_panic@Base 3.2.0
  setproctitle@Base 3.2.0
  strlcat@Base 3.2.0
