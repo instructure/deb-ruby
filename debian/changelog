@@ -1,3 +1,10 @@
+ruby3.2 (3.2.9-ppa1) focal; urgency=medium
+
+  * Initial empty upstream branch
+  * New upstream version 3.2.9
+
+ -- Aaron Ogata <aogata@instructure.com>  Wed, 15 Oct 2025 10:19:51 -0700
+
 ruby3.2 (3.2.2-1ppa1) bionic; urgency=medium
 
   [ Jacob Burroughs ]
