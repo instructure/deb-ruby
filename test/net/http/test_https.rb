@@ -23,7 +23,7 @@ class TestNetHTTPS < Test::Unit::TestCase
   TEST_STORE = OpenSSL::X509::Store.new.tap {|s| s.add_cert(CA_CERT) }
 
   CONFIG = {
-    'host' => HOST,
+    'host' => HOST_IP,
     'proxy_host' => nil,
     'proxy_port' => nil,
     'ssl_enable' => true,
@@ -148,7 +148,7 @@ class TestNetHTTPS < Test::Unit::TestCase
       # support session resuse.  Limiting the version to the TLSv1.2 stack allows
       # this test to continue to work on LibreSSL 3.2+.  LibreSSL may eventually
       # support session reuse, but there are no current plans to do so.
-      http.ssl_version = :TLSv1
+      http.ssl_version = :TLSv1_2
     end
 
     http.start
@@ -172,11 +172,11 @@ class TestNetHTTPS < Test::Unit::TestCase
     http.use_ssl = true
     http.cert_store = TEST_STORE
 
-    http.ssl_timeout = -1
+    http.ssl_timeout = 1
     http.start
     http.get("/")
     http.finish
-
+    sleep 1.25
     http.start
     http.get("/")
 

@@ -142,6 +142,24 @@ class TestIOBuffer < Test::Unit::TestCase
     assert_equal message, buffer.get_string(0, message.bytesize)
   end
 
+  def test_resize_zero_internal
+    buffer = IO::Buffer.new(1)
+
+    buffer.resize(0)
+    assert_equal 0, buffer.size
+
+    buffer.resize(1)
+    assert_equal 1, buffer.size
+  end
+
+  def test_resize_zero_external
+    buffer = IO::Buffer.for('1')
+
+    assert_raise IO::Buffer::AccessError do
+      buffer.resize(0)
+    end
+  end
+
   def test_compare_same_size
     buffer1 = IO::Buffer.new(1)
     assert_equal buffer1, buffer1
@@ -191,6 +209,43 @@ class TestIOBuffer < Test::Unit::TestCase
     end
   end
 
+  def test_slice_readonly
+    hello = %w"Hello World".join(" ").freeze
+    buffer = IO::Buffer.for(hello)
+    slice = buffer.slice
+    assert_predicate slice, :readonly?
+    assert_raise IO::Buffer::AccessError do
+      # This breaks the literal in string pool and many other tests in this file.
+      slice.set_string("Adios", 0, 5)
+    end
+    assert_equal "Hello World", hello
+  end
+
+  def test_transfer
+    hello = %w"Hello World".join(" ")
+    buffer = IO::Buffer.for(hello)
+    transferred = buffer.transfer
+    assert_equal "Hello World", transferred.get_string
+    assert_predicate buffer, :null?
+    assert_raise IO::Buffer::AccessError do
+      transferred.set_string("Goodbye")
+    end
+    assert_equal "Hello World", hello
+  end
+
+  def test_transfer_in_block
+    hello = %w"Hello World".join(" ")
+    buffer = IO::Buffer.for(hello, &:transfer)
+    assert_equal "Hello World", buffer.get_string
+    buffer.set_string("Ciao!")
+    assert_equal "Ciao! World", hello
+    hello.freeze
+    assert_raise IO::Buffer::AccessError do
+      buffer.set_string("Hola")
+    end
+    assert_equal "Ciao! World", hello
+  end
+
   def test_locked
     buffer = IO::Buffer.new(128, IO::Buffer::INTERNAL|IO::Buffer::LOCKED)
 
@@ -219,6 +274,18 @@ class TestIOBuffer < Test::Unit::TestCase
 
     chunk = buffer.get_string(0, message.bytesize, Encoding::BINARY)
     assert_equal Encoding::BINARY, chunk.encoding
+
+    assert_raise_with_message(ArgumentError, /bigger than the buffer size/) do
+      buffer.get_string(0, 129)
+    end
+
+    assert_raise_with_message(ArgumentError, /bigger than the buffer size/) do
+      buffer.get_string(129)
+    end
+
+    assert_raise_with_message(ArgumentError, /Offset can't be negative/) do
+      buffer.get_string(-1)
+    end
   end
 
   # We check that values are correctly round tripped.
@@ -329,21 +396,49 @@ class TestIOBuffer < Test::Unit::TestCase
     input.close
   end
 
-  def test_read
-    # This is currently a bug in IO:Buffer [#19084] which affects extended
-    # strings. On 32 bit machines, the example below becomes extended, so
-    # we omit this test until the bug is fixed.
-    omit if GC::INTERNAL_CONSTANTS[:SIZE_POOL_COUNT] == 1
+  def hello_world_tempfile(repeats = 1)
     io = Tempfile.new
-    io.write("Hello World")
+    repeats.times do
+      io.write("Hello World")
+    end
     io.seek(0)
 
-    buffer = IO::Buffer.new(128)
-    buffer.read(io, 5)
-
-    assert_equal "Hello", buffer.get_string(0, 5)
+    yield io
   ensure
-    io.close! if io
+    io&.close!
+  end
+
+  def test_read
+    hello_world_tempfile do |io|
+      buffer = IO::Buffer.new(128)
+      buffer.read(io)
+      assert_equal "Hello", buffer.get_string(0, 5)
+    end
+  end
+
+  def test_read_with_with_length
+    hello_world_tempfile do |io|
+      buffer = IO::Buffer.new(128)
+      buffer.read(io, 5)
+      assert_equal "Hello", buffer.get_string(0, 5)
+    end
+  end
+
+  def test_read_with_with_offset
+    hello_world_tempfile do |io|
+      buffer = IO::Buffer.new(128)
+      buffer.read(io, nil, 6)
+      assert_equal "Hello", buffer.get_string(6, 5)
+    end
+  end
+
+  def test_read_with_length_and_offset
+    hello_world_tempfile(100) do |io|
+      buffer = IO::Buffer.new(1024)
+      # Only read 24 bytes from the file, as we are starting at offset 1000 in the buffer.
+      assert_equal 24, buffer.read(io, 0, 1000)
+      assert_equal "Hello World", buffer.get_string(1000, 11)
+    end
   end
 
   def test_write
@@ -351,10 +446,23 @@ class TestIOBuffer < Test::Unit::TestCase
 
     buffer = IO::Buffer.new(128)
     buffer.set_string("Hello")
-    buffer.write(io, 5)
+    buffer.write(io)
 
     io.seek(0)
     assert_equal "Hello", io.read(5)
+  ensure
+    io.close!
+  end
+
+  def test_write_with_length_and_offset
+    io = Tempfile.new
+
+    buffer = IO::Buffer.new(5)
+    buffer.set_string("Hello")
+    buffer.write(io, 4, 1)
+
+    io.seek(0)
+    assert_equal "ello", io.read(4)
   ensure
     io.close!
   end

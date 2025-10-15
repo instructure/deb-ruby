@@ -126,10 +126,10 @@ class TestNetHTTP < Test::Unit::TestCase
 
   def test_proxy_address_no_proxy
     TestNetHTTPUtils.clean_http_proxy_env do
-      http = Net::HTTP.new 'hostname.example', nil, 'proxy.example', nil, nil, nil, 'example'
+      http = Net::HTTP.new 'hostname.example', nil, 'proxy.com', nil, nil, nil, 'example'
       assert_nil http.proxy_address
 
-      http = Net::HTTP.new '10.224.1.1', nil, 'proxy.example', nil, nil, nil, 'example,10.224.0.0/22'
+      http = Net::HTTP.new '10.224.1.1', nil, 'proxy.com', nil, nil, nil, 'example,10.224.0.0/22'
       assert_nil http.proxy_address
     end
   end
@@ -549,7 +549,7 @@ module TestNetHTTP_version_1_1_methods
       conn = Net::HTTP.new('localhost', port)
       conn.write_timeout = EnvUtil.apply_timeout_scale(0.01)
       conn.read_timeout = EnvUtil.apply_timeout_scale(0.01) if windows?
-      conn.open_timeout = EnvUtil.apply_timeout_scale(0.1)
+      conn.open_timeout = EnvUtil.apply_timeout_scale(1)
 
       th = Thread.new do
         err = !windows? ? Net::WriteTimeout : Net::ReadTimeout
@@ -573,9 +573,9 @@ module TestNetHTTP_version_1_1_methods
       port = server.addr[1]
 
       conn = Net::HTTP.new('localhost', port)
-      conn.write_timeout = 0.01
-      conn.read_timeout = 0.01 if windows?
-      conn.open_timeout = 0.1
+      conn.write_timeout = EnvUtil.apply_timeout_scale(0.01)
+      conn.read_timeout = EnvUtil.apply_timeout_scale(0.01) if windows?
+      conn.open_timeout = EnvUtil.apply_timeout_scale(1)
 
       req = Net::HTTP::Post.new('/')
       data = "a"*50_000_000
@@ -1249,7 +1249,7 @@ end
 
 class TestNetHTTPLocalBind < Test::Unit::TestCase
   CONFIG = {
-    'host' => 'localhost',
+    'host' => '127.0.0.1',
     'proxy_host' => nil,
     'proxy_port' => nil,
   }
@@ -1286,7 +1286,7 @@ end
 
 class TestNetHTTPForceEncoding < Test::Unit::TestCase
   CONFIG = {
-    'host' => 'localhost',
+    'host' => '127.0.0.1',
     'proxy_host' => nil,
     'proxy_port' => nil,
   }

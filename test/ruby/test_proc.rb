@@ -168,6 +168,24 @@ class TestProc < Test::Unit::TestCase
    assert_operator(procs.map(&:hash).uniq.size, :>=, 500)
   end
 
+  def test_hash_does_not_change_after_compaction
+    # [Bug #20853]
+    [
+      "proc {}", # iseq backed proc
+      "{}.to_proc", # ifunc backed proc
+      ":hello.to_proc", # symbol backed proc
+    ].each do |proc|
+      assert_separately([], <<~RUBY)
+        p1 = #{proc}
+        hash = p1.hash
+
+        GC.verify_compaction_references(expand_heap: true, toward: :empty)
+
+        assert_equal(hash, p1.hash, "proc is `#{proc}`")
+      RUBY
+    end
+  end
+
   def test_block_par
     assert_equal(10, Proc.new{|&b| b.call(10)}.call {|x| x})
     assert_equal(12, Proc.new{|a,&b| b.call(a)}.call(12) {|x| x})
@@ -1319,6 +1337,32 @@ class TestProc < Test::Unit::TestCase
 
     pr = eval("proc{|"+"(_),"*30+"|}")
     assert_empty(pr.parameters.map{|_,n|n}.compact)
+  end
+
+  def test_proc_autosplat_with_multiple_args_with_ruby2_keywords_splat_bug_19759
+    def self.yielder_ab(splat)
+      yield([:a, :b], *splat)
+    end
+
+    res = yielder_ab([[:aa, :bb], Hash.ruby2_keywords_hash({k: :k})]) do |a, b, k:|
+      [a, b, k]
+    end
+    assert_equal([[:a, :b], [:aa, :bb], :k], res)
+
+    def self.yielder(splat)
+      yield(*splat)
+    end
+    res = yielder([ [:a, :b] ]){|a, b, **| [a, b]}
+    assert_equal([:a, :b], res)
+
+    res = yielder([ [:a, :b], Hash.ruby2_keywords_hash({}) ]){|a, b, **| [a, b]}
+    assert_equal([[:a, :b], nil], res)
+
+    res = yielder([ [:a, :b], Hash.ruby2_keywords_hash({c: 1}) ]){|a, b, **| [a, b]}
+    assert_equal([[:a, :b], nil], res)
+
+    res = yielder([ [:a, :b], Hash.ruby2_keywords_hash({}) ]){|a, b, **nil| [a, b]}
+    assert_equal([[:a, :b], nil], res)
   end
 
   def test_parameters_lambda

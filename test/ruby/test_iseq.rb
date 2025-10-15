@@ -167,6 +167,14 @@ class TestISeq < Test::Unit::TestCase
     end
   end
 
+  def test_ractor_shareable_value_frozen_core
+    iseq = RubyVM::InstructionSequence.compile(<<~'RUBY')
+      # shareable_constant_value: literal
+      REGEX = /#{}/ # [Bug #20569]
+    RUBY
+    assert_includes iseq.to_binary, "REGEX".b
+  end
+
   def test_disasm_encoding
     src = "\u{3042} = 1; \u{3042}; \u{3043}"
     asm = compile(src).disasm
@@ -756,5 +764,42 @@ class TestISeq < Test::Unit::TestCase
       }
       assert_equal :new, r.take
     RUBY
+  end
+
+  def test_unreachable_pattern_matching
+    assert_in_out_err([], "true or 1 in 1")
+    assert_in_out_err([], "true or (case 1; in 1; 1; in 2; 2; end)")
+  end
+
+  def test_unreachable_pattern_matching_in_if_condition
+    assert_in_out_err([], "#{<<~"begin;"}\n#{<<~'end;'}", %w[1])
+    begin;
+      if true or {a: 0} in {a:}
+        p 1
+      else
+        p a
+      end
+    end;
+  end
+
+  def test_unreachable_next_in_block
+    bug20344 = '[ruby-core:117210] [Bug #20344]'
+    assert_nothing_raised(SyntaxError, bug20344) do
+      compile(<<~RUBY)
+        proc do
+          next
+
+          case nil
+          when "a"
+            next
+          when "b"
+          when "c"
+            proc {}
+          end
+
+          next
+        end
+      RUBY
+    end
   end
 end

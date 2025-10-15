@@ -2926,7 +2926,11 @@ escape_asis:
           case '#':
             if (extended_mode && !in_char_class) {
                 /* consume and ignore comment in extended regexp */
-                while ((p < end) && ((c = *p++) != '\n'));
+                while ((p < end) && ((c = *p++) != '\n')) {
+                    if ((c & 0x80) && !*encp && enc == rb_utf8_encoding()) {
+                        *encp = enc;
+                    }
+                }
                 break;
             }
             rb_str_buf_cat(buf, (char *)&c, 1);
@@ -2961,6 +2965,9 @@ escape_asis:
                         switch (c = *p++) {
                           default:
                             if (!(c & 0x80)) break;
+                            if (!*encp && enc == rb_utf8_encoding()) {
+                                *encp = enc;
+                            }
                             --p;
                             /* fallthrough */
                           case '\\':
@@ -2983,7 +2990,8 @@ escape_asis:
                         rb_str_buf_cat(buf, (char *)&c, 1);
                     }
                     break;
-                } else {
+                }
+                else {
                     /* potential change of extended option */
                     int invert = 0;
                     int local_extend = 0;
@@ -3015,7 +3023,8 @@ escape_asis:
                                     int local_options = options;
                                     if (local_extend == 1) {
                                          local_options |= ONIG_OPTION_EXTEND;
-                                    } else {
+                                    }
+                                    else {
                                          local_options &= ~ONIG_OPTION_EXTEND;
                                     }
 
@@ -3025,7 +3034,8 @@ escape_asis:
                                                                 local_options, 1);
                                     if (ret < 0) return ret;
                                     goto begin_scan;
-                                } else {
+                                }
+                                else {
                                     /* change extended flag for rest of expression */
                                     extended_mode = local_extend == 1;
                                     goto fallthrough;
@@ -3043,7 +3053,8 @@ escape_asis:
                         }
                     }
                 }
-            } else if (!in_char_class && recurse) {
+            }
+            else if (!in_char_class && recurse) {
                 parens++;
             }
             /* FALLTHROUGH */

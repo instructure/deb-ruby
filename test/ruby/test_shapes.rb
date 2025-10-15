@@ -3,6 +3,17 @@ require 'test/unit'
 
 # These test the functionality of object shapes
 class TestShapes < Test::Unit::TestCase
+  class IVOrder
+    def expected_ivs
+      %w{ @a @b @c @d @e @f @g @h @i @j @k }
+    end
+
+    def set_ivs
+      expected_ivs.each { instance_variable_set(_1, 1) }
+      self
+    end
+  end
+
   class ShapeOrder
     def initialize
       @b = :b # 5 => 6
@@ -78,6 +89,16 @@ class TestShapes < Test::Unit::TestCase
 
   def refute_shape_equal(shape1, shape2)
     refute_equal(shape1.id, shape2.id)
+  end
+
+  def test_iv_order_correct_on_complex_objects
+    (RubyVM::Shape::SHAPE_MAX_VARIATIONS + 1).times {
+      IVOrder.new.instance_variable_set("@a#{_1}", 1)
+    }
+
+    obj = IVOrder.new
+    iv_list = obj.set_ivs.instance_variables
+    assert_equal obj.expected_ivs, iv_list.map(&:to_s)
   end
 
   def test_too_complex
@@ -328,6 +349,19 @@ class TestShapes < Test::Unit::TestCase
     obj = Example.new
     obj2 = obj.dup
     assert_shape_equal(RubyVM::Shape.of(obj), RubyVM::Shape.of(obj2))
+  end
+
+  def test_duplicating_too_complex_objects_memory_leak
+    assert_no_memory_leak([], "#{<<~'begin;'}", "#{<<~'end;'}", "[Bug #20162]", rss: true)
+      RubyVM::Shape.exhaust_shapes
+
+      o = Object.new
+      o.instance_variable_set(:@a, 0)
+    begin;
+      1_000_000.times do
+        o.dup
+      end
+    end;
   end
 
   def test_freezing_and_duplicating_object

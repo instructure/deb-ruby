@@ -253,6 +253,14 @@ class TestModule < Test::Unit::TestCase
     assert_operator(Math, :const_defined?, "PI")
     assert_not_operator(Math, :const_defined?, :IP)
     assert_not_operator(Math, :const_defined?, "IP")
+
+    # Test invalid symbol name
+    # [Bug #20245]
+    EnvUtil.under_gc_stress do
+      assert_raise(EncodingError) do
+        Math.const_defined?("\xC3")
+      end
+    end
   end
 
   def each_bad_constants(m, &b)
@@ -774,6 +782,18 @@ class TestModule < Test::Unit::TestCase
     sc.prepend m1
     sc.prepend m1
     assert_equal([:m1, :m0, :m, :sc, :m1, :m0, :c], sc.new.m)
+  end
+
+  def test_include_into_module_after_prepend_bug_20871
+    bar = Module.new{def bar; 'bar'; end}
+    foo = Module.new{def foo; 'foo'; end}
+    m = Module.new
+    c = Class.new{include m}
+    m.prepend bar
+    Class.new{include m}
+    m.include foo
+    assert_include c.ancestors, foo
+    assert_equal "foo", c.new.foo
   end
 
   def test_protected_include_into_included_module
@@ -3272,6 +3292,62 @@ class TestModule < Test::Unit::TestCase
     s = Object.new.singleton_class
     mod = s.const_set(:Foo, Module.new)
     assert_match(/::Foo$/, mod.name, '[Bug #14895]')
+  end
+
+  def test_iclass_memory_leak
+    # [Bug #19550]
+    assert_no_memory_leak([], <<~PREP, <<~CODE, rss: true)
+      code = proc do
+        mod = Module.new
+        Class.new do
+          include mod
+        end
+      end
+      1_000.times(&code)
+    PREP
+      3_000_000.times(&code)
+    CODE
+  end
+
+  def test_complemented_method_entry_memory_leak
+    # [Bug #19894] [Bug #19896]
+    assert_no_memory_leak([], <<~PREP, <<~CODE, rss: true)
+      code = proc do
+        $c = Class.new do
+          def foo; end
+        end
+
+        $m = Module.new do
+          refine $c do
+            def foo; end
+          end
+        end
+
+        Class.new do
+          using $m
+
+          def initialize
+            o = $c.new
+            o.method(:foo).unbind
+          end
+        end.new
+      end
+      1_000.times(&code)
+    PREP
+      300_000.times(&code)
+    CODE
+  end
+
+  def test_module_clone_memory_leak
+    # [Bug #19901]
+    assert_no_memory_leak([], <<~PREP, <<~CODE, rss: true)
+      code = proc do
+        Module.new.clone
+      end
+      1_000.times(&code)
+    PREP
+      1_000_000.times(&code)
+    CODE
   end
 
   private

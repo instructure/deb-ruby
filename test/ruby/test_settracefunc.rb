@@ -93,6 +93,22 @@ class TestSetTraceFunc < Test::Unit::TestCase
     assert_equal([[:req]], parameters)
   end
 
+  def test_c_call_aliased_method
+    # [Bug #20915]
+    klass = Class.new do
+      alias_method :new_method, :method
+    end
+
+    instance = klass.new
+    parameters = nil
+
+    TracePoint.new(:c_call) do |tp|
+      parameters = tp.parameters
+    end.enable { instance.new_method(:to_s) }
+
+    assert_equal([[:req]], parameters)
+  end
+
   def test_call
     events = []
     name = "#{self.class}\##{__method__}"
@@ -623,6 +639,19 @@ code = proc { TracePoint.new(:line) { } }
 PREP
 1_000_000.times(&code)
 CODE
+  end
+
+  def test_tracepoint_bmethod_memory_leak
+    assert_no_memory_leak([], '', "#{<<~"begin;"}\n#{<<~'end;'}", "[Bug #20194]", rss: true)
+      obj = Object.new
+      obj.define_singleton_method(:foo) {}
+      bmethod = obj.method(:foo)
+      tp = TracePoint.new(:return) {}
+    begin;
+      1_000_000.times do
+        tp.enable(target: bmethod) {}
+      end
+    end;
   end
 
   def trace_by_set_trace_func
@@ -2724,5 +2753,53 @@ CODE
 
       Foo.foo
     RUBY
+  end
+
+  def test_tracepoint_thread_begin
+    target_thread = nil
+
+    trace = TracePoint.new(:thread_begin) do |tp|
+      target_thread = tp.self
+    end
+
+    trace.enable(target_thread: nil) do
+      Thread.new{}.join
+    end
+
+    assert_kind_of(Thread, target_thread)
+  end
+
+  def test_tracepoint_thread_end
+    target_thread = nil
+
+    trace = TracePoint.new(:thread_end) do |tp|
+      target_thread = tp.self
+    end
+
+    trace.enable(target_thread: nil) do
+      Thread.new{}.join
+    end
+
+    assert_kind_of(Thread, target_thread)
+  end
+
+  def test_tracepoint_thread_end_with_exception
+    target_thread = nil
+
+    trace = TracePoint.new(:thread_end) do |tp|
+      target_thread = tp.self
+    end
+
+    trace.enable(target_thread: nil) do
+      thread = Thread.new do
+        Thread.current.report_on_exception = false
+        raise
+      end
+
+      # Ignore the exception raised by the thread:
+      thread.join rescue nil
+    end
+
+    assert_kind_of(Thread, target_thread)
   end
 end

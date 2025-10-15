@@ -905,15 +905,29 @@ class TestProcess < Test::Unit::TestCase
     }
   end
 
-  def test_popen_fork
-    IO.popen("-") {|io|
-      if !io
-        puts "fooo"
-      else
-        assert_equal("fooo\n", io.read)
+  if Process.respond_to?(:fork)
+    def test_popen_fork
+      IO.popen("-") do |io|
+        if !io
+          puts "fooo"
+        else
+          assert_equal("fooo\n", io.read)
+        end
       end
-    }
-  rescue NotImplementedError
+    end
+
+    def test_popen_fork_ensure
+      IO.popen("-") do |io|
+        if !io
+          STDERR.reopen(STDOUT)
+          raise "fooo"
+        else
+          assert_empty io.read
+        end
+      end
+    rescue RuntimeError
+      abort "[Bug #20995] should not reach here"
+    end
   end
 
   def test_fd_inheritance
@@ -1837,6 +1851,8 @@ class TestProcess < Test::Unit::TestCase
     end
 
     def test_daemon_noclose
+      pend "macOS 15 is not working with this test" if /darwin/ =~ RUBY_PLATFORM && /15/ =~ `sw_vers -productVersion`
+
       data = IO.popen("-", "r+") do |f|
         break f.read if f
         Process.daemon(false, true)
@@ -2658,4 +2674,104 @@ EOS
       end
     end;
   end if Process.respond_to?(:_fork)
+
+  def _test_concurrent_group_and_pid_wait(nohang)
+    # Use a pair of pipes that will make long_pid exit when this test exits, to avoid
+    # leaking temp processes.
+    long_rpipe, long_wpipe = IO.pipe
+    short_rpipe, short_wpipe = IO.pipe
+    # This process should run forever
+    long_pid = fork do
+      [short_rpipe, short_wpipe, long_wpipe].each(&:close)
+      long_rpipe.read
+    end
+    # This process will exit
+    short_pid = fork do
+      [long_rpipe, long_wpipe, short_wpipe].each(&:close)
+      short_rpipe.read
+    end
+    t1, t2, t3 = nil
+    EnvUtil.timeout(5) do
+      t1 = Thread.new do
+        Process.waitpid long_pid
+      end
+      # Wait for us to be blocking in a call to waitpid2
+      Thread.pass until t1.stop?
+      assert_nil Process.waitpid(-1, Process::WNOHANG)
+      short_wpipe.close # Make short_pid exit
+
+      # The short pid has exited, so waitpid(-1) should pick that up.
+      exited_pid =
+        unless nohang
+          Process.waitpid(-1)
+        else
+          EnvUtil.timeout(5) do
+            loop do
+              pid = Process.waitpid(-1, Process::WNOHANG)
+
+              break pid if pid
+
+              sleep 0.1
+            end
+          end
+        end
+
+      assert_equal short_pid, exited_pid
+
+      # Terminate t1 for the next phase of the test.
+      t1.kill
+      t1.join
+
+      t2 = Thread.new do
+        Process.waitpid -1
+      rescue Errno::ECHILD
+        nil
+      end
+      Thread.pass until t2.stop?
+      t3 = Thread.new do
+        Process.waitpid long_pid
+      rescue Errno::ECHILD
+        nil
+      end
+      Thread.pass until t3.stop?
+
+      # it's actually nondeterministic which of t2 or t3 will receive the wait (this
+      # nondeterminism comes from the behaviour of the underlying system calls)
+      long_wpipe.close
+      assert_equal [long_pid], [t2, t3].map(&:value).compact
+    end
+  ensure
+    [t1, t2, t3].each { _1&.kill rescue nil }
+    [t1, t2, t3].each { _1&.join rescue nil }
+    [long_rpipe, long_wpipe, short_rpipe, short_wpipe].each { _1&.close rescue nil }
+  end if defined?(fork)
+
+  def test_concurrent_group_and_pid_wait
+    _test_concurrent_group_and_pid_wait(false)
+  end if defined?(fork)
+
+  def test_concurrent_group_and_pid_wait_nohang
+    _test_concurrent_group_and_pid_wait(true)
+  end if defined?(fork)
+
+  def test_handle_interrupt_with_fork
+    Thread.handle_interrupt(RuntimeError => :never) do
+      Thread.current.raise(RuntimeError, "Queued error")
+
+      assert_predicate Thread, :pending_interrupt?
+
+      pid = Process.fork do
+        if Thread.pending_interrupt?
+          exit 1
+        end
+      end
+
+      _, status = Process.waitpid2(pid)
+      assert_predicate status, :success?
+
+      assert_predicate Thread, :pending_interrupt?
+    end
+  rescue RuntimeError
+    # Ignore.
+  end if defined?(fork)
 end

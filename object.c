@@ -101,7 +101,8 @@ rb_obj_reveal(VALUE obj, VALUE klass)
 VALUE
 rb_obj_setup(VALUE obj, VALUE klass, VALUE type)
 {
-    RBASIC(obj)->flags = type;
+    VALUE ignored_flags = RUBY_FL_PROMOTED | RUBY_FL_SEEN_OBJ_ID;
+    RBASIC(obj)->flags = (type & ~ignored_flags) | (RBASIC(obj)->flags & ignored_flags);
     RBASIC_SET_CLASS(obj, klass);
     return obj;
 }
@@ -275,7 +276,7 @@ rb_obj_copy_ivar(VALUE dest, VALUE obj)
     rb_shape_t * src_shape = rb_shape_get_shape(obj);
 
     if (rb_shape_id(src_shape) == OBJ_TOO_COMPLEX_SHAPE_ID) {
-        struct rb_id_table * table = rb_id_table_create(rb_id_table_size(ROBJECT_IV_HASH(obj)));
+        st_table *table = st_copy(ROBJECT_IV_HASH(obj));
 
         rb_ivar_foreach(obj, rb_obj_evacuate_ivs_to_hash_table, (st_data_t)table);
         rb_shape_set_too_complex(dest);
@@ -2079,6 +2080,10 @@ rb_class_superclass(VALUE klass)
         if (klass == rb_cBasicObject) return Qnil;
         rb_raise(rb_eTypeError, "uninitialized class");
     }
+
+    if (!RCLASS_SUPERCLASS_DEPTH(klass)) {
+        return Qnil;
+    }
     else {
         super = RCLASS_SUPERCLASSES(klass)[RCLASS_SUPERCLASS_DEPTH(klass) - 1];
         RUBY_ASSERT(RB_TYPE_P(klass, T_CLASS));
@@ -3470,6 +3475,7 @@ rb_str_to_dbl_raise(VALUE str, int badcheck, int raise, int *error)
     VALUE v = 0;
 
     StringValue(str);
+    rb_must_asciicompat(str);
     s = RSTRING_PTR(str);
     len = RSTRING_LEN(str);
     if (s) {

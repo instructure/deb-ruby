@@ -1148,7 +1148,8 @@ io_internal_wait(VALUE thread, rb_io_t *fptr, int error, int events, struct time
 
     if (ready > 0) {
         return ready;
-    } else if (ready == 0) {
+    }
+    else if (ready == 0) {
         errno = ETIMEDOUT;
         return -1;
     }
@@ -1176,7 +1177,8 @@ internal_read_func(void *ptr)
         if (io_again_p(errno)) {
             if (io_internal_wait(iis->th, iis->fptr, errno, RB_WAITFD_IN, iis->timeout) == -1) {
                 return -1;
-            } else {
+            }
+            else {
                 goto retry;
             }
         }
@@ -1211,7 +1213,8 @@ internal_write_func(void *ptr)
         if (io_again_p(e)) {
             if (io_internal_wait(iis->th, iis->fptr, errno, RB_WAITFD_OUT, iis->timeout) == -1) {
                 return -1;
-            } else {
+            }
+            else {
                 goto retry;
             }
         }
@@ -1240,7 +1243,8 @@ internal_writev_func(void *ptr)
         if (io_again_p(errno)) {
             if (io_internal_wait(iis->th, iis->fptr, errno, RB_WAITFD_OUT, iis->timeout) == -1) {
                 return -1;
-            } else {
+            }
+            else {
                 goto retry;
             }
         }
@@ -1320,14 +1324,15 @@ rb_io_write_memory(rb_io_t *fptr, const void *buf, size_t count)
 static ssize_t
 rb_writev_internal(rb_io_t *fptr, const struct iovec *iov, int iovcnt)
 {
+    if (!iovcnt) return 0;
+
     VALUE scheduler = rb_fiber_scheduler_current();
     if (scheduler != Qnil) {
-        for (int i = 0; i < iovcnt; i += 1) {
-            VALUE result = rb_fiber_scheduler_io_write_memory(scheduler, fptr->self, iov[i].iov_base, iov[i].iov_len, 0);
+        // This path assumes at least one `iov`:
+        VALUE result = rb_fiber_scheduler_io_write_memory(scheduler, fptr->self, iov[0].iov_base, iov[0].iov_len, 0);
 
-            if (!UNDEF_P(result)) {
-                return rb_fiber_scheduler_io_result_apply(result);
-            }
+        if (!UNDEF_P(result)) {
+            return rb_fiber_scheduler_io_result_apply(result);
         }
     }
 
@@ -1788,13 +1793,11 @@ io_binwrite_string(VALUE arg)
         // Write as much as possible:
         ssize_t result = io_binwrite_string_internal(p->fptr, ptr, remaining);
 
-        // If only the internal buffer is written, result will be zero [bytes of given data written]. This means we
-        // should try again.
         if (result == 0) {
-            errno = EWOULDBLOCK;
+            // If only the internal buffer is written, result will be zero [bytes of given data written]. This means we
+            // should try again immediately.
         }
-
-        if (result > 0) {
+        else if (result > 0) {
             if ((size_t)result == remaining) break;
             ptr += result;
             remaining -= result;
@@ -2034,7 +2037,7 @@ io_binwritev_internal(VALUE arg)
     while (remaining) {
         long result = rb_writev_internal(fptr, iov, iovcnt);
 
-        if (result > 0) {
+        if (result >= 0) {
             offset += result;
             if (fptr->wbuf.ptr && fptr->wbuf.len) {
                 if (offset < (size_t)fptr->wbuf.len) {
@@ -3802,8 +3805,33 @@ rscheck(const char *rsptr, long rslen, VALUE rs)
         rb_raise(rb_eRuntimeError, "rs modified");
 }
 
+static const char *
+search_delim(const char *p, long len, int delim, rb_encoding *enc)
+{
+    if (rb_enc_mbminlen(enc) == 1) {
+        p = memchr(p, delim, len);
+        if (p) return p + 1;
+    }
+    else {
+        const char *end = p + len;
+        while (p < end) {
+            int r = rb_enc_precise_mbclen(p, end, enc);
+            if (!MBCLEN_CHARFOUND_P(r)) {
+                p += rb_enc_mbminlen(enc);
+                continue;
+            }
+            int n = MBCLEN_CHARFOUND_LEN(r);
+            if (rb_enc_mbc_to_codepoint(p, end, enc) == (unsigned int)delim) {
+                return p + n;
+            }
+            p += n;
+        }
+    }
+    return NULL;
+}
+
 static int
-appendline(rb_io_t *fptr, int delim, VALUE *strp, long *lp)
+appendline(rb_io_t *fptr, int delim, VALUE *strp, long *lp, rb_encoding *enc)
 {
     VALUE str = *strp;
     long limit = *lp;
@@ -3818,9 +3846,9 @@ appendline(rb_io_t *fptr, int delim, VALUE *strp, long *lp)
                 p = READ_CHAR_PENDING_PTR(fptr);
                 if (0 < limit && limit < searchlen)
                     searchlen = (int)limit;
-                e = memchr(p, delim, searchlen);
+                e = search_delim(p, searchlen, delim, enc);
                 if (e) {
-                    int len = (int)(e-p+1);
+                    int len = (int)(e-p);
                     if (NIL_P(str))
                         *strp = str = rb_str_new(p, len);
                     else
@@ -3860,8 +3888,8 @@ appendline(rb_io_t *fptr, int delim, VALUE *strp, long *lp)
             long last;
 
             if (limit > 0 && pending > limit) pending = limit;
-            e = memchr(p, delim, pending);
-            if (e) pending = e - p + 1;
+            e = search_delim(p, pending, delim, enc);
+            if (e) pending = e - p;
             if (!NIL_P(str)) {
                 last = RSTRING_LEN(str);
                 rb_str_resize(str, last + pending);
@@ -4121,16 +4149,26 @@ rb_io_getline_0(VALUE rs, long limit, int chomp, rb_io_t *fptr)
                     rsptr = RSTRING_PTR(rs);
                     rslen = RSTRING_LEN(rs);
                 }
+                newline = '\n';
+            }
+            else if (rb_enc_mbminlen(enc) == 1) {
+                 rsptr = RSTRING_PTR(rs);
+                 newline = (unsigned char)rsptr[rslen - 1];
             }
             else {
+                rs = rb_str_encode(rs, rb_enc_from_encoding(enc), 0, Qnil);
                 rsptr = RSTRING_PTR(rs);
+                const char *e = rsptr + rslen;
+                const char *last = rb_enc_prev_char(rsptr, e, e, enc);
+                int n;
+                newline = rb_enc_codepoint_len(last, e, &n, enc);
+                if (last + n != e) rb_raise(rb_eArgError, "broken separator");
             }
-            newline = (unsigned char)rsptr[rslen - 1];
-            chomp_cr = chomp && rslen == 1 && newline == '\n';
+            chomp_cr = chomp && newline == '\n' && rslen == rb_enc_mbminlen(enc);
         }
 
         /* MS - Optimization */
-        while ((c = appendline(fptr, newline, &str, &limit)) != EOF) {
+        while ((c = appendline(fptr, newline, &str, &limit, enc)) != EOF) {
             const char *s, *p, *pp, *e;
 
             if (c == newline) {
@@ -4152,8 +4190,8 @@ rb_io_getline_0(VALUE rs, long limit, int chomp, rb_io_t *fptr)
             if (limit == 0) {
                 s = RSTRING_PTR(str);
                 p = RSTRING_END(str);
-                pp = rb_enc_left_char_head(s, p-1, p, enc);
-                if (extra_limit &&
+                pp = rb_enc_prev_char(s, p, p, enc);
+                if (extra_limit && pp &&
                     MBCLEN_NEEDMORE_P(rb_enc_precise_mbclen(pp, p, enc))) {
                     /* relax the limit while incomplete character.
                      * extra_limit limits the relax length */
@@ -7947,7 +7985,7 @@ popen_finish(VALUE port, VALUE klass)
     if (NIL_P(port)) {
         /* child */
         if (rb_block_given_p()) {
-            rb_yield(Qnil);
+            rb_protect(rb_yield, Qnil, NULL);
             rb_io_flush(rb_ractor_stdout());
             rb_io_flush(rb_ractor_stderr());
             _exit(0);
@@ -8898,7 +8936,6 @@ io_puts_ary(VALUE ary, VALUE out, int recur)
 VALUE
 rb_io_puts(int argc, const VALUE *argv, VALUE out)
 {
-    int i, n;
     VALUE line, args[2];
 
     /* if no argument given, print newline. */
@@ -8906,22 +8943,30 @@ rb_io_puts(int argc, const VALUE *argv, VALUE out)
         rb_io_write(out, rb_default_rs);
         return Qnil;
     }
-    for (i=0; i<argc; i++) {
+    for (int i = 0; i < argc; i++) {
+        // Convert the argument to a string:
         if (RB_TYPE_P(argv[i], T_STRING)) {
             line = argv[i];
-            goto string;
         }
-        if (rb_exec_recursive(io_puts_ary, argv[i], out)) {
+        else if (rb_exec_recursive(io_puts_ary, argv[i], out)) {
             continue;
         }
-        line = rb_obj_as_string(argv[i]);
-      string:
-        n = 0;
-        args[n++] = line;
-        if (RSTRING_LEN(line) == 0 ||
-            !rb_str_end_with_asciichar(line, '\n')) {
+        else {
+            line = rb_obj_as_string(argv[i]);
+        }
+
+        // Write the line:
+        int n = 0;
+        if (RSTRING_LEN(line) == 0) {
             args[n++] = rb_default_rs;
         }
+        else {
+            args[n++] = line;
+            if (!rb_str_end_with_asciichar(line, '\n')) {
+                args[n++] = rb_default_rs;
+            }
+        }
+
         rb_io_writev(out, n, args);
     }
 
@@ -13050,6 +13095,7 @@ copy_stream_fallback_body(VALUE arg)
     while (1) {
         long numwrote;
         long l;
+        rb_str_make_independent(buf);
         if (stp->copy_length < (rb_off_t)0) {
             l = buflen;
         }
@@ -15501,13 +15547,12 @@ Init_IO(void)
     rb_gvar_ractor_local("$>");
     rb_gvar_ractor_local("$stderr");
 
-    rb_stdin  = rb_io_prep_stdin();
-    rb_stdout = rb_io_prep_stdout();
-    rb_stderr = rb_io_prep_stderr();
-
     rb_global_variable(&rb_stdin);
+    rb_stdin  = rb_io_prep_stdin();
     rb_global_variable(&rb_stdout);
+    rb_stdout = rb_io_prep_stdout();
     rb_global_variable(&rb_stderr);
+    rb_stderr = rb_io_prep_stderr();
 
     orig_stdout = rb_stdout;
     orig_stderr = rb_stderr;

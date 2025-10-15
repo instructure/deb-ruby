@@ -214,15 +214,23 @@ AS_CASE(["/${rb_CC} "],
 [*clang*],            [
     # Ditto for LLVM.  Note however that llvm-as is a LLVM-IR to LLVM bitcode
     # assembler that does not target your machine native binary.
-    : ${LD:="${CC}"}         # ... try -fuse-ld=lld ?
-    RUBY_CHECK_PROG_FOR_CC([AR],      [s/clang/llvm-ar/])
-#   RUBY_CHECK_PROG_FOR_CC([AS],      [s/clang/llvm-as/])
+
+    # Xcode has its own version tools that may be incompatible with
+    # genuine LLVM tools, use the tools in the same directory.
+
+    AS_IF([$rb_CC -E -dM -xc - < /dev/null | grep -F __apple_build_version__ > /dev/null],
+          [llvm_prefix=], [llvm_prefix=llvm-])
+    # AC_PREPROC_IFELSE cannot be used before AC_USE_SYSTEM_EXTENSIONS
+
+    RUBY_CHECK_PROG_FOR_CC([LD],      [s/clang/ld/]) # ... maybe try lld ?
+    RUBY_CHECK_PROG_FOR_CC([AR],      [s/clang/${llvm_prefix}ar/])
+#   RUBY_CHECK_PROG_FOR_CC([AS],      [s/clang/${llvm_prefix}as/])
     RUBY_CHECK_PROG_FOR_CC([CXX],     [s/clang/clang++/])
-    RUBY_CHECK_PROG_FOR_CC([NM],      [s/clang/llvm-nm/])
-    RUBY_CHECK_PROG_FOR_CC([OBJCOPY], [s/clang/llvm-objcopy/])
-    RUBY_CHECK_PROG_FOR_CC([OBJDUMP], [s/clang/llvm-objdump/])
-    RUBY_CHECK_PROG_FOR_CC([RANLIB],  [s/clang/llvm-ranlib/])
-    RUBY_CHECK_PROG_FOR_CC([STRIP],   [s/clang/llvm-strip/])
+    RUBY_CHECK_PROG_FOR_CC([NM],      [s/clang/${llvm_prefix}nm/])
+    RUBY_CHECK_PROG_FOR_CC([OBJCOPY], [s/clang/${llvm_prefix}objcopy/])
+    RUBY_CHECK_PROG_FOR_CC([OBJDUMP], [s/clang/${llvm_prefix}objdump/])
+    RUBY_CHECK_PROG_FOR_CC([RANLIB],  [s/clang/${llvm_prefix}ranlib/])
+    RUBY_CHECK_PROG_FOR_CC([STRIP],   [s/clang/${llvm_prefix}strip/])
 ])
 AS_UNSET(rb_CC)
 AS_UNSET(rb_dummy)
@@ -967,9 +975,10 @@ AS_IF([test "x$OPT_DIR" != x], [
     LDFLAGS="${LDFLAGS:+$LDFLAGS }$val"
     DLDFLAGS="${DLDFLAGS:+$DLDFLAGS }$val"
     LDFLAGS_OPTDIR="$val"
-    CPPFLAGS="${CPPFLAGS:+$CPPFLAGS }"`echo "$OPT_DIR" | tr "${PATH_SEPARATOR}" '\012' |
+    INCFLAGS="${INCFLAGS:+$INCFLAGS }"`echo "$OPT_DIR" | tr "${PATH_SEPARATOR}" '\012' |
         sed '/^$/d;s|^|-I|;s|$|/include|' | tr '\012' ' ' | sed 's/ *$//'`
 ])
+AC_SUBST(incflags, "$INCFLAGS")
 
 test -z "${ac_env_CFLAGS_set}" -a -n "${cflags+set}" && eval CFLAGS="\"$cflags $ARCH_FLAG\""
 test -z "${ac_env_CXXFLAGS_set}" -a -n "${cxxflags+set}" && eval CXXFLAGS="\"$cxxflags $ARCH_FLAG\""
@@ -1194,8 +1203,6 @@ main()
 		ac_cv_func_gmtime_r=yes
 		rb_cv_large_fd_select=yes
 		ac_cv_type_struct_timeval=yes
-                ac_cv_func_clock_gettime=yes
-                ac_cv_func_clock_getres=yes
 		ac_cv_func_malloc_usable_size=no
 		ac_cv_type_off_t=yes
 		ac_cv_sizeof_off_t=8
@@ -1341,6 +1348,8 @@ AC_CHECK_HEADERS(syscall.h)
 AC_CHECK_HEADERS(time.h)
 AC_CHECK_HEADERS(ucontext.h)
 AC_CHECK_HEADERS(utime.h)
+AC_CHECK_HEADERS(stdatomic.h)
+
 AS_CASE("$target_cpu", [x64|x86_64|i[3-6]86*], [
   AC_CHECK_HEADERS(x86intrin.h)
 ])
@@ -1357,6 +1366,8 @@ AC_ARG_WITH([jemalloc],
   [with_jemalloc=$withval], [with_jemalloc=no])
 AS_IF([test "x$with_jemalloc" != xno],[
   # find jemalloc header first
+  save_CPPFLAGS="${CPPFLAGS}"
+  CPPFLAGS="${INCFLAGS} ${CPPFLAGS}"
   malloc_header=
   AC_CHECK_HEADER(jemalloc/jemalloc.h, [malloc_header=jemalloc/jemalloc.h], [
     AC_CHECK_HEADER(jemalloc.h, [malloc_header=jemalloc.h])
@@ -1388,6 +1399,8 @@ AS_IF([test "x$with_jemalloc" != xno],[
       done
     done
   ])
+  CPPFLAGS="${save_CPPFLAGS}"
+  unset save_CPPFLAGS
   with_jemalloc=${rb_cv_jemalloc_library}
   AS_CASE(["$with_jemalloc"],
   [no],
@@ -1998,6 +2011,7 @@ AC_CHECK_FUNCS(_longjmp)		# used for AC_ARG_WITH(setjmp-type)
 test x$ac_cv_func__longjmp = xno && ac_cv_func__setjmp=no
 AC_CHECK_FUNCS(arc4random_buf)
 AC_CHECK_FUNCS(atan2l atan2f)
+AC_CHECK_DECLS(atomic_signal_fence, [], [], [#include <stdatomic.h>])
 AC_CHECK_FUNCS(chmod)
 AC_CHECK_FUNCS(chown)
 AC_CHECK_FUNCS(chroot)
@@ -3052,7 +3066,7 @@ AC_SUBST(EXTOBJS)
 	[darwin*], [	: ${LDSHARED='$(CC) -dynamic -bundle'}
 			: ${DLDSHARED='$(CC) -dynamiclib'}
 			: ${LDFLAGS=""}
-			: ${LIBPATHENV=DYLD_FALLBACK_LIBRARY_PATH}
+			: ${LIBPATHENV=DYLD_LIBRARY_PATH}
 			: ${PRELOADENV=DYLD_INSERT_LIBRARIES}
                         AS_IF([test x"$enable_shared" = xyes], [
                             # Resolve symbols from libruby.dylib when --enable-shared

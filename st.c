@@ -103,11 +103,13 @@
 #ifdef NOT_RUBY
 #include "regint.h"
 #include "st.h"
+#include <assert.h>
 #else
 #include "internal.h"
 #include "internal/bits.h"
 #include "internal/hash.h"
 #include "internal/sanitizers.h"
+#include "ruby_assert.h"
 #endif
 
 #include <stdio.h>
@@ -115,7 +117,6 @@
 #include <stdlib.h>
 #endif
 #include <string.h>
-#include <assert.h>
 
 #ifdef __GNUC__
 #define PREFETCH(addr, write_p) __builtin_prefetch(addr, write_p)
@@ -313,15 +314,20 @@ static const struct st_features features[] = {
 #define RESERVED_HASH_VAL (~(st_hash_t) 0)
 #define RESERVED_HASH_SUBSTITUTION_VAL ((st_hash_t) 0)
 
+static inline st_hash_t
+normalize_hash_value(st_hash_t hash)
+{
+    /* RESERVED_HASH_VAL is used for a deleted entry.  Map it into
+       another value.  Such mapping should be extremely rare.  */
+    return hash == RESERVED_HASH_VAL ? RESERVED_HASH_SUBSTITUTION_VAL : hash;
+}
+
 /* Return hash value of KEY for table TAB.  */
 static inline st_hash_t
 do_hash(st_data_t key, st_table *tab)
 {
     st_hash_t hash = (st_hash_t)(tab->type->hash)(key);
-
-    /* RESERVED_HASH_VAL is used for a deleted entry.  Map it into
-       another value.  Such mapping should be extremely rare.  */
-    return hash == RESERVED_HASH_VAL ? RESERVED_HASH_SUBSTITUTION_VAL : hash;
+    return normalize_hash_value(hash);
 }
 
 /* Power of 2 defining the minimal number of allocated entries.  */
@@ -569,6 +575,12 @@ st_init_table_with_size(const struct st_hash_type *type, st_index_t size)
     return tab;
 }
 
+size_t
+st_table_size(const struct st_table *tbl)
+{
+    return tbl->num_entries;
+}
+
 /* Create and return table with TYPE which can hold a minimal number
    of entries (see comments for get_power2).  */
 st_table *
@@ -696,6 +708,8 @@ count_collision(const struct st_hash_type *type)
 #error "REBUILD_THRESHOLD should be >= 2"
 #endif
 
+static void rebuild_table_with(st_table *new_tab, st_table *tab);
+
 /* Rebuild table TAB.  Rebuilding removes all deleted bins and entries
    and can change size of the table entries and bins arrays.
    Rebuilding is implemented by creation of a new table or by
@@ -703,14 +717,6 @@ count_collision(const struct st_hash_type *type)
 static void
 rebuild_table(st_table *tab)
 {
-    st_index_t i, ni;
-    unsigned int size_ind;
-    st_table *new_tab;
-    st_table_entry *new_entries;
-    st_table_entry *curr_entry_ptr;
-    st_index_t *bins;
-    st_index_t bin_ind;
-
     if ((2 * tab->num_entries <= get_allocated_entries(tab)
          && REBUILD_THRESHOLD * tab->num_entries > get_allocated_entries(tab))
         || tab->num_entries < (1 << MINIMAL_POWER2)) {
@@ -718,17 +724,30 @@ rebuild_table(st_table *tab)
         tab->num_entries = 0;
         if (tab->bins != NULL)
             initialize_bins(tab);
-        new_tab = tab;
-        new_entries = tab->entries;
+        rebuild_table_with(tab, tab);
     }
     else {
+        st_table *new_tab;
         /* This allocation could trigger GC and compaction. If tab is the
          * gen_iv_tbl, then tab could have changed in size due to objects being
          * freed and/or moved. Do not store attributes of tab before this line. */
         new_tab = st_init_table_with_size(tab->type,
                                           2 * tab->num_entries - 1);
-        new_entries = new_tab->entries;
+        rebuild_table_with(new_tab, tab);
     }
+}
+
+static void
+rebuild_table_with(st_table *new_tab, st_table *tab)
+{
+    st_index_t i, ni;
+    unsigned int size_ind;
+    st_table_entry *new_entries;
+    st_table_entry *curr_entry_ptr;
+    st_index_t *bins;
+    st_index_t bin_ind;
+
+    new_entries = new_tab->entries;
 
     ni = 0;
     bins = new_tab->bins;
@@ -751,6 +770,9 @@ rebuild_table(st_table *tab)
         new_tab->num_entries++;
         ni++;
     }
+
+    assert(new_tab->num_entries == tab->num_entries);
+
     if (new_tab != tab) {
         tab->entry_power = new_tab->entry_power;
         tab->bin_power = new_tab->bin_power;
@@ -1133,6 +1155,8 @@ st_add_direct_with_hash(st_table *tab,
     st_index_t ind;
     st_index_t bin_ind;
 
+    assert(hash != RESERVED_HASH_VAL);
+
     rebuild_table_if_necessary(tab);
     ind = tab->entries_bound++;
     entry = &tab->entries[ind];
@@ -1144,6 +1168,13 @@ st_add_direct_with_hash(st_table *tab,
         bin_ind = find_table_bin_ind_direct(tab, hash, key);
         set_bin(tab->bins, get_size_ind(tab), bin_ind, ind + ENTRY_BASE);
     }
+}
+
+void
+rb_st_add_direct_with_hash(st_table *tab,
+                           st_data_t key, st_data_t value, st_hash_t hash)
+{
+    st_add_direct_with_hash(tab, key, value, normalize_hash_value(hash));
 }
 
 /* Insert (KEY, VALUE) into table TAB.  The table should not have
@@ -2263,6 +2294,17 @@ rb_st_nth_key(st_table *tab, st_index_t index)
     }
     else {
         rb_bug("unreachable");
+    }
+}
+
+void
+rb_st_compact_table(st_table *tab)
+{
+    st_index_t num = tab->num_entries;
+    if (REBUILD_THRESHOLD * num <= get_allocated_entries(tab)) {
+        /* Compaction: */
+        st_table *new_tab = st_init_table_with_size(tab->type, 2 * num);
+        rebuild_table_with(new_tab, tab);
     }
 }
 

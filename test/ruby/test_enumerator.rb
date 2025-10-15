@@ -244,6 +244,26 @@ class TestEnumerator < Test::Unit::TestCase
     assert_equal(res, exc.result)
   end
 
+  def test_stopiteration_rescue
+    e = [1].each
+    res = e.each {}
+    e.next
+    exc0 = assert_raise(StopIteration) { e.peek }
+    assert_include(exc0.backtrace.first, "test_enumerator.rb:#{__LINE__-1}:")
+    assert_nil(exc0.cause)
+    assert_equal(res, exc0.result)
+
+    exc1 = assert_raise(StopIteration) { e.next }
+    assert_include(exc1.backtrace.first, "test_enumerator.rb:#{__LINE__-1}:")
+    assert_same(exc0, exc1.cause)
+    assert_equal(res, exc1.result)
+
+    exc2 = assert_raise(StopIteration) { e.next }
+    assert_include(exc2.backtrace.first, "test_enumerator.rb:#{__LINE__-1}:")
+    assert_same(exc0, exc2.cause)
+    assert_equal(res, exc2.result)
+  end
+
   def test_next_values
     o = Object.new
     def o.each
@@ -987,5 +1007,20 @@ class TestEnumerator < Test::Unit::TestCase
     assert_raise(ArgumentError) {
       Enumerator.product(1..3, foo: 1, bar: 2)
     }
+  end
+
+  def test_sum_of_numeric
+    num = Class.new(Numeric) do
+      attr_reader :to_f
+      def initialize(val)
+        @to_f = Float(val)
+      end
+    end
+
+    ary = [5, 10, 20].map {|i| num.new(i)}
+
+    assert_equal(35.0, ary.sum)
+    enum = ary.each
+    assert_equal(35.0, enum.sum)
   end
 end

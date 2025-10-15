@@ -1116,6 +1116,34 @@ class TestIO < Test::Unit::TestCase
     }
   end
 
+  def test_copy_stream_dup_buffer
+    bug21131 = '[ruby-core:120961] [Bug #21131]'
+    mkcdtmpdir do
+      dst_class = Class.new do
+        def initialize(&block)
+          @block = block
+        end
+
+        def write(data)
+          @block.call(data.dup)
+          data.bytesize
+        end
+      end
+
+      rng = Random.new(42)
+      body = Tempfile.new("ruby-bug", binmode: true)
+      body.write(rng.bytes(16_385))
+      body.rewind
+
+      payload = []
+      IO.copy_stream(body, dst_class.new{|data| payload << data})
+      body.rewind
+      assert_equal(body.read, payload.join, bug21131)
+    ensure
+      body&.close
+    end
+  end
+
   def test_copy_stream_write_in_binmode
     bug8767 = '[ruby-core:56518] [Bug #8767]'
     mkcdtmpdir {
@@ -1896,6 +1924,36 @@ class TestIO < Test::Unit::TestCase
       r.gets; assert_equal(1001, $.)
       r.gets; assert_equal(1001, $.)
     end)
+  end
+
+  def test_readline_limit_nonascii
+    mkcdtmpdir do
+      i = 0
+
+      File.open("text#{i+=1}", "w+:utf-8") do |f|
+        f.write("Test\nok\u{bf}ok\n")
+        f.rewind
+
+        assert_equal("Test\nok\u{bf}", f.readline("\u{bf}"))
+        assert_equal("ok\n", f.readline("\u{bf}"))
+      end
+
+      File.open("text#{i+=1}", "w+b:utf-32le") do |f|
+        f.write("0123456789")
+        f.rewind
+
+        assert_equal(4, f.readline(4).bytesize)
+        assert_equal(4, f.readline(3).bytesize)
+      end
+
+      File.open("text#{i+=1}", "w+:utf-8:utf-32le") do |f|
+        f.write("0123456789")
+        f.rewind
+
+        assert_equal(4, f.readline(4).bytesize)
+        assert_equal(4, f.readline(3).bytesize)
+      end
+    end
   end
 
   def test_set_lineno_readline

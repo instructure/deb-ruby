@@ -1243,6 +1243,32 @@ new_adjust_body(rb_iseq_t *iseq, LABEL *label, int line)
     return adjust;
 }
 
+static void
+iseq_insn_each_markable_object(INSN *insn, void (*func)(VALUE *, VALUE), VALUE data)
+{
+    const char *types = insn_op_types(insn->insn_id);
+    for (int j = 0; types[j]; j++) {
+        char type = types[j];
+        switch (type) {
+          case TS_CDHASH:
+          case TS_ISEQ:
+          case TS_VALUE:
+          case TS_IC: // constant path array
+          case TS_CALLDATA: // ci is stored.
+            func(&OPERAND_AT(insn, j), data);
+            break;
+          default:
+            break;
+        }
+    }
+}
+
+static void
+iseq_insn_each_object_write_barrier(VALUE *obj_ptr, VALUE iseq)
+{
+    RB_OBJ_WRITTEN(iseq, Qundef, *obj_ptr);
+}
+
 static INSN *
 new_insn_core(rb_iseq_t *iseq, const NODE *line_node,
               int insn_id, int argc, VALUE *argv)
@@ -1260,6 +1286,9 @@ new_insn_core(rb_iseq_t *iseq, const NODE *line_node,
     iobj->operands = argv;
     iobj->operand_size = argc;
     iobj->sc_state = 0;
+
+    iseq_insn_each_markable_object(iobj, iseq_insn_each_object_write_barrier, (VALUE)iseq);
+
     return iobj;
 }
 
@@ -2631,9 +2660,11 @@ iseq_set_exception_table(rb_iseq_t *iseq)
     struct iseq_catch_table_entry *entry;
 
     ISEQ_BODY(iseq)->catch_table = NULL;
-    if (NIL_P(ISEQ_COMPILE_DATA(iseq)->catch_table_ary)) return COMPILE_OK;
-    tlen = (int)RARRAY_LEN(ISEQ_COMPILE_DATA(iseq)->catch_table_ary);
-    tptr = RARRAY_CONST_PTR_TRANSIENT(ISEQ_COMPILE_DATA(iseq)->catch_table_ary);
+
+    VALUE catch_table_ary = ISEQ_COMPILE_DATA(iseq)->catch_table_ary;
+    if (NIL_P(catch_table_ary)) return COMPILE_OK;
+    tlen = (int)RARRAY_LEN(catch_table_ary);
+    tptr = RARRAY_CONST_PTR_TRANSIENT(catch_table_ary);
 
     if (tlen > 0) {
         struct iseq_catch_table *table = xmalloc(iseq_catch_table_bytes(tlen));
@@ -2668,6 +2699,8 @@ iseq_set_exception_table(rb_iseq_t *iseq)
         ISEQ_BODY(iseq)->catch_table = table;
         RB_OBJ_WRITE(iseq, &ISEQ_COMPILE_DATA(iseq)->catch_table_ary, 0); /* free */
     }
+
+    RB_GC_GUARD(catch_table_ary);
 
     return COMPILE_OK;
 }
@@ -2807,7 +2840,6 @@ remove_unreachable_chunk(rb_iseq_t *iseq, LINK_ELEMENT *i)
                 break;
             }
             else if ((lab = find_destination((INSN *)i)) != 0) {
-                if (lab->unremovable) break;
                 unref_counts[lab->label_no]++;
             }
         }
@@ -2824,8 +2856,7 @@ remove_unreachable_chunk(rb_iseq_t *iseq, LINK_ELEMENT *i)
             /* do nothing */
         }
         else if (IS_ADJUST(i)) {
-            LABEL *dest = ((ADJUST *)i)->label;
-            if (dest && dest->unremovable) return 0;
+            return 0;
         }
         end = i;
     } while ((i = i->next) != 0);
@@ -4589,7 +4620,12 @@ compile_array_1(rb_iseq_t *iseq, LINK_ANCHOR *const ret, const NODE *node)
     }
     else {
         CHECK(COMPILE_(ret, "array element", node, FALSE));
-        ADD_INSN1(ret, node, newarray, INT2FIX(1));
+        if (keyword_node_p(node)) {
+            ADD_INSN1(ret, node, newarraykwsplat, INT2FIX(1));
+        }
+        else {
+            ADD_INSN1(ret, node, newarray, INT2FIX(1));
+        }
     }
 
     return 1;
@@ -5040,12 +5076,17 @@ compile_massign_lhs(rb_iseq_t *iseq, LINK_ANCHOR *const pre, LINK_ANCHOR *const 
 
         CHECK(COMPILE_POPPED(pre, "masgn lhs (NODE_ATTRASGN)", node));
 
+        bool safenav_call = false;
         LINK_ELEMENT *insn_element = LAST_ELEMENT(pre);
         iobj = (INSN *)get_prev_insn((INSN *)insn_element); /* send insn */
         ASSUME(iobj);
-        ELEM_REMOVE(LAST_ELEMENT(pre));
-        ELEM_REMOVE((LINK_ELEMENT *)iobj);
-        pre->last = iobj->link.prev;
+        ELEM_REMOVE(insn_element);
+        if (!IS_INSN_ID(iobj, send)) {
+            safenav_call = true;
+            iobj = (INSN *)get_prev_insn(iobj);
+            ELEM_INSERT_NEXT(&iobj->link, insn_element);
+        }
+        (pre->last = iobj->link.prev)->next = 0;
 
         const struct rb_callinfo *ci = (struct rb_callinfo *)OPERAND_AT(iobj, 0);
         int argc = vm_ci_argc(ci) + 1;
@@ -5064,7 +5105,9 @@ compile_massign_lhs(rb_iseq_t *iseq, LINK_ANCHOR *const pre, LINK_ANCHOR *const 
             return COMPILE_NG;
         }
 
-        ADD_ELEM(lhs, (LINK_ELEMENT *)iobj);
+        iobj->link.prev = lhs->last;
+        lhs->last->next = &iobj->link;
+        for (lhs->last = &iobj->link; lhs->last->next; lhs->last = lhs->last->next);
         if (vm_ci_flag(ci) & VM_CALL_ARGS_SPLAT) {
             int argc = vm_ci_argc(ci);
             ci = ci_argc_set(iseq, ci, argc - 1);
@@ -5073,9 +5116,11 @@ compile_massign_lhs(rb_iseq_t *iseq, LINK_ANCHOR *const pre, LINK_ANCHOR *const 
             INSERT_BEFORE_INSN1(iobj, line_node, newarray, INT2FIX(1));
             INSERT_BEFORE_INSN(iobj, line_node, concatarray);
         }
-        ADD_INSN(lhs, line_node, pop);
-        if (argc != 1) {
+        if (!safenav_call) {
             ADD_INSN(lhs, line_node, pop);
+            if (argc != 1) {
+                ADD_INSN(lhs, line_node, pop);
+            }
         }
         for (int i=0; i < argc; i++) {
             ADD_INSN(post, line_node, pop);
@@ -7612,7 +7657,6 @@ compile_next(rb_iseq_t *iseq, LINK_ANCHOR *const ret, const NODE *const node, in
         add_ensure_iseq(ret, iseq, 0);
         ADD_INSNL(ret, line_node, jump, ISEQ_COMPILE_DATA(iseq)->end_label);
         ADD_ADJUST_RESTORE(ret, splabel);
-        splabel->unremovable = FALSE;
 
         if (!popped) {
             ADD_INSN(ret, line_node, putnil);
@@ -9277,7 +9321,8 @@ compile_attrasgn(rb_iseq_t *iseq, LINK_ANCHOR *const ret, const NODE *const node
     /* optimization shortcut
      *   obj["literal"] = value -> opt_aset_with(obj, "literal", value)
      */
-    if (mid == idASET && !private_recv_p(node) && node->nd_args &&
+    if (!ISEQ_COMPILE_DATA(iseq)->in_masgn &&
+        mid == idASET && !private_recv_p(node) && node->nd_args &&
         nd_type_p(node->nd_args, NODE_LIST) && node->nd_args->nd_alen == 2 &&
         nd_type_p(node->nd_args->nd_head, NODE_STR) &&
         ISEQ_COMPILE_DATA(iseq)->current_block == NULL &&
@@ -9475,7 +9520,10 @@ iseq_compile_each0(rb_iseq_t *iseq, LINK_ANCHOR *const ret, const NODE *const no
       }
 
       case NODE_MASGN:{
+        bool prev_in_masgn = ISEQ_COMPILE_DATA(iseq)->in_masgn;
+        ISEQ_COMPILE_DATA(iseq)->in_masgn = true;
         compile_massign(iseq, ret, node, popped);
+        ISEQ_COMPILE_DATA(iseq)->in_masgn = prev_in_masgn;
         break;
       }
 
@@ -9717,7 +9765,12 @@ iseq_compile_each0(rb_iseq_t *iseq, LINK_ANCHOR *const ret, const NODE *const no
       case NODE_LIT:{
         debugp_param("lit", node->nd_lit);
         if (!popped) {
-            ADD_INSN1(ret, node, putobject, node->nd_lit);
+            if (UNLIKELY(node->nd_lit == rb_mRubyVMFrozenCore)) {
+                ADD_INSN1(ret, node, putspecialobject, INT2FIX(VM_SPECIAL_OBJECT_VMCORE)); // [Bug #20569]
+            }
+            else {
+                ADD_INSN1(ret, node, putobject, node->nd_lit);
+            }
             RB_OBJ_WRITTEN(iseq, Qundef, node->nd_lit);
         }
         break;
@@ -10735,6 +10788,12 @@ iseq_build_kw(rb_iseq_t *iseq, VALUE params, VALUE keywords)
     return keyword;
 }
 
+static void
+iseq_insn_each_object_mark(VALUE *obj_ptr, VALUE _)
+{
+    rb_gc_mark(*obj_ptr);
+}
+
 void
 rb_iseq_mark_insn_storage(struct iseq_compile_data_storage *storage)
 {
@@ -10761,29 +10820,7 @@ rb_iseq_mark_insn_storage(struct iseq_compile_data_storage *storage)
             iobj = (INSN *)&storage->buff[pos];
 
             if (iobj->operands) {
-                int j;
-                const char *types = insn_op_types(iobj->insn_id);
-
-                for (j = 0; types[j]; j++) {
-                    char type = types[j];
-                    switch (type) {
-                      case TS_CDHASH:
-                      case TS_ISEQ:
-                      case TS_VALUE:
-                      case TS_IC: // constant path array
-                      case TS_CALLDATA: // ci is stored.
-                        {
-                            VALUE op = OPERAND_AT(iobj, j);
-
-                            if (!SPECIAL_CONST_P(op)) {
-                                rb_gc_mark(op);
-                            }
-                        }
-                        break;
-                      default:
-                        break;
-                    }
-                }
+                iseq_insn_each_markable_object(iobj, iseq_insn_each_object_mark, (VALUE)0);
             }
             pos += (int)size;
         }

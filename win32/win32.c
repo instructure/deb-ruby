@@ -4806,6 +4806,7 @@ gettimeofday(struct timeval *tv, struct timezone *tz)
     return 0;
 }
 
+#if !defined(__MINGW32__) || !defined(HAVE_CLOCK_GETTIME)
 /* License: Ruby's */
 int
 clock_gettime(clockid_t clock_id, struct timespec *sp)
@@ -4845,7 +4846,9 @@ clock_gettime(clockid_t clock_id, struct timespec *sp)
         return -1;
     }
 }
+#endif
 
+#if !defined(__MINGW32__) || !defined(HAVE_CLOCK_GETRES)
 /* License: Ruby's */
 int
 clock_getres(clockid_t clock_id, struct timespec *sp)
@@ -4873,6 +4876,7 @@ clock_getres(clockid_t clock_id, struct timespec *sp)
         return -1;
     }
 }
+#endif
 
 /* License: Ruby's */
 static char *
@@ -5894,11 +5898,13 @@ winnt_stat(const WCHAR *path, struct stati128 *st, BOOL lstat)
                 if (e && attr_info.ReparseTag == IO_REPARSE_TAG_AF_UNIX) {
                     st->st_size = 0;
                     mode |= S_IFSOCK;
-                } else if (rb_w32_reparse_symlink_p(path)) {
+                }
+                else if (rb_w32_reparse_symlink_p(path)) {
                     /* TODO: size in which encoding? */
                     st->st_size = 0;
                     mode |= S_IFLNK | S_IEXEC;
-                } else {
+                }
+                else {
                     mode |= S_IFDIR | S_IEXEC;
                 }
             }

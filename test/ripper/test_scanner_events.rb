@@ -53,6 +53,8 @@ class TestRipper::ScannerEvents < Test::Unit::TestCase
                  Ripper.tokenize("1  .foo\n")
     assert_equal ["1", "\n", "  ", ".", "foo", "\n"],
                  Ripper.tokenize("1\n  .foo\n")
+    assert_equal ["def", " ", "f", ";", " ", "(", "x", ")", "::", "A", " ", "="],
+                 Ripper.tokenize("def f; (x)::A =")
   end
 
   def test_lex
@@ -177,6 +179,11 @@ class TestRipper::ScannerEvents < Test::Unit::TestCase
   def test_backtick
     assert_equal ["`"],
                  scan('backtick', %q[p `make all`])
+  end
+
+  def test_colon2_call
+    assert_equal ["::"],
+                 scan('op', %q[ a::b ])
   end
 
   def test_comma
@@ -984,6 +991,12 @@ class TestRipper::ScannerEvents < Test::Unit::TestCase
     assert_equal(:compile_error, err[0])
     assert_match(/Invalid char/, err[1])
     assert_equal("\e", err[2])
+  end
+
+  def test_invalid_escape
+    err = nil
+    assert_equal ["\\C-\u{3042}"], scan('tstring_content', %["\\C-\u{3042}"]) {|*e| err = e}
+    assert_equal [:on_parse_error, "Invalid escape character syntax", "\\C-\u{3042}"], err
   end
 
   def test_invalid_hex_escape

@@ -577,6 +577,10 @@ class TestParse < Test::Unit::TestCase
     assert_equal(' ^~~~~'"\n", e.message.lines.last)
     e = assert_syntax_error('"\M-\U0000"', 'Invalid escape character syntax')
     assert_equal(' ^~~~~'"\n", e.message.lines.last)
+
+    e = assert_syntax_error(%["\\C-\u3042"], 'Invalid escape character syntax')
+    assert_match(/^\s \^(?# \\ ) ~(?# C ) ~(?# - ) ~+(?# U+3042 )$/x, e.message.lines.last)
+    assert_not_include(e.message, "invalid multibyte char")
   end
 
   def test_question
@@ -607,6 +611,8 @@ class TestParse < Test::Unit::TestCase
     assert_syntax_error("?\\M-\x01", 'Invalid escape character syntax')
     assert_syntax_error("?\\M-\\C-\x01", 'Invalid escape character syntax')
     assert_syntax_error("?\\C-\\M-\x01", 'Invalid escape character syntax')
+
+    assert_equal("\xff", eval("# encoding: ascii-8bit\n""?\\\xFF"))
   end
 
   def test_percent
@@ -1039,6 +1045,22 @@ x = __ENCODING__
   def test_yyerror_at_eol
     assert_syntax_error("    0b", /\^/)
     assert_syntax_error("    0b\n", /\^/)
+  end
+
+  def test_unclosed_unicode_escape_at_eol_bug_19750
+    assert_separately([], "#{<<-"begin;"}\n#{<<~'end;'}")
+    begin;
+      assert_syntax_error("/\\u", /too short escape sequence/)
+      assert_syntax_error("/\\u{", /unterminated regexp meets end of file/)
+      assert_syntax_error("/\\u{\\n", /invalid Unicode list/)
+      assert_syntax_error("/a#\\u{\\n/", /invalid Unicode list/)
+      re = eval("/a#\\u{\n$/x")
+      assert_match(re, 'a')
+      assert_not_match(re, 'a#')
+      re = eval("/a#\\u\n$/x")
+      assert_match(re, 'a')
+      assert_not_match(re, 'a#')
+    end;
   end
 
   def test_error_def_in_argument

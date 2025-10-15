@@ -404,6 +404,30 @@ class_init_copy_check(VALUE clone, VALUE orig)
     }
 }
 
+struct cvc_table_copy_ctx {
+    VALUE clone;
+    struct rb_id_table * new_table;
+};
+
+static enum rb_id_table_iterator_result
+cvc_table_copy(ID id, VALUE val, void *data) {
+    struct cvc_table_copy_ctx *ctx = (struct cvc_table_copy_ctx *)data;
+    struct rb_cvar_class_tbl_entry * orig_entry;
+    orig_entry = (struct rb_cvar_class_tbl_entry *)val;
+
+    struct rb_cvar_class_tbl_entry *ent;
+
+    ent = ALLOC(struct rb_cvar_class_tbl_entry);
+    ent->class_value = ctx->clone;
+    ent->cref = orig_entry->cref;
+    ent->global_cvar_state = orig_entry->global_cvar_state;
+    rb_id_table_insert(ctx->new_table, id, (VALUE)ent);
+
+    RB_OBJ_WRITTEN(ctx->clone, Qundef, ent->cref);
+
+    return ID_TABLE_CONTINUE;
+}
+
 static void
 copy_tables(VALUE clone, VALUE orig)
 {
@@ -411,6 +435,17 @@ copy_tables(VALUE clone, VALUE orig)
         rb_free_const_table(RCLASS_CONST_TBL(clone));
         RCLASS_CONST_TBL(clone) = 0;
     }
+    if (RCLASS_CVC_TBL(orig)) {
+        struct rb_id_table *rb_cvc_tbl = RCLASS_CVC_TBL(orig);
+        struct rb_id_table *rb_cvc_tbl_dup = rb_id_table_create(rb_id_table_size(rb_cvc_tbl));
+
+        struct cvc_table_copy_ctx ctx;
+        ctx.clone = clone;
+        ctx.new_table = rb_cvc_tbl_dup;
+        rb_id_table_foreach(rb_cvc_tbl, cvc_table_copy, &ctx);
+        RCLASS_CVC_TBL(clone) = rb_cvc_tbl_dup;
+    }
+    rb_id_table_free(RCLASS_M_TBL(clone));
     RCLASS_M_TBL(clone) = 0;
     if (!RB_TYPE_P(clone, T_ICLASS)) {
         st_data_t id;
@@ -923,7 +958,7 @@ rb_define_class_under(VALUE outer, const char *name, VALUE super)
 }
 
 VALUE
-rb_define_class_id_under(VALUE outer, ID id, VALUE super)
+rb_define_class_id_under_no_pin(VALUE outer, ID id, VALUE super)
 {
     VALUE klass;
 
@@ -940,8 +975,6 @@ rb_define_class_id_under(VALUE outer, ID id, VALUE super)
                      " (%"PRIsVALUE" is given but was %"PRIsVALUE")",
                      outer, rb_id2str(id), RCLASS_SUPER(klass), super);
         }
-        /* Class may have been defined in Ruby and not pin-rooted */
-        rb_vm_add_root_module(klass);
 
         return klass;
     }
@@ -953,8 +986,15 @@ rb_define_class_id_under(VALUE outer, ID id, VALUE super)
     rb_set_class_path_string(klass, outer, rb_id2str(id));
     rb_const_set(outer, id, klass);
     rb_class_inherited(super, klass);
-    rb_vm_add_root_module(klass);
 
+    return klass;
+}
+
+VALUE
+rb_define_class_id_under(VALUE outer, ID id, VALUE super)
+{
+    VALUE klass = rb_define_class_id_under_no_pin(outer, id, super);
+    rb_vm_add_root_module(klass);
     return klass;
 }
 
@@ -1105,8 +1145,8 @@ rb_include_module(VALUE klass, VALUE module)
             iclass = iclass->next;
         }
 
-        int do_include = 1;
         while (iclass) {
+            int do_include = 1;
             VALUE check_class = iclass->klass;
             /* During lazy sweeping, iclass->klass could be a dead object that
              * has not yet been swept. */
@@ -1173,7 +1213,7 @@ static int
 do_include_modules_at(const VALUE klass, VALUE c, VALUE module, int search_super, bool check_cyclic)
 {
     VALUE p, iclass, origin_stack = 0;
-    int method_changed = 0, add_subclass;
+    int method_changed = 0;
     long origin_len;
     VALUE klass_origin = RCLASS_ORIGIN(klass);
     VALUE original_klass = klass;
@@ -1237,7 +1277,6 @@ do_include_modules_at(const VALUE klass, VALUE c, VALUE module, int search_super
         iclass = rb_include_class_new(module, super_class);
         c = RCLASS_SET_SUPER(c, iclass);
         RCLASS_SET_INCLUDER(iclass, klass);
-        add_subclass = TRUE;
         if (module != RCLASS_ORIGIN(module)) {
             if (!origin_stack) origin_stack = rb_ary_hidden_new(2);
             VALUE origin[2] = {iclass, RCLASS_ORIGIN(module)};
@@ -1248,14 +1287,11 @@ do_include_modules_at(const VALUE klass, VALUE c, VALUE module, int search_super
             RCLASS_SET_ORIGIN(RARRAY_AREF(origin_stack, (origin_len -= 2)), iclass);
             RICLASS_SET_ORIGIN_SHARED_MTBL(iclass);
             rb_ary_resize(origin_stack, origin_len);
-            add_subclass = FALSE;
         }
 
-        if (add_subclass) {
-            VALUE m = module;
-            if (BUILTIN_TYPE(m) == T_ICLASS) m = METACLASS_OF(m);
-            rb_module_add_to_subclasses_list(m, iclass);
-        }
+        VALUE m = module;
+        if (BUILTIN_TYPE(m) == T_ICLASS) m = METACLASS_OF(m);
+        rb_module_add_to_subclasses_list(m, iclass);
 
         if (BUILTIN_TYPE(klass) == T_MODULE && FL_TEST(klass, RMODULE_IS_REFINEMENT)) {
             VALUE refined_class =

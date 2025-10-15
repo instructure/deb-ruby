@@ -69,7 +69,11 @@ For detail, see the MSDN[http://msdn.microsoft.com/library/en-us/sysinfo/base/pr
   WCHAR_NUL = "\0".encode(WCHAR).freeze
   WCHAR_CR = "\r".encode(WCHAR).freeze
   WCHAR_SIZE = WCHAR_NUL.bytesize
-  LOCALE = Encoding.find(Encoding.locale_charmap)
+  begin
+    LOCALE = Encoding.find(Encoding.locale_charmap)
+  rescue ArgumentError
+    LOCALE = Encoding::UTF_8
+  end
 
   class Registry
 
@@ -740,14 +744,11 @@ For detail, see the MSDN[http://msdn.microsoft.com/library/en-us/sysinfo/base/pr
     # method returns.
     #
     def write(name, type, data)
-      termsize = 0
       case type
       when REG_SZ, REG_EXPAND_SZ
-        data = data.encode(WCHAR)
-        termsize = WCHAR_SIZE
+        data = data.encode(WCHAR) << WCHAR_NUL
       when REG_MULTI_SZ
         data = data.to_a.map {|s| s.encode(WCHAR)}.join(WCHAR_NUL) << WCHAR_NUL
-        termsize = WCHAR_SIZE
       when REG_BINARY, REG_NONE
         data = data.to_s
       when REG_DWORD
@@ -759,7 +760,7 @@ For detail, see the MSDN[http://msdn.microsoft.com/library/en-us/sysinfo/base/pr
       else
         raise TypeError, "Unsupported type #{Registry.type2name(type)}"
       end
-      API.SetValue(@hkey, name, type, data, data.bytesize + termsize)
+      API.SetValue(@hkey, name, type, data, data.bytesize)
     end
 
     #

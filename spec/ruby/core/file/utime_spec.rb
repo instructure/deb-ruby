@@ -19,18 +19,20 @@ describe "File.utime" do
     rm_r @file1, @file2
   end
 
-  it "sets the access and modification time of each file" do
-    File.utime(@atime, @mtime, @file1, @file2)
-    if @time_is_float
-      File.atime(@file1).should be_close(@atime, 0.0001)
-      File.mtime(@file1).should be_close(@mtime, 0.0001)
-      File.atime(@file2).should be_close(@atime, 0.0001)
-      File.mtime(@file2).should be_close(@mtime, 0.0001)
-    else
-      File.atime(@file1).to_i.should be_close(@atime.to_i, TIME_TOLERANCE)
-      File.mtime(@file1).to_i.should be_close(@mtime.to_i, TIME_TOLERANCE)
-      File.atime(@file2).to_i.should be_close(@atime.to_i, TIME_TOLERANCE)
-      File.mtime(@file2).to_i.should be_close(@mtime.to_i, TIME_TOLERANCE)
+  platform_is_not :windows do
+    it "sets the access and modification time of each file" do
+      File.utime(@atime, @mtime, @file1, @file2)
+      if @time_is_float
+        File.atime(@file1).should be_close(@atime, 0.0001)
+        File.mtime(@file1).should be_close(@mtime, 0.0001)
+        File.atime(@file2).should be_close(@atime, 0.0001)
+        File.mtime(@file2).should be_close(@mtime, 0.0001)
+      else
+        File.atime(@file1).to_i.should be_close(@atime.to_i, TIME_TOLERANCE)
+        File.mtime(@file1).to_i.should be_close(@mtime.to_i, TIME_TOLERANCE)
+        File.atime(@file2).to_i.should be_close(@atime.to_i, TIME_TOLERANCE)
+        File.mtime(@file2).to_i.should be_close(@mtime.to_i, TIME_TOLERANCE)
+      end
     end
   end
 
@@ -83,17 +85,19 @@ describe "File.utime" do
 
   platform_is :linux do
     platform_is wordsize: 64 do
-      it "allows Time instances in the far future to set mtime and atime (but some filesystems limit it up to 2446-05-10 or 2038-01-19)" do
+      it "allows Time instances in the far future to set mtime and atime (but some filesystems limit it up to 2446-05-10 or 2038-01-19 or 2486-07-02)" do
         # https://ext4.wiki.kernel.org/index.php/Ext4_Disk_Layout#Inode_Timestamps
         # "Therefore, timestamps should not overflow until May 2446."
         # https://lwn.net/Articles/804382/
         # "On-disk timestamps hitting the y2038 limit..."
         # The problem seems to be being improved, but currently it actually fails on XFS on RHEL8
         # https://rubyci.org/logs/rubyci.s3.amazonaws.com/rhel8/ruby-master/log/20201112T123004Z.fail.html.gz
+        # Amazon Linux 2023 returns 2486-07-02 in this example
+        # http://rubyci.s3.amazonaws.com/amazon2023/ruby-master/log/20230322T063004Z.fail.html.gz
         time = Time.at(1<<44)
         File.utime(time, time, @file1)
-        [559444, 2446, 2038].should.include? File.atime(@file1).year
-        [559444, 2446, 2038].should.include? File.mtime(@file1).year
+        [559444, 2486, 2446, 2038].should.include? File.atime(@file1).year
+        [559444, 2486, 2446, 2038].should.include? File.mtime(@file1).year
       end
     end
   end

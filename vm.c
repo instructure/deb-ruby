@@ -2703,6 +2703,7 @@ rb_vm_update_references(void *ptr)
         vm->loaded_features = rb_gc_location(vm->loaded_features);
         vm->loaded_features_snapshot = rb_gc_location(vm->loaded_features_snapshot);
         vm->loaded_features_realpaths = rb_gc_location(vm->loaded_features_realpaths);
+        vm->loaded_features_realpath_map = rb_gc_location(vm->loaded_features_realpath_map);
         vm->top_self = rb_gc_location(vm->top_self);
         vm->orig_progname = rb_gc_location(vm->orig_progname);
 
@@ -2794,6 +2795,7 @@ rb_vm_mark(void *ptr)
         rb_gc_mark_movable(vm->loaded_features);
         rb_gc_mark_movable(vm->loaded_features_snapshot);
         rb_gc_mark_movable(vm->loaded_features_realpaths);
+        rb_gc_mark_movable(vm->loaded_features_realpath_map);
         rb_gc_mark_movable(vm->top_self);
         rb_gc_mark_movable(vm->orig_progname);
         RUBY_MARK_MOVABLE_UNLESS_NULL(vm->coverages);
@@ -3137,21 +3139,19 @@ rb_execution_context_mark(const rb_execution_context_t *ec)
             const VALUE *ep = cfp->ep;
             VM_ASSERT(!!VM_ENV_FLAGS(ep, VM_ENV_FLAG_ESCAPED) == vm_ep_in_heap_p_(ec, ep));
 
-            if (VM_FRAME_TYPE(cfp) != VM_FRAME_MAGIC_DUMMY) {
-                rb_gc_mark_movable(cfp->self);
-                rb_gc_mark_movable((VALUE)cfp->iseq);
-                rb_gc_mark_movable((VALUE)cfp->block_code);
+            rb_gc_mark_movable(cfp->self);
+            rb_gc_mark_movable((VALUE)cfp->iseq);
+            rb_gc_mark_movable((VALUE)cfp->block_code);
 
-                if (!VM_ENV_LOCAL_P(ep)) {
-                    const VALUE *prev_ep = VM_ENV_PREV_EP(ep);
-                    if (VM_ENV_FLAGS(prev_ep, VM_ENV_FLAG_ESCAPED)) {
-                        rb_gc_mark_movable(prev_ep[VM_ENV_DATA_INDEX_ENV]);
-                    }
+            if (!VM_ENV_LOCAL_P(ep)) {
+                const VALUE *prev_ep = VM_ENV_PREV_EP(ep);
+                if (VM_ENV_FLAGS(prev_ep, VM_ENV_FLAG_ESCAPED)) {
+                    rb_gc_mark_movable(prev_ep[VM_ENV_DATA_INDEX_ENV]);
+                }
 
-                    if (VM_ENV_FLAGS(ep, VM_ENV_FLAG_ESCAPED)) {
-                        rb_gc_mark_movable(ep[VM_ENV_DATA_INDEX_ENV]);
-                        rb_gc_mark(ep[VM_ENV_DATA_INDEX_ME_CREF]);
-                    }
+                if (VM_ENV_FLAGS(ep, VM_ENV_FLAG_ESCAPED)) {
+                    rb_gc_mark_movable(ep[VM_ENV_DATA_INDEX_ENV]);
+                    rb_gc_mark(ep[VM_ENV_DATA_INDEX_ME_CREF]);
                 }
             }
 
@@ -3305,7 +3305,7 @@ thread_alloc(VALUE klass)
     return TypedData_Make_Struct(klass, rb_thread_t, &thread_data_type, th);
 }
 
-inline void
+void
 rb_ec_set_vm_stack(rb_execution_context_t *ec, VALUE *stack, size_t size)
 {
     ec->vm_stack = stack;
@@ -3677,6 +3677,7 @@ Init_VM(void)
     RBASIC_CLEAR_CLASS(klass);
     rb_obj_freeze(klass);
     rb_gc_register_mark_object(fcore);
+    rb_gc_register_mark_object(rb_class_path_cached(fcore));
     rb_mRubyVMFrozenCore = fcore;
 
     /*
@@ -4032,9 +4033,6 @@ Init_vm_objects(void)
     vm->mark_object_ary = rb_ary_hidden_new(128);
     vm->loading_table = st_init_strtable();
     vm->frozen_strings = st_init_table_with_size(&rb_fstring_hash_type, 10000);
-#if EXTSTATIC
-    vm->static_ext_inits = st_init_strtable();
-#endif
 
 #ifdef HAVE_MMAP
     vm->shape_list = (rb_shape_t *)mmap(NULL, rb_size_mul_or_raise(SHAPE_BITMAP_SIZE * 32, sizeof(rb_shape_t), rb_eRuntimeError),

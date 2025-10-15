@@ -6,11 +6,27 @@ require 'tmpdir'
 
 class TestRequire < Test::Unit::TestCase
   def test_load_error_path
-    filename = "should_not_exist"
-    error = assert_raise(LoadError) do
-      require filename
-    end
-    assert_equal filename, error.path
+    Tempfile.create(["should_not_exist", ".rb"]) {|t|
+      filename = t.path
+      t.close
+      File.unlink(filename)
+
+      error = assert_raise(LoadError) do
+        require filename
+      end
+      assert_equal filename, error.path
+
+      # with --disable=gems
+      assert_separately(["-", filename], "#{<<~"begin;"}\n#{<<~'end;'}")
+      begin;
+        filename = ARGV[0]
+        path = Struct.new(:to_path).new(filename)
+        error = assert_raise(LoadError) do
+          require path
+        end
+        assert_equal filename, error.path
+      end;
+    }
   end
 
   def test_require_invalid_shared_object
@@ -52,7 +68,8 @@ class TestRequire < Test::Unit::TestCase
   def test_require_nonascii
     bug3758 = '[ruby-core:31915]'
     ["\u{221e}", "\x82\xa0".force_encoding("cp932")].each do |path|
-      assert_raise_with_message(LoadError, /#{path}\z/, bug3758) {require path}
+      e = assert_raise(LoadError, bug3758) {require path}
+      assert_operator(e.message, :end_with?, path, bug3758)
     end
   end
 
@@ -349,6 +366,26 @@ class TestRequire < Test::Unit::TestCase
         load path, true
         assert_instance_of(Class, Foo)
       end;
+    end
+  end
+
+  def test_public_in_wrapped_load
+    Tempfile.create(["test_public_in_wrapped_load", ".rb"]) do |t|
+      t.puts "def foo; end", "public :foo"
+      t.close
+      assert_warning(/main\.public/) do
+        assert load(t.path, true)
+      end
+    end
+  end
+
+  def test_private_in_wrapped_load
+    Tempfile.create(["test_private_in_wrapped_load", ".rb"]) do |t|
+      t.puts "def foo; end", "private :foo"
+      t.close
+      assert_warning(/main\.private/) do
+        assert load(t.path, true)
+      end
     end
   end
 
@@ -957,5 +994,20 @@ class TestRequire < Test::Unit::TestCase
     def test_resolve_feature_path_with_missing_feature
       assert_nil($LOAD_PATH.resolve_feature_path("superkalifragilisticoespialidoso"))
     end
+  end
+
+  def test_require_with_public_method_missing
+    # [Bug #19793]
+    assert_separately(["-W0", "--disable-gems", "-rtempfile"], __FILE__, __LINE__, <<~RUBY)
+      GC.stress = true
+
+      class Object
+        public :method_missing
+      end
+
+      Tempfile.create(["empty", ".rb"]) do |file|
+        require file.path
+      end
+    RUBY
   end
 end

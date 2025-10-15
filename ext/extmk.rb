@@ -136,6 +136,14 @@ def extract_makefile(makefile, keep = true)
   true
 end
 
+def create_makefile(target, srcprefix = nil)
+  if $static and target.include?("/")
+    base = File.basename(target)
+    $defs << "-DInit_#{base}=Init_#{target.tr('/', '_')}"
+  end
+  super
+end
+
 def extmake(target, basedir = 'ext', maybestatic = true)
   FileUtils.mkpath target unless File.directory?(target)
   begin
@@ -163,8 +171,6 @@ def extmake(target, basedir = 'ext', maybestatic = true)
     $mdir = target
     $srcdir = File.join($top_srcdir, basedir, $mdir)
     $preload = nil
-    $objs = []
-    $srcs = []
     $extso = []
     makefile = "./Makefile"
     static = $static
@@ -198,7 +204,7 @@ def extmake(target, basedir = 'ext', maybestatic = true)
       begin
 	$extconf_h = nil
 	ok &&= extract_makefile(makefile)
-	old_objs = $objs
+	old_objs = $objs || []
 	old_cleanfiles = $distcleanfiles | $cleanfiles
 	conf = ["#{$srcdir}/makefile.rb", "#{$srcdir}/extconf.rb"].find {|f| File.exist?(f)}
 	if (!ok || ($extconf_h && !File.exist?($extconf_h)) ||
@@ -261,6 +267,8 @@ def extmake(target, basedir = 'ext', maybestatic = true)
     unless $destdir.to_s.empty? or $mflags.defined?("DESTDIR")
       args += ["DESTDIR=" + relative_from($destdir, "../"+prefix)]
     end
+    $objs ||= []
+    $srcs ||= []
     if $static and ok and !$objs.empty? and !noinstall
       args += ["static"]
       $extlist.push [(maybestatic ? $static : false), target, $target, $preload]
@@ -549,7 +557,13 @@ extend Module.new {
   end
 
   def create_makefile(*args, &block)
-    return super unless @gemname
+    unless @gemname
+      if $static and (target = args.first).include?("/")
+        base = File.basename(target)
+        $defs << "-DInit_#{base}=Init_#{target.tr('/', '_')}"
+      end
+      return super
+    end
     super(*args) do |conf|
       conf.find do |s|
         s.sub!(%r(^(srcdir *= *)\$\(top_srcdir\)/\.bundle/gems/[^/]+(?=/))) {

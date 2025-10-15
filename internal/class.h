@@ -15,6 +15,9 @@
 #include "ruby/intern.h"        /* for rb_alloc_func_t */
 #include "ruby/ruby.h"          /* for struct RBasic */
 #include "shape.h"
+#include "ruby_assert.h"
+#include "vm_core.h"
+#include "method.h"             /* for rb_cref_t */
 
 #ifdef RCLASS_SUPER
 # undef RCLASS_SUPER
@@ -29,6 +32,7 @@ struct rb_subclass_entry {
 struct rb_cvar_class_tbl_entry {
     uint32_t index;
     rb_serial_t global_cvar_state;
+    const rb_cref_t * cref;
     VALUE class_value;
 };
 
@@ -115,6 +119,7 @@ void rb_class_foreach_subclass(VALUE klass, void (*f)(VALUE, VALUE), VALUE);
 void rb_class_detach_subclasses(VALUE);
 void rb_class_detach_module_subclasses(VALUE);
 void rb_class_remove_from_module_subclasses(VALUE);
+VALUE rb_define_class_id_under_no_pin(VALUE outer, ID id, VALUE super);
 VALUE rb_obj_methods(int argc, const VALUE *argv, VALUE obj);
 VALUE rb_obj_protected_methods(int argc, const VALUE *argv, VALUE obj);
 VALUE rb_obj_private_methods(int argc, const VALUE *argv, VALUE obj);

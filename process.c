@@ -1168,7 +1168,7 @@ rb_sigwait_fd_migrate(rb_vm_t *vm)
 extern volatile unsigned int ruby_nocldwait; /* signal.c */
 /* called by timer thread or thread which acquired sigwait_fd */
 static void
-waitpid_each(struct ccan_list_head *head)
+waitpid_each(rb_vm_t *vm, struct ccan_list_head *head)
 {
     struct waitpid_state *w = 0, *next;
 
@@ -1177,6 +1177,18 @@ waitpid_each(struct ccan_list_head *head)
 
         if (!ret) continue;
         if (ret == -1) w->errnum = errno;
+
+        if (w->pid <= 0) {
+            /* when waiting for a group of processes, make sure a waiter for a
+             * specific pid is given that event in preference */
+            struct waitpid_state *w_inner = 0, *next_inner;
+            ccan_list_for_each_safe(&vm->waiting_pids, w_inner, next_inner, wnode) {
+                if (w_inner->pid == ret) {
+                    /* signal this one instead */
+                    w = w_inner;
+                }
+            }
+        }
 
         w->ret = ret;
         ccan_list_del_init(&w->wnode);
@@ -1192,10 +1204,8 @@ ruby_waitpid_all(rb_vm_t *vm)
 {
 #if RUBY_SIGCHLD
     rb_native_mutex_lock(&vm->waitpid_lock);
-    waitpid_each(&vm->waiting_pids);
-    if (ccan_list_empty(&vm->waiting_pids)) {
-        waitpid_each(&vm->waiting_grps);
-    }
+    waitpid_each(vm, &vm->waiting_pids);
+    waitpid_each(vm, &vm->waiting_grps);
     /* emulate SA_NOCLDWAIT */
     if (ccan_list_empty(&vm->waiting_pids) && ccan_list_empty(&vm->waiting_grps)) {
         while (ruby_nocldwait && do_waitpid(-1, 0, WNOHANG) > 0)
@@ -1260,6 +1270,7 @@ waitpid_cleanup(VALUE x)
     return Qfalse;
 }
 
+#if RUBY_SIGCHLD
 static void
 waitpid_wait(struct waitpid_state *w)
 {
@@ -1273,9 +1284,16 @@ waitpid_wait(struct waitpid_state *w)
      */
     rb_native_mutex_lock(&vm->waitpid_lock);
 
-    if (w->pid > 0 || ccan_list_empty(&vm->waiting_pids)) {
-        w->ret = do_waitpid(w->pid, &w->status, w->options | WNOHANG);
+    if (w->options & WNOHANG && w->pid <= 0) {
+        /* In the case of WNOHANG wait for a group, make sure there isn't a zombie child
+        * whose PID we are directly waiting for in another call to waitpid. If there is,
+        * we will reap it via a call to waitpid($pid) with this call to waitpid_each. */
+        waitpid_each(vm, &vm->waiting_pids);
+        /* _now_ it's safe to call do_waitpid, without risk of stealing the wait from
+         * another directed call. */
     }
+
+    w->ret = do_waitpid(w->pid, &w->status, w->options | WNOHANG);
 
     if (w->ret) {
         if (w->ret == -1) w->errnum = errno;
@@ -1298,6 +1316,7 @@ waitpid_wait(struct waitpid_state *w)
         rb_ensure(waitpid_sleep, (VALUE)w, waitpid_cleanup, (VALUE)w);
     }
 }
+#endif
 
 static void *
 waitpid_blocking_no_SIGCHLD(void *x)
@@ -1340,12 +1359,11 @@ rb_process_status_wait(rb_pid_t pid, int flags)
     waitpid_state_init(&waitpid_state, pid, flags);
     waitpid_state.ec = GET_EC();
 
-    if (WAITPID_USE_SIGCHLD) {
-        waitpid_wait(&waitpid_state);
-    }
-    else {
-        waitpid_no_SIGCHLD(&waitpid_state);
-    }
+#if WAITPID_USE_SIGCHLD
+    waitpid_wait(&waitpid_state);
+#else
+    waitpid_no_SIGCHLD(&waitpid_state);
+#endif
 
     if (waitpid_state.ret == 0) return Qnil;
 
@@ -1426,7 +1444,7 @@ rb_waitpid(rb_pid_t pid, int *st, int flags)
     VALUE status = rb_process_status_wait(pid, flags);
     if (NIL_P(status)) return 0;
 
-    struct rb_process_status *data = RTYPEDDATA_DATA(status);
+    struct rb_process_status *data = rb_check_typeddata(status, &rb_process_status_type);
     pid = data->pid;
 
     if (st) *st = data->status;
@@ -1776,7 +1794,6 @@ before_fork_ruby(void)
 static void
 after_fork_ruby(void)
 {
-    rb_threadptr_pending_interrupt_clear(GET_THREAD());
     after_exec();
 }
 #endif
@@ -4843,7 +4860,8 @@ rb_f_system(int argc, VALUE *argv, VALUE _)
 
     if (pid > 0) {
         VALUE status = rb_process_status_wait(pid, 0);
-        struct rb_process_status *data = RTYPEDDATA_DATA(status);
+
+        struct rb_process_status *data = rb_check_typeddata(status, &rb_process_status_type);
 
         // Set the last status:
         rb_obj_freeze(status);
@@ -8361,7 +8379,9 @@ rb_clock_gettime(int argc, VALUE *argv, VALUE _)
 
     VALUE unit = (rb_check_arity(argc, 1, 2) == 2) ? argv[1] : Qnil;
     VALUE clk_id = argv[0];
+#ifdef HAVE_CLOCK_GETTIME
     clockid_t c;
+#endif
 
     if (SYMBOL_P(clk_id)) {
 #ifdef CLOCK_REALTIME
@@ -8587,7 +8607,9 @@ rb_clock_getres(int argc, VALUE *argv, VALUE _)
     timetick_int_t denominators[2];
     int num_numerators = 0;
     int num_denominators = 0;
+#ifdef HAVE_CLOCK_GETRES
     clockid_t c;
+#endif
 
     VALUE unit = (rb_check_arity(argc, 1, 2) == 2) ? argv[1] : Qnil;
     VALUE clk_id = argv[0];
