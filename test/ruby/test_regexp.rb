@@ -1838,6 +1838,13 @@ class TestRegexp < Test::Unit::TestCase
     end;
   end
 
+  def test_bug_20886
+    re = Regexp.new("d()*+|a*a*bc", timeout: 0.02)
+    assert_raise(Regexp::TimeoutError) do
+      re === "b" + "a" * 1000
+    end
+  end
+
   def per_instance_redos_test(global_timeout, per_instance_timeout, expected_timeout)
     assert_separately([], "#{<<-"begin;"}\n#{<<-'end;'}")
       global_timeout = #{ EnvUtil.apply_timeout_scale(global_timeout).inspect }
@@ -1892,6 +1899,22 @@ class TestRegexp < Test::Unit::TestCase
 
       assert_raise(ArgumentError) { Regexp.new("foo", timeout: 0) }
       assert_raise(ArgumentError) { Regexp.new("foo", timeout: -1) }
+    end;
+  end
+
+  def test_timeout_memory_leak
+    assert_no_memory_leak([], "#{<<~"begin;"}", "#{<<~'end;'}", "[Bug #20650]", timeout: 100, rss: true)
+      regex = Regexp.new("^#{"(a*)" * 10_000}x$", timeout: 0.000001)
+      str = "a" * 1_000_000 + "x"
+
+      code = proc do
+        regex =~ str
+      rescue
+      end
+
+      10.times(&code)
+    begin;
+      1_000.times(&code)
     end;
   end
 

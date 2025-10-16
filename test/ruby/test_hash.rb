@@ -1268,6 +1268,17 @@ class TestHash < Test::Unit::TestCase
     assert_equal(@cls[a: 10, b: 2, c: 3, d: 4, e: 5, f: 6, g: 7, h: 8, i: 9, j: 10], h)
   end
 
+  def test_update_modify_in_block
+    a = @cls[]
+    (1..1337).each {|k| a[k] = k}
+    b = {1=>1338}
+    assert_raise_with_message(RuntimeError, /rehash during iteration/) do
+      a.update(b) {|k, o, n|
+        a.rehash
+      }
+    end
+  end
+
   def test_update_on_identhash
     key = +'a'
     i = @cls[].compare_by_identity
@@ -1816,6 +1827,14 @@ class TestHash < Test::Unit::TestCase
       end
     end
     assert_equal(@cls[a: 2, b: 2, c: 3, d: 4, e: 5, f: 6, g: 7, h: 8, i: 9, j: 10], x)
+
+    x = (1..1337).to_h {|k| [k, k]}
+    assert_raise_with_message(RuntimeError, /rehash during iteration/) do
+      x.transform_values! {|v|
+        x.rehash if v == 1337
+        v * 2
+      }
+    end
   end
 
   def hrec h, n, &b
@@ -2296,6 +2315,11 @@ class TestHashOnly < Test::Unit::TestCase
     end
   end
 
+  def test_bug_21357
+    h = {x: []}.merge(x: nil) { |_k, v1, _v2| v1 }
+    assert_equal({x: []}, h)
+  end
+
   def test_any_hash_fixable
     20.times do
       assert_separately([], "#{<<~"begin;"}\n#{<<~'end;'}")
@@ -2351,5 +2375,19 @@ class TestHashOnly < Test::Unit::TestCase
         (0..10).each {|i| $h[Foo.new] ||= {} }
       end
     end;
+  end
+
+  def test_ar_to_st_reserved_value
+    klass = Class.new do
+      attr_reader :hash
+      def initialize(val) = @hash = val
+    end
+
+    values = 0.downto(-16).to_a
+    hash = {}
+    values.each do |val|
+      hash[klass.new(val)] = val
+    end
+    assert_equal values, hash.values, "[ruby-core:121239] [Bug #21170]"
   end
 end

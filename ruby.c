@@ -571,6 +571,8 @@ translit_char_bin(char *p, int from, int to)
 #endif
 
 #ifdef _WIN32
+# undef chdir
+# define chdir rb_w32_uchdir
 # define UTF8_PATH 1
 #endif
 
@@ -1769,7 +1771,7 @@ ruby_opt_init(ruby_cmdline_options_t *opt)
     }
 
     if (getenv("RUBY_FREE_AT_EXIT")) {
-        rb_warn("Free at exit is experimental and may be unstable");
+        rb_category_warn(RB_WARN_CATEGORY_EXPERIMENTAL, "Free at exit is experimental and may be unstable");
         rb_free_at_exit = true;
     }
 

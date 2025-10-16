@@ -2975,7 +2975,6 @@ remove_unreachable_chunk(rb_iseq_t *iseq, LINK_ELEMENT *i)
                 break;
             }
             else if ((lab = find_destination((INSN *)i)) != 0) {
-                if (lab->unremovable) break;
                 unref_counts[lab->label_no]++;
             }
         }
@@ -2992,8 +2991,7 @@ remove_unreachable_chunk(rb_iseq_t *iseq, LINK_ELEMENT *i)
             /* do nothing */
         }
         else if (IS_ADJUST(i)) {
-            LABEL *dest = ((ADJUST *)i)->label;
-            if (dest && dest->unremovable) return 0;
+            return 0;
         }
         end = i;
     } while ((i = i->next) != 0);
@@ -5282,12 +5280,17 @@ compile_massign_lhs(rb_iseq_t *iseq, LINK_ANCHOR *const pre, LINK_ANCHOR *const 
 
         CHECK(COMPILE_POPPED(pre, "masgn lhs (NODE_ATTRASGN)", node));
 
+        bool safenav_call = false;
         LINK_ELEMENT *insn_element = LAST_ELEMENT(pre);
         iobj = (INSN *)get_prev_insn((INSN *)insn_element); /* send insn */
         ASSUME(iobj);
-        ELEM_REMOVE(LAST_ELEMENT(pre));
-        ELEM_REMOVE((LINK_ELEMENT *)iobj);
-        pre->last = iobj->link.prev;
+        ELEM_REMOVE(insn_element);
+        if (!IS_INSN_ID(iobj, send)) {
+            safenav_call = true;
+            iobj = (INSN *)get_prev_insn(iobj);
+            ELEM_INSERT_NEXT(&iobj->link, insn_element);
+        }
+        (pre->last = iobj->link.prev)->next = 0;
 
         const struct rb_callinfo *ci = (struct rb_callinfo *)OPERAND_AT(iobj, 0);
         int argc = vm_ci_argc(ci) + 1;
@@ -5306,7 +5309,9 @@ compile_massign_lhs(rb_iseq_t *iseq, LINK_ANCHOR *const pre, LINK_ANCHOR *const 
             return COMPILE_NG;
         }
 
-        ADD_ELEM(lhs, (LINK_ELEMENT *)iobj);
+        iobj->link.prev = lhs->last;
+        lhs->last->next = &iobj->link;
+        for (lhs->last = &iobj->link; lhs->last->next; lhs->last = lhs->last->next);
         if (vm_ci_flag(ci) & VM_CALL_ARGS_SPLAT) {
             int argc = vm_ci_argc(ci);
             ci = ci_argc_set(iseq, ci, argc - 1);
@@ -5315,9 +5320,11 @@ compile_massign_lhs(rb_iseq_t *iseq, LINK_ANCHOR *const pre, LINK_ANCHOR *const 
             INSERT_BEFORE_INSN1(iobj, line_node, newarray, INT2FIX(1));
             INSERT_BEFORE_INSN(iobj, line_node, concatarray);
         }
-        ADD_INSN(lhs, line_node, pop);
-        if (argc != 1) {
+        if (!safenav_call) {
             ADD_INSN(lhs, line_node, pop);
+            if (argc != 1) {
+                ADD_INSN(lhs, line_node, pop);
+            }
         }
         for (int i=0; i < argc; i++) {
             ADD_INSN(post, line_node, pop);
@@ -6098,7 +6105,6 @@ setup_args_core(rb_iseq_t *iseq, LINK_ANCHOR *const args, const NODE *argn,
         if (kwnode) {
             // kwsplat
             *flag_ptr |= VM_CALL_KW_SPLAT;
-            *flag_ptr |= VM_CALL_KW_SPLAT_MUT;
             compile_hash(iseq, args, kwnode, TRUE, FALSE);
             argc += 1;
         }
@@ -7884,7 +7890,6 @@ compile_next(rb_iseq_t *iseq, LINK_ANCHOR *const ret, const NODE *const node, in
         add_ensure_iseq(ret, iseq, 0);
         ADD_INSNL(ret, line_node, jump, ISEQ_COMPILE_DATA(iseq)->end_label);
         ADD_ADJUST_RESTORE(ret, splabel);
-        splabel->unremovable = FALSE;
 
         if (!popped) {
             ADD_INSN(ret, line_node, putnil);
@@ -9661,11 +9666,13 @@ compile_attrasgn(rb_iseq_t *iseq, LINK_ANCHOR *const ret, const NODE *const node
     VALUE argc;
     LABEL *else_label = NULL;
     VALUE branches = Qfalse;
+    struct rb_callinfo_kwarg *keywords = NULL;
 
     /* optimization shortcut
      *   obj["literal"] = value -> opt_aset_with(obj, "literal", value)
      */
-    if (mid == idASET && !private_recv_p(node) && RNODE_ATTRASGN(node)->nd_args &&
+    if (!ISEQ_COMPILE_DATA(iseq)->in_masgn &&
+        mid == idASET && !private_recv_p(node) && RNODE_ATTRASGN(node)->nd_args &&
         nd_type_p(RNODE_ATTRASGN(node)->nd_args, NODE_LIST) && RNODE_LIST(RNODE_ATTRASGN(node)->nd_args)->as.nd_alen == 2 &&
         nd_type_p(RNODE_LIST(RNODE_ATTRASGN(node)->nd_args)->nd_head, NODE_STR) &&
         ISEQ_COMPILE_DATA(iseq)->current_block == NULL &&
@@ -9688,7 +9695,7 @@ compile_attrasgn(rb_iseq_t *iseq, LINK_ANCHOR *const ret, const NODE *const node
 
     INIT_ANCHOR(recv);
     INIT_ANCHOR(args);
-    argc = setup_args(iseq, args, RNODE_ATTRASGN(node)->nd_args, &flag, NULL);
+    argc = setup_args(iseq, args, RNODE_ATTRASGN(node)->nd_args, &flag, &keywords);
     CHECK(!NIL_P(argc));
 
     int asgnflag = COMPILE_RECV(recv, "recv", node, RNODE_ATTRASGN(node)->nd_recv);
@@ -9776,7 +9783,7 @@ iseq_compile_each0(rb_iseq_t *iseq, LINK_ANCHOR *const ret, const NODE *const no
         if (nd_fl_newline(node)) {
             int event = RUBY_EVENT_LINE;
             ISEQ_COMPILE_DATA(iseq)->last_line = line;
-            if (ISEQ_COVERAGE(iseq) && ISEQ_LINE_COVERAGE(iseq)) {
+            if (line > 0 && ISEQ_COVERAGE(iseq) && ISEQ_LINE_COVERAGE(iseq)) {
                 event |= RUBY_EVENT_COVERAGE_LINE;
             }
             ADD_TRACE(ret, event);
@@ -9863,7 +9870,10 @@ iseq_compile_each0(rb_iseq_t *iseq, LINK_ANCHOR *const ret, const NODE *const no
       }
 
       case NODE_MASGN:{
+        bool prev_in_masgn = ISEQ_COMPILE_DATA(iseq)->in_masgn;
+        ISEQ_COMPILE_DATA(iseq)->in_masgn = true;
         compile_massign(iseq, ret, node, popped);
+        ISEQ_COMPILE_DATA(iseq)->in_masgn = prev_in_masgn;
         break;
       }
 

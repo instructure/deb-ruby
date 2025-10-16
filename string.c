@@ -44,6 +44,7 @@
 #include "ruby/util.h"
 #include "ruby_assert.h"
 #include "vm_sync.h"
+#include "ruby/internal/attr/nonstring.h"
 
 #if defined HAVE_CRYPT_R
 # if defined HAVE_CRYPT_H
@@ -344,6 +345,10 @@ fstr_update_callback(st_data_t *key, st_data_t *value, st_data_t data, int exist
 
         if (rb_objspace_garbage_object_p(str)) {
             arg->fstr = Qundef;
+            // When RSTRING_FSTR strings are swept, they call `st_delete`.
+            // To avoid a race condition if an equivalent string was inserted
+            // we must remove the flag immediately.
+            FL_UNSET_RAW(str, RSTRING_FSTR);
             return ST_DELETE;
         }
 
@@ -1970,12 +1975,7 @@ rb_str_s_new(int argc, VALUE *argv, VALUE klass)
         }
     }
 
-    long fake_len = capa - termlen;
-    if (fake_len < 0) {
-        fake_len = 0;
-    }
-
-    VALUE str = str_new0(klass, NULL, fake_len, termlen);
+    VALUE str = str_new0(klass, NULL, capa, termlen);
     STR_SET_LEN(str, 0);
     TERM_FILL(RSTRING_PTR(str), termlen);
 
@@ -2896,11 +2896,12 @@ rb_str_subpos(VALUE str, long beg, long *lenp)
 {
     long len = *lenp;
     long slen = -1L;
-    long blen = RSTRING_LEN(str);
+    const long blen = RSTRING_LEN(str);
     rb_encoding *enc = STR_ENC_GET(str);
     char *p, *s = RSTRING_PTR(str), *e = s + blen;
 
     if (len < 0) return 0;
+    if (beg < 0 && -beg < 0) return 0;
     if (!blen) {
         len = 0;
     }
@@ -2918,7 +2919,8 @@ rb_str_subpos(VALUE str, long beg, long *lenp)
     }
     if (beg < 0) {
         if (len > -beg) len = -beg;
-        if (-beg * rb_enc_mbmaxlen(enc) < RSTRING_LEN(str) / 8) {
+        if ((ENC_CODERANGE(str) == ENC_CODERANGE_VALID) &&
+            (-beg * rb_enc_mbmaxlen(enc) < blen / 8)) {
             beg = -beg;
             while (beg-- > len && (e = rb_enc_prev_char(s, e, e, enc)) != 0);
             p = e;
@@ -2936,7 +2938,7 @@ rb_str_subpos(VALUE str, long beg, long *lenp)
             if (len == 0) goto end;
         }
     }
-    else if (beg > 0 && beg > RSTRING_LEN(str)) {
+    else if (beg > 0 && beg > blen) {
         return 0;
     }
     if (len == 0) {
@@ -8812,11 +8814,15 @@ rb_str_split_m(int argc, VALUE *argv, VALUE str)
         }
     }
 
-#define SPLIT_STR(beg, len) (empty_count = split_string(result, str, beg, len, empty_count))
+#define SPLIT_STR(beg, len) ( \
+        empty_count = split_string(result, str, beg, len, empty_count), \
+        str_mod_check(str, str_start, str_len))
 
     beg = 0;
     char *ptr = RSTRING_PTR(str);
-    char *eptr = RSTRING_END(str);
+    char *const str_start = ptr;
+    const long str_len = RSTRING_LEN(str);
+    char *const eptr = str_start + str_len;
     if (split_type == SPLIT_TYPE_AWK) {
         char *bptr = ptr;
         int skip = 1;
@@ -8877,7 +8883,6 @@ rb_str_split_m(int argc, VALUE *argv, VALUE str)
         }
     }
     else if (split_type == SPLIT_TYPE_STRING) {
-        char *str_start = ptr;
         char *substr_start = ptr;
         char *sptr = RSTRING_PTR(spat);
         long slen = RSTRING_LEN(spat);
@@ -8894,6 +8899,7 @@ rb_str_split_m(int argc, VALUE *argv, VALUE str)
                 continue;
             }
             SPLIT_STR(substr_start - str_start, (ptr+end) - substr_start);
+            str_mod_check(spat, sptr, slen);
             ptr += end + slen;
             substr_start = ptr;
             if (!NIL_P(limit) && lim <= ++i) break;
@@ -8901,7 +8907,6 @@ rb_str_split_m(int argc, VALUE *argv, VALUE str)
         beg = ptr - str_start;
     }
     else if (split_type == SPLIT_TYPE_CHARS) {
-        char *str_start = ptr;
         int n;
 
         if (result) result = rb_ary_new_capa(RSTRING_LEN(str));
@@ -11119,7 +11124,7 @@ enc_str_scrub(rb_encoding *enc, VALUE str, VALUE repl, int cr)
     encidx = rb_enc_to_index(enc);
 
 #define DEFAULT_REPLACE_CHAR(str) do { \
-        static const char replace[sizeof(str)-1] = str; \
+        RBIMPL_ATTR_NONSTRING() static const char replace[sizeof(str)-1] = str; \
         rep = replace; replen = (int)sizeof(replace); \
     } while (0)
 

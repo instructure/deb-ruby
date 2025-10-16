@@ -5434,8 +5434,12 @@ fn gen_send_cfunc(
     // Increment total cfunc send count
     gen_counter_incr(asm, Counter::num_send_cfunc);
 
-    // Delegate to codegen for C methods if we have it.
-    if kw_arg.is_null() && flags & VM_CALL_OPT_SEND == 0 && flags & VM_CALL_ARGS_SPLAT == 0 && (cfunc_argc == -1 || argc == cfunc_argc) {
+    // Delegate to codegen for C methods if we have it and the callsite is simple enough.
+    if kw_arg.is_null() &&
+            flags & VM_CALL_OPT_SEND == 0 &&
+            flags & VM_CALL_ARGS_SPLAT == 0 &&
+            flags & VM_CALL_ARGS_BLOCKARG == 0 &&
+            (cfunc_argc == -1 || argc == cfunc_argc) {
         let codegen_p = lookup_cfunc_codegen(unsafe { (*cme).def });
         let expected_stack_after = asm.ctx.get_stack_size() as i32 - argc;
         if let Some(known_cfunc_codegen) = codegen_p {
@@ -7445,7 +7449,6 @@ fn gen_send_general(
 
                     }
                     OPTIMIZED_METHOD_TYPE_CALL => {
-
                         if block.is_some() {
                             gen_counter_incr(asm, Counter::send_call_block);
                             return None;
@@ -7497,8 +7500,10 @@ fn gen_send_general(
 
                         let stack_ret = asm.stack_push(Type::Unknown);
                         asm.mov(stack_ret, ret);
-                        return Some(KeepCompiling);
 
+                        // End the block to allow invalidating the next instruction
+                        jump_to_next_insn(jit, asm, ocb);
+                        return Some(EndBlock);
                     }
                     OPTIMIZED_METHOD_TYPE_BLOCK_CALL => {
                         gen_counter_incr(asm, Counter::send_optimized_method_block_call);

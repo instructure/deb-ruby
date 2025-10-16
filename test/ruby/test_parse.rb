@@ -631,6 +631,8 @@ class TestParse < Test::Unit::TestCase
     assert_equal("\u{1234}", eval('?\u{1234}'))
     assert_equal("\u{1234}", eval('?\u1234'))
     assert_syntax_error('?\u{41 42}', 'Multiple codepoints at single character literal')
+    assert_syntax_error("?and", /unexpected '\?'/)
+    assert_syntax_error("?\u1234and", /unexpected '\?'/)
     e = assert_syntax_error('"#{?\u123}"', 'invalid Unicode escape')
     assert_not_match(/end-of-input/, e.message)
 
@@ -1473,6 +1475,21 @@ x = __ENCODING__
     assert_not_ractor_shareable(obj)
     assert_equal obj, a
     assert !obj.equal?(a)
+  end
+
+  def test_shareable_constant_value_literal_const_refs
+    a = eval_separately("#{<<~"begin;"}\n#{<<~'end;'}")
+    begin;
+      # shareable_constant_value: literal
+      # [Bug #20668]
+      SOME_CONST = {
+        'Object' => Object,
+        'String' => String,
+        'Array' => Array,
+      }
+      SOME_CONST
+    end;
+    assert_ractor_shareable(a)
   end
 
   def test_shareable_constant_value_nested

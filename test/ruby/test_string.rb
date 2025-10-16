@@ -169,6 +169,15 @@ CODE
     assert_raise(ArgumentError) { "foo"[] }
   end
 
+  def test_AREF_underflow
+    require "rbconfig/sizeof"
+    assert_equal(nil, S("\u{3042 3044 3046}")[RbConfig::LIMITS["LONG_MIN"], 1])
+  end
+
+  def test_AREF_invalid_encoding
+    assert_equal(S("\x80"), S("A"*39+"\x80")[-1, 1])
+  end
+
   def test_ASET # '[]='
     s = S("FooBar")
     s[0] = S('A')
@@ -1899,6 +1908,13 @@ CODE
 
     result = []; S("aaa,bbb,ccc,ddd").split(/,/) {|s| result << s.gsub(/./, "A")}
     assert_equal(["AAA"]*4, result)
+
+    s = S("abc ") * 20
+    assert_raise(RuntimeError) {
+      10.times do
+        s.split {s.prepend("xxx" * 100)}
+      end
+    }
   ensure
     EnvUtil.suppress_warning {$; = fs}
   end
@@ -2008,6 +2024,22 @@ CODE
     assert_equal("hel", $&)
     assert_equal(false, S("hello").start_with?(/el/))
     assert_nil($&)
+  end
+
+  def test_start_with_timeout_memory_leak
+    assert_no_memory_leak([], "#{<<~"begin;"}", "#{<<~'end;'}", "[Bug #20653]", rss: true)
+      regex = Regexp.new("^#{"(a*)" * 10_000}x$", timeout: 0.000001)
+      str = "a" * 1_000_000 + "x"
+
+      code = proc do
+        str.start_with?(regex)
+      rescue
+      end
+
+      10.times(&code)
+    begin;
+      1_000.times(&code)
+    end;
   end
 
   def test_strip

@@ -28,6 +28,17 @@ module Bundler
 
     # @!group Stub Delegates
 
+    def ignored?
+      return @ignored unless @ignored.nil?
+
+      @ignored = missing_extensions?
+      return false unless @ignored
+
+      warn "Source #{source} is ignoring #{self} because it is missing extensions"
+
+      true
+    end
+
     def manually_installed?
       # This is for manually installed gems which are gems that were fixed in place after a
       # failed installation. Once the issue was resolved, the user then manually created
@@ -45,8 +56,8 @@ module Bundler
       true
     end
 
-    def activated
-      stub.activated
+    def activated?
+      stub.activated?
     end
 
     def activated=(activated)
@@ -75,6 +86,14 @@ module Bundler
 
     def full_require_paths
       stub.full_require_paths
+    end
+
+    def require_paths
+      stub.require_paths
+    end
+
+    def base_dir=(path)
+      stub.base_dir = path
     end
 
     def load_paths

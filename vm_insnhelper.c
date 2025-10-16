@@ -12,6 +12,10 @@
 
 #include <math.h>
 
+#ifdef HAVE_STDATOMIC_H
+  #include <stdatomic.h>
+#endif
+
 #include "constant.h"
 #include "debug_counter.h"
 #include "internal.h"
@@ -388,6 +392,14 @@ vm_push_frame(rb_execution_context_t *ec,
         .jit_return = NULL
     };
 
+    /* Ensure the initialization of `*cfp` above never gets reordered with the update of `ec->cfp` below.
+    This is a no-op in all cases we've looked at (https://godbolt.org/z/3oxd1446K), but should guarantee it for all
+    future/untested compilers/platforms. */
+
+    #if defined HAVE_DECL_ATOMIC_SIGNAL_FENCE && HAVE_DECL_ATOMIC_SIGNAL_FENCE
+    atomic_signal_fence(memory_order_seq_cst);
+    #endif
+
     ec->cfp = cfp;
 
     if (VMDEBUG == 2) {
@@ -432,15 +444,8 @@ rb_vm_pop_frame(rb_execution_context_t *ec)
 VALUE
 rb_vm_push_frame_fname(rb_execution_context_t *ec, VALUE fname)
 {
-    VALUE tmpbuf = rb_imemo_tmpbuf_auto_free_pointer();
-    void *ptr = ruby_xcalloc(sizeof(struct rb_iseq_constant_body) + sizeof(struct rb_iseq_struct), 1);
-    rb_imemo_tmpbuf_set_ptr(tmpbuf, ptr);
-
-    struct rb_iseq_struct *dmy_iseq = (struct rb_iseq_struct *)ptr;
-    struct rb_iseq_constant_body *dmy_body = (struct rb_iseq_constant_body *)&dmy_iseq[1];
-    dmy_iseq->body = dmy_body;
-    dmy_body->type = ISEQ_TYPE_TOP;
-    dmy_body->location.pathobj = fname;
+    rb_iseq_t *rb_iseq_alloc_with_dummy_path(VALUE fname);
+    rb_iseq_t *dmy_iseq = rb_iseq_alloc_with_dummy_path(fname);
 
     vm_push_frame(ec,
                   dmy_iseq, //const rb_iseq_t *iseq,
@@ -453,7 +458,7 @@ rb_vm_push_frame_fname(rb_execution_context_t *ec, VALUE fname)
                   0, // int local_size,
                   0); // int stack_max
 
-    return tmpbuf;
+    return (VALUE)dmy_iseq;
 }
 
 /* method dispatch */
@@ -5797,7 +5802,8 @@ rb_vm_opt_newarray_hash(rb_execution_context_t *ec, rb_num_t num, const VALUE *p
 static void
 vm_track_constant_cache(ID id, void *ic)
 {
-    struct rb_id_table *const_cache = GET_VM()->constant_cache;
+    rb_vm_t *vm = GET_VM();
+    struct rb_id_table *const_cache = vm->constant_cache;
     VALUE lookup_result;
     st_table *ics;
 
@@ -5809,7 +5815,23 @@ vm_track_constant_cache(ID id, void *ic)
         rb_id_table_insert(const_cache, id, (VALUE)ics);
     }
 
+    /* The call below to st_insert could allocate which could trigger a GC.
+     * If it triggers a GC, it may free an iseq that also holds a cache to this
+     * constant. If that iseq is the last iseq with a cache to this constant, then
+     * it will free this ST table, which would cause an use-after-free during this
+     * st_insert.
+     *
+     * So to fix this issue, we store the ID that is currently being inserted
+     * and, in remove_from_constant_cache, we don't free the ST table for ID
+     * equal to this one.
+     *
+     * See [Bug #20921].
+     */
+    vm->inserting_constant_cache_id = id;
+
     st_insert(ics, (st_data_t) ic, (st_data_t) Qtrue);
+
+    vm->inserting_constant_cache_id = (ID)0;
 }
 
 static void

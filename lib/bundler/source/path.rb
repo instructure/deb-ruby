@@ -18,9 +18,6 @@ module Bundler
         @options = options.dup
         @glob = options["glob"] || DEFAULT_GLOB
 
-        @allow_cached = false
-        @allow_remote = false
-
         @root_path = options["root_path"] || root
 
         if options["path"]
@@ -41,16 +38,6 @@ module Bundler
         @original_path = @path
       end
 
-      def remote!
-        @local_specs = nil
-        @allow_remote = true
-      end
-
-      def cached!
-        @local_specs = nil
-        @allow_cached = true
-      end
-
       def self.from_lock(options)
         new(options.merge("path" => options.delete("remote")))
       end
@@ -65,6 +52,8 @@ module Bundler
       def to_s
         "source at `#{@path}`"
       end
+
+      alias_method :to_gemfile, :path
 
       def hash
         [self.class, expanded_path, version].hash
@@ -161,7 +150,7 @@ module Bundler
 
       def load_gemspec(file)
         return unless spec = Bundler.load_gemspec(file)
-        Bundler.rubygems.set_installed_by_version(spec)
+        spec.installed_by_version = Gem::VERSION
         spec
       end
 

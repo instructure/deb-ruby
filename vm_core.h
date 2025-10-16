@@ -759,6 +759,7 @@ typedef struct rb_vm_struct {
     // and Qtrue as values. It is used when inline constant caches need to be
     // invalidated or ISEQs are being freed.
     struct rb_id_table *constant_cache;
+    ID inserting_constant_cache_id;
 
 #ifndef VM_GLOBAL_CC_CACHE_TABLE_SIZE
 #define VM_GLOBAL_CC_CACHE_TABLE_SIZE 1023
@@ -1929,7 +1930,7 @@ static inline rb_execution_context_t *
 rb_current_execution_context(bool expect_ec)
 {
 #ifdef RB_THREAD_LOCAL_SPECIFIER
-  #ifdef __APPLE__
+  #if defined(__arm64__) || defined(__aarch64__)
     rb_execution_context_t *ec = rb_current_ec();
   #else
     rb_execution_context_t *ec = ruby_current_ec;

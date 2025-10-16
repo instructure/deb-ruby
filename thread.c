@@ -1698,7 +1698,12 @@ thread_io_wake_pending_closer(struct waiting_fd *wfd)
     RB_VM_LOCK_LEAVE();
 
     if (has_waiter) {
-        rb_thread_wakeup(wfd->busy->closing_thread);
+        rb_thread_t *th = rb_thread_ptr(wfd->busy->closing_thread);
+        if (th->scheduler != Qnil) {
+            rb_fiber_scheduler_unblock(th->scheduler, wfd->busy->closing_thread, wfd->busy->closing_fiber);
+        } else {
+            rb_thread_wakeup(wfd->busy->closing_thread);
+        }
         rb_mutex_unlock(wfd->busy->wakeup_mutex);
     }
 }
@@ -2609,6 +2614,7 @@ rb_notify_fd_close(int fd, struct rb_io_close_wait_list *busy)
 
     has_any = !ccan_list_empty(&busy->pending_fd_users);
     busy->closing_thread = rb_thread_current();
+    busy->closing_fiber = rb_fiber_current();
     wakeup_mutex = Qnil;
     if (has_any) {
         wakeup_mutex = rb_mutex_new();
@@ -5583,6 +5589,7 @@ update_line_coverage(VALUE data, const rb_trace_arg_t *trace_arg)
         VALUE lines = RARRAY_AREF(coverage, COVERAGE_INDEX_LINES);
         if (lines) {
             long line = rb_sourceline() - 1;
+            VM_ASSERT(line >= 0);
             long count;
             VALUE num;
             void rb_iseq_clear_event_flags(const rb_iseq_t *iseq, size_t pos, rb_event_flag_t reset);

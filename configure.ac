@@ -465,7 +465,7 @@ AC_SUBST(CC_VERSION_MESSAGE, $cc_version_message)
 
 RUBY_UNIVERSAL_ARCH
 AS_IF([test "$target_cpu" != "$host_cpu" -a "$GCC" = yes -a "${universal_binary:-no}" = no], [
-    RUBY_DEFAULT_ARCH("$target_cpu")
+    RUBY_DEFAULT_ARCH($target_cpu)
 ])
 host_os=$target_os
 host_vendor=$target_vendor
@@ -1210,8 +1210,6 @@ main()
 		ac_cv_func_gmtime_r=yes
 		rb_cv_large_fd_select=yes
 		ac_cv_type_struct_timeval=yes
-                ac_cv_func_clock_gettime=yes
-                ac_cv_func_clock_getres=yes
 		ac_cv_func_malloc_usable_size=no
 		ac_cv_type_off_t=yes
 		ac_cv_sizeof_off_t=8
@@ -1359,6 +1357,7 @@ AC_CHECK_HEADERS(ucontext.h)
 AC_CHECK_HEADERS(utime.h)
 AC_CHECK_HEADERS(sys/epoll.h)
 AC_CHECK_HEADERS(sys/event.h)
+AC_CHECK_HEADERS(stdatomic.h)
 
 AS_CASE("$target_cpu", [x64|x86_64|i[3-6]86*], [
   AC_CHECK_HEADERS(x86intrin.h)
@@ -2039,6 +2038,7 @@ AC_CHECK_FUNCS(_longjmp)		# used for AC_ARG_WITH(setjmp-type)
 test x$ac_cv_func__longjmp = xno && ac_cv_func__setjmp=no
 AC_CHECK_FUNCS(arc4random_buf)
 AC_CHECK_FUNCS(atan2l atan2f)
+AC_CHECK_DECLS(atomic_signal_fence, [], [], [#include <stdatomic.h>])
 AC_CHECK_FUNCS(chmod)
 AC_CHECK_FUNCS(chown)
 AC_CHECK_FUNCS(chroot)

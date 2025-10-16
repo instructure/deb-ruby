@@ -465,6 +465,10 @@ class TestInteger < Test::Unit::TestCase
 
     assert_int_equal(1111_1111_1111_1111_1111_1111_1111_1111, 1111_1111_1111_1111_1111_1111_1111_1111.floor(1))
     assert_int_equal(10**400, (10**400).floor(1))
+
+    assert_int_equal(-10000000000, -1.floor(-10), "[Bug #20654]")
+    assert_int_equal(-100000000000000000000, -1.floor(-20), "[Bug #20654]")
+    assert_int_equal(-100000000000000000000000000000000000000000000000000, -1.floor(-50), "[Bug #20654]")
   end
 
   def test_ceil
@@ -493,6 +497,10 @@ class TestInteger < Test::Unit::TestCase
 
     assert_int_equal(1111_1111_1111_1111_1111_1111_1111_1111, 1111_1111_1111_1111_1111_1111_1111_1111.ceil(1))
     assert_int_equal(10**400, (10**400).ceil(1))
+
+    assert_int_equal(10000000000, 1.ceil(-10), "[Bug #20654]")
+    assert_int_equal(100000000000000000000, 1.ceil(-20), "[Bug #20654]")
+    assert_int_equal(100000000000000000000000000000000000000000000000000, 1.ceil(-50), "[Bug #20654]")
   end
 
   def test_truncate
@@ -699,6 +707,10 @@ class TestInteger < Test::Unit::TestCase
 
     x = 0xffff_ffff_ffff_ffff
     assert_equal(x, Integer.sqrt(x ** 2), "[ruby-core:95453]")
+  end
+
+  def test_bug_21217
+    assert_equal(0x10000 * 2**10, Integer.sqrt(0x100000008 * 2**20))
   end
 
   def test_fdiv

@@ -15,12 +15,14 @@
 #include "internal/error.h"
 #include "internal/eval.h"
 #include "internal/gc.h"
+#include "internal/hash.h"
 #include "internal/object.h"
 #include "internal/proc.h"
 #include "internal/symbol.h"
 #include "method.h"
 #include "iseq.h"
 #include "vm_core.h"
+#include "ractor_core.h"
 #include "yjit.h"
 
 const rb_cref_t *rb_vm_cref_in_context(VALUE self, VALUE cbase);
@@ -679,6 +681,29 @@ cfunc_proc_new(VALUE klass, VALUE ifunc)
     return procval;
 }
 
+VALUE
+rb_func_proc_dup(VALUE src_obj)
+{
+    RUBY_ASSERT(rb_typeddata_is_instance_of(src_obj, &proc_data_type));
+
+    rb_proc_t *src_proc;
+    GetProcPtr(src_obj, src_proc);
+    RUBY_ASSERT(vm_block_type(&src_proc->block) == block_type_ifunc);
+
+    cfunc_proc_t *proc;
+    VALUE proc_obj = TypedData_Make_Struct(rb_obj_class(src_obj), cfunc_proc_t, &proc_data_type, proc);
+
+    memcpy(&proc->basic, src_proc, sizeof(rb_proc_t));
+
+    VALUE *ep = *(VALUE **)&proc->basic.block.as.captured.ep = proc->env + VM_ENV_DATA_SIZE - 1;
+    ep[VM_ENV_DATA_INDEX_FLAGS]   = src_proc->block.as.captured.ep[VM_ENV_DATA_INDEX_FLAGS];
+    ep[VM_ENV_DATA_INDEX_ME_CREF] = src_proc->block.as.captured.ep[VM_ENV_DATA_INDEX_ME_CREF];
+    ep[VM_ENV_DATA_INDEX_SPECVAL] = src_proc->block.as.captured.ep[VM_ENV_DATA_INDEX_SPECVAL];
+    ep[VM_ENV_DATA_INDEX_ENV]     = src_proc->block.as.captured.ep[VM_ENV_DATA_INDEX_ENV];
+
+    return proc_obj;
+}
+
 static VALUE
 sym_proc_new(VALUE klass, VALUE sym)
 {
@@ -1299,10 +1324,15 @@ proc_eq(VALUE self, VALUE other)
         }
         break;
       case block_type_ifunc:
-        if (self_block->as.captured.ep != \
-                other_block->as.captured.ep ||
-                self_block->as.captured.code.ifunc != \
+        if (self_block->as.captured.code.ifunc != \
                 other_block->as.captured.code.ifunc) {
+            return Qfalse;
+        }
+
+        if (memcmp(
+                ((cfunc_proc_t *)self_proc)->env,
+                ((cfunc_proc_t *)other_proc)->env,
+                sizeof(((cfunc_proc_t *)self_proc)->env))) {
             return Qfalse;
         }
         break;
@@ -1426,9 +1456,33 @@ rb_hash_proc(st_index_t hash, VALUE prc)
 {
     rb_proc_t *proc;
     GetProcPtr(prc, proc);
-    hash = rb_hash_uint(hash, (st_index_t)proc->block.as.captured.code.val);
-    hash = rb_hash_uint(hash, (st_index_t)proc->block.as.captured.self);
-    return rb_hash_uint(hash, (st_index_t)proc->block.as.captured.ep);
+
+    switch (vm_block_type(&proc->block)) {
+      case block_type_iseq:
+        hash = rb_st_hash_uint(hash, (st_index_t)proc->block.as.captured.code.iseq->body);
+        break;
+      case block_type_ifunc:
+        hash = rb_st_hash_uint(hash, (st_index_t)proc->block.as.captured.code.ifunc->func);
+        hash = rb_st_hash_uint(hash, (st_index_t)proc->block.as.captured.code.ifunc->data);
+        break;
+      case block_type_symbol:
+        hash = rb_st_hash_uint(hash, rb_any_hash(proc->block.as.symbol));
+        break;
+      case block_type_proc:
+        hash = rb_st_hash_uint(hash, rb_any_hash(proc->block.as.proc));
+        break;
+      default:
+        rb_bug("rb_hash_proc: unknown block type %d", vm_block_type(&proc->block));
+    }
+
+    /* ifunc procs have their own allocated ep. If an ifunc is duplicated, they
+     * will point to different ep but they should return the same hash code, so
+     * we cannot include the ep in the hash. */
+    if (vm_block_type(&proc->block) != block_type_ifunc) {
+        hash = rb_hash_uint(hash, (st_index_t)proc->block.as.captured.ep);
+    }
+
+    return hash;
 }
 
 
@@ -1455,23 +1509,26 @@ rb_sym_to_proc(VALUE sym)
     long index;
     ID id;
 
-    if (!sym_proc_cache) {
-        sym_proc_cache = rb_ary_hidden_new(SYM_PROC_CACHE_SIZE * 2);
-        rb_gc_register_mark_object(sym_proc_cache);
-        rb_ary_store(sym_proc_cache, SYM_PROC_CACHE_SIZE*2 - 1, Qnil);
-    }
-
     id = SYM2ID(sym);
-    index = (id % SYM_PROC_CACHE_SIZE) << 1;
 
-    if (RARRAY_AREF(sym_proc_cache, index) == sym) {
-        return RARRAY_AREF(sym_proc_cache, index + 1);
-    }
-    else {
-        proc = sym_proc_new(rb_cProc, ID2SYM(id));
-        RARRAY_ASET(sym_proc_cache, index, sym);
-        RARRAY_ASET(sym_proc_cache, index + 1, proc);
-        return proc;
+    if (rb_ractor_main_p()) {
+        index = (id % SYM_PROC_CACHE_SIZE) << 1;
+        if (!sym_proc_cache) {
+            sym_proc_cache = rb_ary_hidden_new(SYM_PROC_CACHE_SIZE * 2);
+            rb_gc_register_mark_object(sym_proc_cache);
+            rb_ary_store(sym_proc_cache, SYM_PROC_CACHE_SIZE*2 - 1, Qnil);
+        }
+        if (RARRAY_AREF(sym_proc_cache, index) == sym) {
+            return RARRAY_AREF(sym_proc_cache, index + 1);
+        }
+        else {
+            proc = sym_proc_new(rb_cProc, ID2SYM(id));
+            RARRAY_ASET(sym_proc_cache, index, sym);
+            RARRAY_ASET(sym_proc_cache, index + 1, proc);
+            return proc;
+        }
+    } else {
+        return sym_proc_new(rb_cProc, ID2SYM(id));
     }
 }
 

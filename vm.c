@@ -551,7 +551,7 @@ rb_current_ec_set(rb_execution_context_t *ec)
 }
 
 
-#ifdef __APPLE__
+#if defined(__arm64__) || defined(__aarch64__)
 rb_execution_context_t *
 rb_current_ec(void)
 {
@@ -1158,7 +1158,16 @@ rb_proc_dup(VALUE self)
     rb_proc_t *src;
 
     GetProcPtr(self, src);
-    procval = proc_create(rb_obj_class(self), &src->block, src->is_from_method, src->is_lambda);
+
+    switch (vm_block_type(&src->block)) {
+      case block_type_ifunc:
+        procval = rb_func_proc_dup(self);
+        break;
+      default:
+        procval = proc_create(rb_obj_class(self), &src->block, src->is_from_method, src->is_lambda);
+        break;
+    }
+
     if (RB_OBJ_SHAREABLE_P(self)) FL_SET_RAW(procval, RUBY_FL_SHAREABLE);
     RB_GC_GUARD(self); /* for: body = rb_proc_dup(body) */
     return procval;
@@ -3318,21 +3327,19 @@ rb_execution_context_mark(const rb_execution_context_t *ec)
             const VALUE *ep = cfp->ep;
             VM_ASSERT(!!VM_ENV_FLAGS(ep, VM_ENV_FLAG_ESCAPED) == vm_ep_in_heap_p_(ec, ep));
 
-            if (VM_FRAME_TYPE(cfp) != VM_FRAME_MAGIC_DUMMY) {
-                rb_gc_mark_movable(cfp->self);
-                rb_gc_mark_movable((VALUE)cfp->iseq);
-                rb_gc_mark_movable((VALUE)cfp->block_code);
+            rb_gc_mark_movable(cfp->self);
+            rb_gc_mark_movable((VALUE)cfp->iseq);
+            rb_gc_mark_movable((VALUE)cfp->block_code);
 
-                if (!VM_ENV_LOCAL_P(ep)) {
-                    const VALUE *prev_ep = VM_ENV_PREV_EP(ep);
-                    if (VM_ENV_FLAGS(prev_ep, VM_ENV_FLAG_ESCAPED)) {
-                        rb_gc_mark_movable(prev_ep[VM_ENV_DATA_INDEX_ENV]);
-                    }
+            if (!VM_ENV_LOCAL_P(ep)) {
+                const VALUE *prev_ep = VM_ENV_PREV_EP(ep);
+                if (VM_ENV_FLAGS(prev_ep, VM_ENV_FLAG_ESCAPED)) {
+                    rb_gc_mark_movable(prev_ep[VM_ENV_DATA_INDEX_ENV]);
+                }
 
-                    if (VM_ENV_FLAGS(ep, VM_ENV_FLAG_ESCAPED)) {
-                        rb_gc_mark_movable(ep[VM_ENV_DATA_INDEX_ENV]);
-                        rb_gc_mark(ep[VM_ENV_DATA_INDEX_ME_CREF]);
-                    }
+                if (VM_ENV_FLAGS(ep, VM_ENV_FLAG_ESCAPED)) {
+                    rb_gc_mark_movable(ep[VM_ENV_DATA_INDEX_ENV]);
+                    rb_gc_mark(ep[VM_ENV_DATA_INDEX_ME_CREF]);
                 }
             }
 
@@ -3495,7 +3502,7 @@ thread_alloc(VALUE klass)
     return TypedData_Make_Struct(klass, rb_thread_t, &thread_data_type, th);
 }
 
-inline void
+void
 rb_ec_set_vm_stack(rb_execution_context_t *ec, VALUE *stack, size_t size)
 {
     ec->vm_stack = stack;
@@ -3521,10 +3528,10 @@ rb_ec_initialize_vm_stack(rb_execution_context_t *ec, VALUE *stack, size_t size)
 void
 rb_ec_clear_vm_stack(rb_execution_context_t *ec)
 {
-    rb_ec_set_vm_stack(ec, NULL, 0);
-
-    // Avoid dangling pointers:
+    // set cfp to NULL before clearing the stack in case `thread_profile_frames`
+    // gets called in this middle of `rb_ec_set_vm_stack` via signal handler.
     ec->cfp = NULL;
+    rb_ec_set_vm_stack(ec, NULL, 0);
 }
 
 static void

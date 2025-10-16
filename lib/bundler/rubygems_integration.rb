@@ -48,35 +48,13 @@ module Bundler
     end
 
     def validate(spec)
-      Bundler.ui.silence { spec.validate(false) }
+      Bundler.ui.silence { spec.validate_for_resolution }
     rescue Gem::InvalidSpecificationException => e
       error_message = "The gemspec at #{spec.loaded_from} is not valid. Please fix this gemspec.\n" \
         "The validation error was '#{e.message}'\n"
       raise Gem::InvalidSpecificationException.new(error_message)
     rescue Errno::ENOENT
       nil
-    end
-
-    def set_installed_by_version(spec, installed_by_version = Gem::VERSION)
-      return unless spec.respond_to?(:installed_by_version=)
-      spec.installed_by_version = Gem::Version.create(installed_by_version)
-    end
-
-    def spec_missing_extensions?(spec, default = true)
-      return spec.missing_extensions? if spec.respond_to?(:missing_extensions?)
-
-      return false if spec.default_gem?
-      return false if spec.extensions.empty?
-
-      default
-    end
-
-    def spec_matches_for_glob(spec, glob)
-      return spec.matches_for_glob(glob) if spec.respond_to?(:matches_for_glob)
-
-      spec.load_paths.flat_map do |lp|
-        Dir["#{lp}/#{glob}#{suffix_pattern}"]
-      end
     end
 
     def stub_set_spec(stub, spec)
@@ -204,7 +182,7 @@ module Bundler
 
       [::Kernel.singleton_class, ::Kernel].each do |kernel_class|
         redefine_method(kernel_class, :gem) do |dep, *reqs|
-          if executables&.include?(File.basename(caller.first.split(":").first))
+          if executables&.include?(File.basename(caller_locations(1, 1).first.path))
             break
           end
 
@@ -469,7 +447,21 @@ module Bundler
     end
 
     def all_specs
+      SharedHelpers.major_deprecation 2, "Bundler.rubygems.all_specs has been removed in favor of Bundler.rubygems.installed_specs"
+
       Gem::Specification.stubs.map do |stub|
+        StubSpecification.from_stub(stub)
+      end
+    end
+
+    def installed_specs
+      Gem::Specification.stubs.reject(&:default_gem?).map do |stub|
+        StubSpecification.from_stub(stub)
+      end
+    end
+
+    def default_specs
+      Gem::Specification.default_stubs.map do |stub|
         StubSpecification.from_stub(stub)
       end
     end

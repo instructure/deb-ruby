@@ -113,7 +113,9 @@ remove_from_constant_cache(ID id, IC ic)
         st_table *ics = (st_table *)lookup_result;
         st_delete(ics, &ic_data, NULL);
 
-        if (ics->num_entries == 0) {
+        if (ics->num_entries == 0 &&
+                // See comment in vm_track_constant_cache on why we need this check
+                id != vm->inserting_constant_cache_id) {
             rb_id_table_delete(vm->constant_cache, id);
             st_free_table(ics);
         }
@@ -529,6 +531,19 @@ rb_iseq_pathobj_set(const rb_iseq_t *iseq, VALUE path, VALUE realpath)
 {
     RB_OBJ_WRITE(iseq, &ISEQ_BODY(iseq)->location.pathobj,
                  rb_iseq_pathobj_new(path, realpath));
+}
+
+// Make a dummy iseq for a dummy frame that exposes a path for profilers to inspect
+rb_iseq_t *
+rb_iseq_alloc_with_dummy_path(VALUE fname)
+{
+    rb_iseq_t *dummy_iseq = iseq_alloc();
+
+    ISEQ_BODY(dummy_iseq)->type = ISEQ_TYPE_TOP;
+    RB_OBJ_WRITE(dummy_iseq, &ISEQ_BODY(dummy_iseq)->location.pathobj, fname);
+    RB_OBJ_WRITE(dummy_iseq, &ISEQ_BODY(dummy_iseq)->location.label, fname);
+
+    return dummy_iseq;
 }
 
 static rb_iseq_location_t *
@@ -1670,7 +1685,11 @@ rb_iseqw_to_iseq(VALUE iseqw)
 static VALUE
 iseqw_eval(VALUE self)
 {
-    return rb_iseq_eval(iseqw_check(self));
+    const rb_iseq_t *iseq = iseqw_check(self);
+    if (0 == ISEQ_BODY(iseq)->iseq_size) {
+        rb_raise(rb_eTypeError, "attempt to evaluate dummy InstructionSequence");
+    }
+    return rb_iseq_eval(iseq);
 }
 
 /*
@@ -3465,7 +3484,7 @@ rb_vm_encoded_insn_data_table_init(void)
     const void * const *table = rb_vm_get_insns_address_table();
 #define INSN_CODE(insn) ((VALUE)table[insn])
 #else
-#define INSN_CODE(insn) (insn)
+#define INSN_CODE(insn) ((VALUE)(insn))
 #endif
     st_data_t insn;
     encoded_insn_data = st_init_numtable_with_size(VM_INSTRUCTION_SIZE / 2);
