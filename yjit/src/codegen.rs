@@ -821,11 +821,11 @@ fn gen_stub_exit(ocb: &mut OutlinedCb) -> Option<CodePtr> {
 
 /// Generate an exit to return to the interpreter
 fn gen_exit(exit_pc: *mut VALUE, asm: &mut Assembler) {
-    #[cfg(all(feature = "disasm", not(test)))]
-    {
+    #[cfg(not(test))]
+    asm_comment!(asm, "exit to interpreter on {}", {
         let opcode = unsafe { rb_vm_insn_addr2opcode((*exit_pc).as_ptr()) };
-        asm_comment!(asm, "exit to interpreter on {}", insn_name(opcode as usize));
-    }
+        insn_name(opcode as usize)
+    });
 
     if asm.ctx.is_return_landing() {
         asm.mov(SP, Opnd::mem(64, CFP, RUBY_OFFSET_CFP_SP));
@@ -1094,11 +1094,7 @@ pub fn gen_entry_prologue(
     let code_ptr = cb.get_write_ptr();
 
     let mut asm = Assembler::new(unsafe { get_iseq_body_local_table_size(iseq) });
-    if get_option_ref!(dump_disasm).is_some() {
-        asm_comment!(asm, "YJIT entry point: {}", iseq_get_location(iseq, 0));
-    } else {
-        asm_comment!(asm, "YJIT entry");
-    }
+    asm_comment!(asm, "YJIT entry point: {}", iseq_get_location(iseq, 0));
 
     asm.frame_setup();
 
@@ -1296,7 +1292,6 @@ pub fn gen_single_block(
     let mut asm = Assembler::new(jit.num_locals());
     asm.ctx = ctx;
 
-    #[cfg(feature = "disasm")]
     if get_option_ref!(dump_disasm).is_some() {
         let blockid_idx = blockid.idx;
         let chain_depth = if asm.ctx.get_chain_depth() > 0 { format!("(chain_depth: {})", asm.ctx.get_chain_depth()) } else { "".to_string() };
@@ -2281,7 +2276,6 @@ fn gen_expandarray(
         jit_guard_known_klass(
             jit,
             asm,
-            comptime_recv.class_of(),
             array_opnd,
             array_opnd.into(),
             comptime_recv,
@@ -2445,6 +2439,11 @@ fn gen_getlocal_generic(
     ep_offset: u32,
     level: u32,
 ) -> Option<CodegenStatus> {
+    // Split the block if we need to invalidate this instruction when EP escapes
+    if level == 0 && !jit.escapes_ep() && !jit.at_compile_target() {
+        return jit.defer_compilation(asm);
+    }
+
     let local_opnd = if level == 0 && jit.assume_no_ep_escape(asm) {
         // Load the local using SP register
         asm.local_opnd(ep_offset)
@@ -2533,6 +2532,11 @@ fn gen_setlocal_generic(
         asm.stack_pop(1);
 
         return Some(KeepCompiling);
+    }
+
+    // Split the block if we need to invalidate this instruction when EP escapes
+    if level == 0 && !jit.escapes_ep() && !jit.at_compile_target() {
+        return jit.defer_compilation(asm);
     }
 
     let (flags_opnd, local_opnd) = if level == 0 && jit.assume_no_ep_escape(asm) {
@@ -3686,7 +3690,6 @@ fn gen_equality_specialized(
         jit_guard_known_klass(
             jit,
             asm,
-            unsafe { rb_cString },
             a_opnd,
             a_opnd.into(),
             comptime_a,
@@ -3712,7 +3715,6 @@ fn gen_equality_specialized(
             jit_guard_known_klass(
                 jit,
                 asm,
-                unsafe { rb_cString },
                 b_opnd,
                 b_opnd.into(),
                 comptime_b,
@@ -3809,7 +3811,6 @@ fn gen_opt_aref(
         jit_guard_known_klass(
             jit,
             asm,
-            unsafe { rb_cArray },
             recv_opnd,
             recv_opnd.into(),
             comptime_recv,
@@ -3849,7 +3850,6 @@ fn gen_opt_aref(
         jit_guard_known_klass(
             jit,
             asm,
-            unsafe { rb_cHash },
             recv_opnd,
             recv_opnd.into(),
             comptime_recv,
@@ -3902,7 +3902,6 @@ fn gen_opt_aset(
         jit_guard_known_klass(
             jit,
             asm,
-            unsafe { rb_cArray },
             recv,
             recv.into(),
             comptime_recv,
@@ -3914,7 +3913,6 @@ fn gen_opt_aset(
         jit_guard_known_klass(
             jit,
             asm,
-            unsafe { rb_cInteger },
             key,
             key.into(),
             comptime_key,
@@ -3947,7 +3945,6 @@ fn gen_opt_aset(
         jit_guard_known_klass(
             jit,
             asm,
-            unsafe { rb_cHash },
             recv,
             recv.into(),
             comptime_recv,
@@ -4906,13 +4903,13 @@ fn gen_jump(
 fn jit_guard_known_klass(
     jit: &mut JITState,
     asm: &mut Assembler,
-    known_klass: VALUE,
     obj_opnd: Opnd,
     insn_opnd: YARVOpnd,
     sample_instance: VALUE,
     max_chain_depth: u8,
     counter: Counter,
 ) {
+    let known_klass = sample_instance.class_of();
     let val_type = asm.ctx.get_opnd_type(insn_opnd);
 
     if val_type.known_class() == Some(known_klass) {
@@ -5018,7 +5015,7 @@ fn jit_guard_known_klass(
             assert_eq!(sample_instance.class_of(), rb_cString, "context says class is exactly ::String")
         };
     } else {
-        assert!(!val_type.is_imm());
+        assert!(!val_type.is_imm(), "{insn_opnd:?} should be a heap object, but was {val_type:?} for {sample_instance:?}");
 
         // Check that the receiver is a heap object
         // Note: if we get here, the class doesn't have immediate instances.
@@ -5662,7 +5659,6 @@ fn jit_rb_float_plus(
         jit_guard_known_klass(
             jit,
             asm,
-            comptime_obj.class_of(),
             obj,
             obj.into(),
             comptime_obj,
@@ -5704,7 +5700,6 @@ fn jit_rb_float_minus(
         jit_guard_known_klass(
             jit,
             asm,
-            comptime_obj.class_of(),
             obj,
             obj.into(),
             comptime_obj,
@@ -5746,7 +5741,6 @@ fn jit_rb_float_mul(
         jit_guard_known_klass(
             jit,
             asm,
-            comptime_obj.class_of(),
             obj,
             obj.into(),
             comptime_obj,
@@ -5788,7 +5782,6 @@ fn jit_rb_float_div(
         jit_guard_known_klass(
             jit,
             asm,
-            comptime_obj.class_of(),
             obj,
             obj.into(),
             comptime_obj,
@@ -6052,7 +6045,6 @@ fn jit_rb_str_getbyte(
         jit_guard_known_klass(
             jit,
             asm,
-            comptime_idx.class_of(),
             idx,
             idx.into(),
             comptime_idx,
@@ -6894,11 +6886,12 @@ fn gen_send_cfunc(
     // Increment total cfunc send count
     gen_counter_incr(jit, asm, Counter::num_send_cfunc);
 
-    // Delegate to codegen for C methods if we have it.
+    // Delegate to codegen for C methods if we have it and the callsite is simple enough.
     if kw_arg.is_null() &&
             !kw_splat &&
             flags & VM_CALL_OPT_SEND == 0 &&
             flags & VM_CALL_ARGS_SPLAT == 0 &&
+            flags & VM_CALL_ARGS_BLOCKARG == 0 &&
             (cfunc_argc == -1 || argc == cfunc_argc) {
         let expected_stack_after = asm.ctx.get_stack_size() as i32 - argc;
         if let Some(known_cfunc_codegen) = lookup_cfunc_codegen(unsafe { (*cme).def }) {
@@ -7392,7 +7385,7 @@ enum IseqReturn {
     Receiver,
 }
 
-extern {
+extern "C" {
     fn rb_simple_iseq_p(iseq: IseqPtr) -> bool;
     fn rb_iseq_only_kwparam_p(iseq: IseqPtr) -> bool;
 }
@@ -8011,14 +8004,14 @@ fn gen_send_iseq(
 
     // Pop surplus positional arguments when yielding
     if arg_setup_block {
-        let extras = argc - required_num - opt_num;
+        let extras = argc - required_num - opt_num - kw_arg_num;
         if extras > 0 {
             // Checked earlier. If there are keyword args, then
             // the positional arguments are not at the stack top.
             assert_eq!(0, kw_arg_num);
 
             asm.stack_pop(extras as usize);
-            argc = required_num + opt_num;
+            argc = required_num + opt_num + kw_arg_num;
         }
     }
 
@@ -8068,7 +8061,6 @@ fn gen_send_iseq(
         }
     }
 
-    // Don't nil fill forwarding iseqs
     if !forwarding {
         // Nil-initialize missing optional parameters
         nil_fill(
@@ -8103,9 +8095,13 @@ fn gen_send_iseq(
         assert_eq!(1, num_params);
         // Write the CI in to the stack and ensure that it actually gets
         // flushed to memory
+        asm_comment!(asm, "put call info for forwarding");
         let ci_opnd = asm.stack_opnd(-1);
         asm.ctx.dealloc_reg(ci_opnd.reg_opnd());
         asm.mov(ci_opnd, VALUE(ci as usize).into());
+
+        // Nil-initialize other locals which are above the CI
+        nil_fill("nil-initialize locals", 1..num_locals, asm);
     }
 
     // Points to the receiver operand on the stack unless a captured environment is used
@@ -9034,7 +9030,6 @@ fn gen_send_general(
     let recv_opnd: YARVOpnd = recv.into();
 
     // Log the name of the method we're calling to
-    #[cfg(feature = "disasm")]
     asm_comment!(asm, "call to {}", get_method_name(Some(comptime_recv_klass), mid));
 
     // Gather some statistics about sends
@@ -9054,7 +9049,6 @@ fn gen_send_general(
     perf_call!("gen_send_general: ", jit_guard_known_klass(
         jit,
         asm,
-        comptime_recv_klass,
         recv,
         recv_opnd,
         comptime_recv,
@@ -9307,7 +9301,6 @@ fn gen_send_general(
 
                     }
                     OPTIMIZED_METHOD_TYPE_CALL => {
-
                         if block.is_some() {
                             gen_counter_incr(jit, asm, Counter::send_call_block);
                             return None;
@@ -9359,8 +9352,9 @@ fn gen_send_general(
 
                         let stack_ret = asm.stack_push(Type::Unknown);
                         asm.mov(stack_ret, ret);
-                        return Some(KeepCompiling);
 
+                        // End the block to allow invalidating the next instruction
+                        return jump_to_next_insn(jit, asm);
                     }
                     OPTIMIZED_METHOD_TYPE_BLOCK_CALL => {
                         gen_counter_incr(jit, asm, Counter::send_optimized_method_block_call);
@@ -9968,7 +9962,6 @@ fn gen_objtostring(
         jit_guard_known_klass(
             jit,
             asm,
-            comptime_recv.class_of(),
             recv,
             recv.into(),
             comptime_recv,
@@ -9982,7 +9975,6 @@ fn gen_objtostring(
         jit_guard_known_klass(
             jit,
             asm,
-            comptime_recv.class_of(),
             recv,
             recv.into(),
             comptime_recv,

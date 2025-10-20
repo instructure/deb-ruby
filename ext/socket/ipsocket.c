@@ -593,7 +593,7 @@ init_fast_fallback_inetsock_internal(VALUE v)
         arg->getaddrinfo_shared->notify = hostname_resolution_notifier;
 
         arg->getaddrinfo_shared->node = arg->hostp ? ruby_strdup(arg->hostp) : NULL;
-        arg->getaddrinfo_shared->service = ruby_strdup(arg->portp);
+        arg->getaddrinfo_shared->service = arg->portp ? ruby_strdup(arg->portp) : NULL;
         arg->getaddrinfo_shared->refcount = arg->family_size + 1;
 
         for (int i = 0; i < arg->family_size; i++) {
@@ -892,7 +892,6 @@ init_fast_fallback_inetsock_internal(VALUE v)
         }
 
         status = rb_thread_fd_select(nfds, &arg->readfds, &arg->writefds, NULL, delay_p);
-        syscall = "select(2)";
 
         now = current_clocktime_ts();
         if (is_timeout_tv(resolution_delay_expires_at, now)) {
@@ -998,9 +997,11 @@ init_fast_fallback_inetsock_internal(VALUE v)
 
                             if (arg->getaddrinfo_entries[IPV6_ENTRY_POS]->err &&
                                 arg->getaddrinfo_entries[IPV6_ENTRY_POS]->err != EAI_ADDRFAMILY) {
-                                last_error.type = RESOLUTION_ERROR;
-                                last_error.ecode = arg->getaddrinfo_entries[IPV6_ENTRY_POS]->err;
-                                syscall = "getaddrinfo(3)";
+                                if (!resolution_store.v4.finished || resolution_store.v4.has_error) {
+                                    last_error.type = RESOLUTION_ERROR;
+                                    last_error.ecode = arg->getaddrinfo_entries[IPV6_ENTRY_POS]->err;
+                                    syscall = "getaddrinfo(3)";
+                                }
                                 resolution_store.v6.has_error = true;
                             } else {
                                 resolution_store.v6.ai = arg->getaddrinfo_entries[IPV6_ENTRY_POS]->ai;
@@ -1015,9 +1016,11 @@ init_fast_fallback_inetsock_internal(VALUE v)
                             resolution_store.v4.finished = true;
 
                             if (arg->getaddrinfo_entries[IPV4_ENTRY_POS]->err) {
-                                last_error.type = RESOLUTION_ERROR;
-                                last_error.ecode = arg->getaddrinfo_entries[IPV4_ENTRY_POS]->err;
-                                syscall = "getaddrinfo(3)";
+                                if (!resolution_store.v6.finished || resolution_store.v6.has_error) {
+                                    last_error.type = RESOLUTION_ERROR;
+                                    last_error.ecode = arg->getaddrinfo_entries[IPV4_ENTRY_POS]->err;
+                                    syscall = "getaddrinfo(3)";
+                                }
                                 resolution_store.v4.has_error = true;
                             } else {
                                 resolution_store.v4.ai = arg->getaddrinfo_entries[IPV4_ENTRY_POS]->ai;
@@ -1057,9 +1060,11 @@ init_fast_fallback_inetsock_internal(VALUE v)
                 resolution_store.v6.finished = true;
 
                 if (arg->getaddrinfo_entries[IPV6_ENTRY_POS]->err) {
-                    last_error.type = RESOLUTION_ERROR;
-                    last_error.ecode = arg->getaddrinfo_entries[IPV6_ENTRY_POS]->err;
-                    syscall = "getaddrinfo(3)";
+                    if (!resolution_store.v4.finished || resolution_store.v4.has_error) {
+                        last_error.type = RESOLUTION_ERROR;
+                        last_error.ecode = arg->getaddrinfo_entries[IPV6_ENTRY_POS]->err;
+                        syscall = "getaddrinfo(3)";
+                    }
                     resolution_store.v6.has_error = true;
                 } else {
                     resolution_store.v6.ai = arg->getaddrinfo_entries[IPV6_ENTRY_POS]->ai;
@@ -1075,9 +1080,11 @@ init_fast_fallback_inetsock_internal(VALUE v)
                 resolution_store.v4.finished = true;
 
                 if (arg->getaddrinfo_entries[IPV4_ENTRY_POS]->err) {
-                    last_error.type = RESOLUTION_ERROR;
-                    last_error.ecode = arg->getaddrinfo_entries[IPV4_ENTRY_POS]->err;
-                    syscall = "getaddrinfo(3)";
+                    if (!resolution_store.v6.finished || resolution_store.v6.has_error) {
+                        last_error.type = RESOLUTION_ERROR;
+                        last_error.ecode = arg->getaddrinfo_entries[IPV4_ENTRY_POS]->err;
+                        syscall = "getaddrinfo(3)";
+                    }
                     resolution_store.v4.has_error = true;
                 } else {
                     resolution_store.v4.ai = arg->getaddrinfo_entries[IPV4_ENTRY_POS]->ai;
@@ -1152,13 +1159,19 @@ fast_fallback_inetsock_cleanup(VALUE v)
         getaddrinfo_shared->notify = -1;
 
         int shared_need_free = 0;
-        int need_free[2] = { 0, 0 };
+        struct addrinfo *ais[arg->family_size];
+        for (int i = 0; i < arg->family_size; i++) ais[i] = NULL;
 
         rb_nativethread_lock_lock(&getaddrinfo_shared->lock);
         {
             for (int i = 0; i < arg->family_size; i++) {
-                if (arg->getaddrinfo_entries[i] && --(arg->getaddrinfo_entries[i]->refcount) == 0) {
-                    need_free[i] = 1;
+                struct fast_fallback_getaddrinfo_entry *getaddrinfo_entry = arg->getaddrinfo_entries[i];
+
+                if (!getaddrinfo_entry) continue;
+
+                if (--(getaddrinfo_entry->refcount) == 0) {
+                    ais[i] = getaddrinfo_entry->ai;
+                    getaddrinfo_entry->ai = NULL;
                 }
             }
             if (--(getaddrinfo_shared->refcount) == 0) {
@@ -1168,9 +1181,11 @@ fast_fallback_inetsock_cleanup(VALUE v)
         rb_nativethread_lock_unlock(&getaddrinfo_shared->lock);
 
         for (int i = 0; i < arg->family_size; i++) {
-            if (need_free[i]) free_fast_fallback_getaddrinfo_entry(&arg->getaddrinfo_entries[i]);
+            if (ais[i]) freeaddrinfo(ais[i]);
         }
-        if (shared_need_free) free_fast_fallback_getaddrinfo_shared(&getaddrinfo_shared);
+        if (getaddrinfo_shared && shared_need_free) {
+            free_fast_fallback_getaddrinfo_shared(&getaddrinfo_shared);
+        }
     }
 
     int connection_attempt_fd;

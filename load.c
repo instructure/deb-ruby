@@ -284,7 +284,7 @@ features_index_add_single_callback(st_data_t *key, st_data_t *value, st_data_t r
             if (pos >= 0) {
                 long *ptr = rb_darray_data_ptr(feature_indexes);
                 long len = rb_darray_size(feature_indexes);
-                MEMMOVE(ptr + pos, ptr + pos + 1, long, len - pos - 1);
+                MEMMOVE(ptr + pos + 1, ptr + pos, long, len - pos - 1);
                 ptr[pos] = FIX2LONG(offset);
             }
         }
@@ -395,7 +395,11 @@ get_loaded_features_index(rb_vm_t *vm)
         VALUE previous_realpath_map = rb_hash_dup(realpath_map);
         rb_hash_clear(realpaths);
         rb_hash_clear(realpath_map);
-        features = vm->loaded_features;
+
+        /* We have to make a copy of features here because the StringValue call
+         * below could call a Ruby method, which could modify $LOADED_FEATURES
+         * and cause it to be corrupt. */
+        features = rb_ary_resurrect(vm->loaded_features);
         for (i = 0; i < RARRAY_LEN(features); i++) {
             VALUE entry, as_str;
             as_str = entry = rb_ary_entry(features, i);
@@ -404,6 +408,10 @@ get_loaded_features_index(rb_vm_t *vm)
             if (as_str != entry)
                 rb_ary_store(features, i, as_str);
             features_index_add(vm, as_str, INT2FIX(i));
+        }
+        /* The user modified $LOADED_FEATURES, so we should restore the changes. */
+        if (!rb_ary_shared_with_p(features, vm->loaded_features)) {
+            rb_ary_replace(vm->loaded_features, features);
         }
         reset_loaded_features_snapshot(vm);
 
@@ -597,7 +605,7 @@ rb_feature_p(rb_vm_t *vm, const char *feature, const char *ext, int rb, int expa
 
     loading_tbl = get_loading_table(vm);
     f = 0;
-    if (!expanded) {
+    if (!expanded && !rb_is_absolute_path(feature)) {
         struct loaded_feature_searching fs;
         fs.name = feature;
         fs.len = len;

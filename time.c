@@ -45,6 +45,10 @@
 #include "ruby/util.h"
 #include "timev.h"
 
+#if defined(_WIN32)
+# include "timezoneapi.h" /* DYNAMIC_TIME_ZONE_INFORMATION */
+#endif
+
 #include "builtin.h"
 
 static ID id_submicro, id_nano_num, id_nano_den, id_offset, id_zone;
@@ -703,10 +707,51 @@ static VALUE tm_from_time(VALUE klass, VALUE time);
 
 bool ruby_tz_uptodate_p;
 
+#ifdef _WIN32
+enum {tzkey_max = numberof(((DYNAMIC_TIME_ZONE_INFORMATION *)NULL)->TimeZoneKeyName)};
+static struct {
+    char use_tzkey;
+    char name[tzkey_max * 4 + 1];
+} w32_tz;
+
+static char *
+get_tzname(int dst)
+{
+    if (w32_tz.use_tzkey) {
+        if (w32_tz.name[0]) {
+            return w32_tz.name;
+        }
+        else {
+            /*
+             * Use GetDynamicTimeZoneInformation::TimeZoneKeyName, Windows
+             * time zone ID, which is not localized because it is the key
+             * for "Dynamic DST" keys under the "Time Zones" registry.
+             * Available since Windows Vista and Windows Server 2008.
+             */
+            DYNAMIC_TIME_ZONE_INFORMATION tzi;
+            WCHAR *const wtzkey = tzi.TimeZoneKeyName;
+            DWORD tzret = GetDynamicTimeZoneInformation(&tzi);
+            if (tzret != TIME_ZONE_ID_INVALID && *wtzkey) {
+                int wlen = (int)wcsnlen(wtzkey, tzkey_max);
+                int clen = WideCharToMultiByte(CP_UTF8, 0, wtzkey, wlen,
+                                               w32_tz.name, sizeof(w32_tz.name) - 1,
+                                               NULL, NULL);
+                w32_tz.name[clen] = '\0';
+                return w32_tz.name;
+            }
+        }
+    }
+    return _tzname[_daylight && dst];
+}
+#endif
+
 void
-ruby_reset_timezone(void)
+ruby_reset_timezone(const char *val)
 {
     ruby_tz_uptodate_p = false;
+#ifdef _WIN32
+    w32_tz.use_tzkey = !val || !*val;
+#endif
     ruby_reset_leap_second_info();
 }
 
@@ -1651,11 +1696,9 @@ localtime_with_gmtoff_zone(const time_t *t, struct tm *result, long *gmtoff, VAL
         if (zone) {
 #if defined(HAVE_TM_ZONE)
             *zone = zone_str(tm.tm_zone);
+#elif defined(_WIN32)
+            *zone = zone_str(get_tzname(tm.tm_isdst));
 #elif defined(HAVE_TZNAME) && defined(HAVE_DAYLIGHT)
-# if defined(RUBY_MSVCRT_VERSION) && RUBY_MSVCRT_VERSION >= 140
-#  define tzname _tzname
-#  define daylight _daylight
-# endif
             /* this needs tzset or localtime, instead of localtime_r */
             *zone = zone_str(tzname[daylight && tm.tm_isdst]);
 #else
@@ -2240,14 +2283,14 @@ utc_offset_arg(VALUE arg)
 
 static void
 zone_set_offset(VALUE zone, struct time_object *tobj,
-                wideval_t tlocal, wideval_t tutc)
+                wideval_t tlocal, wideval_t tutc, VALUE time)
 {
     /* tlocal and tutc must be unmagnified and in seconds */
     wideval_t w = wsub(tlocal, tutc);
     VALUE off = w2v(w);
     validate_utc_offset(off);
-    tobj->vtm.utc_offset = off;
-    tobj->vtm.zone = zone;
+    RB_OBJ_WRITE(time, &tobj->vtm.utc_offset, off);
+    RB_OBJ_WRITE(time, &tobj->vtm.zone, zone);
     TZMODE_SET_LOCALTIME(tobj);
 }
 
@@ -2362,7 +2405,7 @@ zone_timelocal(VALUE zone, VALUE time)
     if (UNDEF_P(utc)) return 0;
 
     s = extract_time(utc);
-    zone_set_offset(zone, tobj, t, s);
+    zone_set_offset(zone, tobj, t, s, time);
     s = rb_time_magnify(s);
     if (tobj->vtm.subsecx != INT2FIX(0)) {
         s = wadd(s, v2w(tobj->vtm.subsecx));
@@ -2391,7 +2434,7 @@ zone_localtime(VALUE zone, VALUE time)
 
     s = extract_vtm(local, time, tobj, subsecx);
     tobj->vtm.tm_got = 1;
-    zone_set_offset(zone, tobj, s, t);
+    zone_set_offset(zone, tobj, s, t, time);
     zone_set_dst(zone, tobj, tm);
 
     RB_GC_GUARD(time);
@@ -3964,9 +4007,20 @@ time_eql(VALUE time1, VALUE time2)
  *    now = Time.now
  *    # => 2022-08-18 10:24:13.5398485 -0500
  *    now.utc? # => false
+ *    now.getutc.utc? # => true
  *    utc = Time.utc(2000, 1, 1, 20, 15, 1)
  *    # => 2000-01-01 20:15:01 UTC
  *    utc.utc? # => true
+ *
+ *  +Time+ objects created with these methods are considered to be in
+ *  UTC:
+ *
+ *  * Time.utc
+ *  * Time#utc
+ *  * Time#getutc
+ *
+ *  Objects created in other ways will not be treated as UTC even if
+ *  the environment variable "TZ" is "UTC".
  *
  *  Related: Time.utc.
  */
@@ -4007,7 +4061,9 @@ time_init_copy(VALUE copy, VALUE time)
     if (!OBJ_INIT_COPY(copy, time)) return copy;
     GetTimeval(time, tobj);
     GetNewTimeval(copy, tcopy);
-    MEMCPY(tcopy, tobj, struct time_object, 1);
+
+    time_set_timew(copy, tcopy, tobj->timew);
+    time_set_vtm(copy, tcopy, tobj->vtm);
 
     return copy;
 }
@@ -5671,7 +5727,7 @@ end_submicro: ;
     }
     if (!NIL_P(zone)) {
         zone = mload_zone(time, zone);
-        tobj->vtm.zone = zone;
+        RB_OBJ_WRITE(time, &tobj->vtm.zone, zone);
         zone_localtime(zone, time);
     }
 
@@ -5718,8 +5774,10 @@ tm_from_time(VALUE klass, VALUE time)
     tm = time_s_alloc(klass);
     ttm = RTYPEDDATA_GET_DATA(tm);
     v = &vtm;
-    GMTIMEW(ttm->timew = tobj->timew, v);
-    ttm->timew = wsub(ttm->timew, v->subsecx);
+
+    WIDEVALUE timew = tobj->timew;
+    GMTIMEW(timew, v);
+    time_set_timew(tm, ttm, wsub(timew, v->subsecx));
     v->subsecx = INT2FIX(0);
     v->zone = Qnil;
     time_set_vtm(tm, ttm, *v);
@@ -5864,6 +5922,10 @@ rb_time_zone_abbreviation(VALUE zone, VALUE time)
 void
 Init_Time(void)
 {
+#ifdef _WIN32
+    ruby_reset_timezone(getenv("TZ"));
+#endif
+
     id_submicro = rb_intern_const("submicro");
     id_nano_num = rb_intern_const("nano_num");
     id_nano_den = rb_intern_const("nano_den");

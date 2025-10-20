@@ -166,6 +166,80 @@ is_constant_path(VALUE name)
     return true;
 }
 
+struct sub_temporary_name_args {
+    VALUE names;
+    ID last;
+};
+
+static VALUE build_const_path(VALUE head, ID tail);
+static void set_sub_temporary_name_foreach(VALUE mod, struct sub_temporary_name_args *args, VALUE name);
+
+static VALUE
+set_sub_temporary_name_recursive(VALUE mod, VALUE data, int recursive)
+{
+    if (recursive) return Qfalse;
+
+    struct sub_temporary_name_args *args = (void *)data;
+    VALUE name = 0;
+    if (args->names) {
+        name = build_const_path(rb_ary_last(0, 0, args->names), args->last);
+    }
+    set_sub_temporary_name_foreach(mod, args, name);
+    return Qtrue;
+}
+
+static VALUE
+set_sub_temporary_name_topmost(VALUE mod, VALUE data, int recursive)
+{
+    if (recursive) return Qfalse;
+
+    struct sub_temporary_name_args *args = (void *)data;
+    VALUE name = args->names;
+    if (name) {
+        args->names = rb_ary_hidden_new(0);
+    }
+    set_sub_temporary_name_foreach(mod, args, name);
+    return Qtrue;
+}
+
+static enum rb_id_table_iterator_result
+set_sub_temporary_name_i(ID id, VALUE val, void *data)
+{
+    val = ((rb_const_entry_t *)val)->value;
+    if (rb_namespace_p(val) && !RCLASS_EXT(val)->permanent_classpath) {
+        VALUE arg = (VALUE)data;
+        struct sub_temporary_name_args *args = data;
+        args->last = id;
+        rb_exec_recursive_paired(set_sub_temporary_name_recursive, val, arg, arg);
+    }
+    return ID_TABLE_CONTINUE;
+}
+
+static void
+set_sub_temporary_name_foreach(VALUE mod, struct sub_temporary_name_args *args, VALUE name)
+{
+    RCLASS_SET_CLASSPATH(mod, name, FALSE);
+    struct rb_id_table *tbl = RCLASS_CONST_TBL(mod);
+    if (!tbl) return;
+    if (!name) {
+        rb_id_table_foreach(tbl, set_sub_temporary_name_i, args);
+    }
+    else {
+        long names_len = RARRAY_LEN(args->names); // paranoiac check?
+        rb_ary_push(args->names, name);
+        rb_id_table_foreach(tbl, set_sub_temporary_name_i, args);
+        rb_ary_set_len(args->names, names_len);
+    }
+}
+
+static void
+set_sub_temporary_name(VALUE mod, VALUE name)
+{
+    struct sub_temporary_name_args args = {name};
+    VALUE arg = (VALUE)&args;
+    rb_exec_recursive_paired(set_sub_temporary_name_topmost, mod, arg, arg);
+}
+
 /*
  *  call-seq:
  *     mod.set_temporary_name(string) -> self
@@ -224,7 +298,9 @@ rb_mod_set_temporary_name(VALUE mod, VALUE name)
 
     if (NIL_P(name)) {
         // Set the temporary classpath to NULL (anonymous):
-        RCLASS_SET_CLASSPATH(mod, 0, FALSE);
+        RB_VM_LOCK_ENTER();
+        set_sub_temporary_name(mod, 0);
+        RB_VM_LOCK_LEAVE();
     }
     else {
         // Ensure the name is a string:
@@ -238,8 +314,12 @@ rb_mod_set_temporary_name(VALUE mod, VALUE name)
             rb_raise(rb_eArgError, "the temporary name must not be a constant path to avoid confusion");
         }
 
+        name = rb_str_new_frozen(name);
+
         // Set the temporary classpath to the given name:
-        RCLASS_SET_CLASSPATH(mod, name, FALSE);
+        RB_VM_LOCK_ENTER();
+        set_sub_temporary_name(mod, name);
+        RB_VM_LOCK_LEAVE();
     }
 
     return mod;
@@ -1103,22 +1183,6 @@ gen_ivtbl_bytes(size_t n)
     return offsetof(struct gen_ivtbl, as.shape.ivptr) + n * sizeof(VALUE);
 }
 
-static struct gen_ivtbl *
-gen_ivtbl_resize(struct gen_ivtbl *old, uint32_t n)
-{
-    RUBY_ASSERT(n > 0);
-
-    uint32_t len = old ? old->as.shape.numiv : 0;
-    struct gen_ivtbl *ivtbl = xrealloc(old, gen_ivtbl_bytes(n));
-
-    ivtbl->as.shape.numiv = n;
-    for (; len < n; len++) {
-        ivtbl->as.shape.ivptr[len] = Qundef;
-    }
-
-    return ivtbl;
-}
-
 void
 rb_mark_generic_ivar(VALUE obj)
 {
@@ -1571,41 +1635,6 @@ struct gen_ivar_lookup_ensure_size {
     bool resize;
 };
 
-static int
-generic_ivar_lookup_ensure_size(st_data_t *k, st_data_t *v, st_data_t u, int existing)
-{
-    ASSERT_vm_locking();
-
-    struct gen_ivar_lookup_ensure_size *ivar_lookup = (struct gen_ivar_lookup_ensure_size *)u;
-    struct gen_ivtbl *ivtbl = existing ? (struct gen_ivtbl *)*v : NULL;
-
-    if (!existing || ivar_lookup->resize) {
-        if (existing) {
-            RUBY_ASSERT(ivar_lookup->shape->type == SHAPE_IVAR);
-            RUBY_ASSERT(rb_shape_get_shape_by_id(ivar_lookup->shape->parent_id)->capacity < ivar_lookup->shape->capacity);
-        }
-        else {
-            FL_SET_RAW((VALUE)*k, FL_EXIVAR);
-        }
-
-        ivtbl = gen_ivtbl_resize(ivtbl, ivar_lookup->shape->capacity);
-        *v = (st_data_t)ivtbl;
-    }
-
-    RUBY_ASSERT(FL_TEST((VALUE)*k, FL_EXIVAR));
-
-    ivar_lookup->ivtbl = ivtbl;
-    if (ivar_lookup->shape) {
-#if SHAPE_IN_BASIC_FLAGS
-        rb_shape_set_shape(ivar_lookup->obj, ivar_lookup->shape);
-#else
-        ivtbl->shape_id = rb_shape_id(ivar_lookup->shape);
-#endif
-    }
-
-    return ST_CONTINUE;
-}
-
 static VALUE *
 generic_ivar_set_shape_ivptr(VALUE obj, void *data)
 {
@@ -1613,9 +1642,48 @@ generic_ivar_set_shape_ivptr(VALUE obj, void *data)
 
     struct gen_ivar_lookup_ensure_size *ivar_lookup = data;
 
+    // We can't use st_update, since when resizing the fields table GC can
+    // happen, which will modify the st_table and may rebuild it
     RB_VM_LOCK_ENTER();
     {
-        st_update(generic_ivtbl(obj, ivar_lookup->id, false), (st_data_t)obj, generic_ivar_lookup_ensure_size, (st_data_t)ivar_lookup);
+        struct gen_ivtbl *ivtbl = NULL;
+        st_table *tbl = generic_ivtbl(obj, ivar_lookup->id, false);
+        int existing = st_lookup(tbl, (st_data_t)obj, (st_data_t *)&ivtbl);
+
+        if (!existing || ivar_lookup->resize) {
+            uint32_t new_capa = ivar_lookup->shape->capacity;
+            uint32_t old_capa = rb_shape_get_shape_by_id(ivar_lookup->shape->parent_id)->capacity;
+
+            if (existing) {
+                RUBY_ASSERT(ivar_lookup->shape->type == SHAPE_IVAR);
+                RUBY_ASSERT(old_capa < new_capa);
+                RUBY_ASSERT(ivtbl);
+            } else {
+                RUBY_ASSERT(!ivtbl);
+                RUBY_ASSERT(old_capa == 0);
+            }
+            RUBY_ASSERT(new_capa > 0);
+
+            struct gen_ivtbl *old_ivtbl = ivtbl;
+            ivtbl = xmalloc(gen_ivtbl_bytes(new_capa));
+            if (old_ivtbl) {
+                memcpy(ivtbl, old_ivtbl, gen_ivtbl_bytes(old_capa));
+            }
+            ivtbl->as.shape.numiv = new_capa;
+            for (uint32_t i = old_capa; i < new_capa; i++) {
+                ivtbl->as.shape.ivptr[i] = Qundef;
+            }
+
+            st_insert(tbl, (st_data_t)obj, (st_data_t)ivtbl);
+            if (old_ivtbl) {
+                xfree(old_ivtbl);
+            }
+        }
+
+        ivar_lookup->ivtbl = ivtbl;
+        if (ivar_lookup->shape) {
+            rb_shape_set_shape(ivar_lookup->obj, ivar_lookup->shape);
+        }
     }
     RB_VM_LOCK_LEAVE();
 
@@ -2070,8 +2138,8 @@ rb_copy_generic_ivar(VALUE clone, VALUE obj)
             new_ivtbl->as.complex.table = st_copy(obj_ivtbl->as.complex.table);
         }
         else {
-            new_ivtbl = gen_ivtbl_resize(0, obj_ivtbl->as.shape.numiv);
-
+            new_ivtbl = xmalloc(gen_ivtbl_bytes(obj_ivtbl->as.shape.numiv));
+            new_ivtbl->as.shape.numiv = obj_ivtbl->as.shape.numiv;
             for (uint32_t i=0; i<obj_ivtbl->as.shape.numiv; i++) {
                 RB_OBJ_WRITE(clone, &new_ivtbl->as.shape.ivptr[i], obj_ivtbl->as.shape.ivptr[i]);
             }

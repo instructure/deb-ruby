@@ -139,6 +139,11 @@ class TestSyntax < Test::Unit::TestCase
         inner(&)
       end
       assert_equal(10, all_kwrest(nil, nil, nil, nil, okw1: nil, okw2: nil){10})
+
+      def evaled(&)
+        eval("inner(&)")
+      end
+      assert_equal(1, evaled{1})
     end;
   end
 
@@ -156,8 +161,10 @@ class TestSyntax < Test::Unit::TestCase
       def b(*); c(*) end
       def c(*a); a end
       def d(*); b(*, *) end
+      def e(*); eval("b(*)") end
       assert_equal([1, 2], b(1, 2))
       assert_equal([1, 2, 1, 2], d(1, 2))
+      assert_equal([1, 2], e(1, 2))
     end;
   end
 
@@ -177,10 +184,12 @@ class TestSyntax < Test::Unit::TestCase
       def d(**); b(k: 1, **) end
       def e(**); b(**, k: 1) end
       def f(a: nil, **); b(**) end
+      def g(**); eval("b(**)") end
       assert_equal({a: 1, k: 3}, b(a: 1, k: 3))
       assert_equal({a: 1, k: 3}, d(a: 1, k: 3))
       assert_equal({a: 1, k: 1}, e(a: 1, k: 3))
       assert_equal({k: 3}, f(a: 1, k: 3))
+      assert_equal({a: 1, k: 3}, g(a: 1, k: 3))
     end;
   end
 
@@ -1937,6 +1946,15 @@ eom
     end
     assert_valid_syntax('proc {def foo(_);end;it}')
     assert_syntax_error('p { [it **2] }', /unexpected \*\*/)
+    assert_equal(1, eval('1.then { raise rescue it }'))
+    assert_equal(2, eval('1.then { 2.then { raise rescue it } }'))
+    assert_equal(3, eval('3.then { begin; raise; rescue; it; end }'))
+    assert_equal(4, eval('4.tap { begin; raise ; rescue; raise rescue it; end; }'))
+    assert_equal(5, eval('a = 0; 5.then { begin; nil; ensure; a = it; end }; a'))
+    assert_equal(6, eval('a = 0; 6.then { begin; nil; rescue; ensure; a = it; end }; a'))
+    assert_equal(7, eval('a = 0; 7.then { begin; raise; ensure; a = it; end } rescue a'))
+    assert_equal(8, eval('a = 0; 8.then { begin; raise; rescue; ensure; a = it; end }; a'))
+    assert_equal(/9/, eval('9.then { /#{it}/o }'))
   end
 
   def test_value_expr_in_condition
@@ -2010,6 +2028,7 @@ eom
     obj4 = obj1.clone
     obj5 = obj1.clone
     obj1.instance_eval('def foo(...) bar(...) end', __FILE__, __LINE__)
+    obj1.instance_eval('def foo(...) eval("bar(...)") end', __FILE__, __LINE__)
     obj4.instance_eval("def foo ...\n  bar(...)\n""end", __FILE__, __LINE__)
     obj5.instance_eval("def foo ...; bar(...); end", __FILE__, __LINE__)
 

@@ -1214,14 +1214,15 @@ tally_up(st_data_t *group, st_data_t *value, st_data_t arg, int existing)
         RB_OBJ_WRITTEN(hash, Qundef, tally);
     }
     *value = (st_data_t)tally;
-    if (!SPECIAL_CONST_P(*group)) RB_OBJ_WRITTEN(hash, Qundef, *group);
     return ST_CONTINUE;
 }
 
 static VALUE
 rb_enum_tally_up(VALUE hash, VALUE group)
 {
-    rb_hash_stlike_update(hash, group, tally_up, (st_data_t)hash);
+    if (!rb_hash_stlike_update(hash, group, tally_up, (st_data_t)hash)) {
+        RB_OBJ_WRITTEN(hash, Qundef, group);
+    }
     return hash;
 }
 
@@ -4704,7 +4705,7 @@ sum_iter(VALUE i, struct enum_sum_memo *memo)
     }
     else switch (TYPE(memo->v)) {
       default:      sum_iter_some_value(i, memo);    return;
-      case T_FLOAT: sum_iter_Kahan_Babuska(i, memo); return;
+      case T_FLOAT:
       case T_FIXNUM:
       case T_BIGNUM:
       case T_RATIONAL:

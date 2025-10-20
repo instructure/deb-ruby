@@ -1250,8 +1250,6 @@ main()
 		ac_cv_func_gmtime_r=yes
 		rb_cv_large_fd_select=yes
 		ac_cv_type_struct_timeval=yes
-                ac_cv_func_clock_gettime=yes
-                ac_cv_func_clock_getres=yes
 		ac_cv_func_malloc_usable_size=no
 		ac_cv_type_off_t=yes
 		ac_cv_sizeof_off_t=8
@@ -4547,10 +4545,10 @@ AS_IF([test x"$enable_rubygems" = xno], [
 AC_SUBST(USE_RUBYGEMS)
 
 m4_define(available_parsers, [parse.y, prism])
-with_parser=prism
 AC_ARG_WITH(parser,
     AS_HELP_STRING([--with-parser=PARSER],
-        [specify default parser; PARSER is one of ]m4_join([, ],available_parsers)))
+        [specify default parser; PARSER is one of ]m4_join([, ],available_parsers)),
+    [], [with_parser=prism])
 AS_CASE([$with_parser],
 m4_foreach(parser, [available_parsers],
     parser[,][AC_DEFINE_UNQUOTED(RB_DEFAULT_PARSER, RB_DEFAULT_PARSER_[]AS_TR_CPP(parser)),])

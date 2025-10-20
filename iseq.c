@@ -539,6 +539,19 @@ rb_iseq_pathobj_set(const rb_iseq_t *iseq, VALUE path, VALUE realpath)
                  rb_iseq_pathobj_new(path, realpath));
 }
 
+// Make a dummy iseq for a dummy frame that exposes a path for profilers to inspect
+rb_iseq_t *
+rb_iseq_alloc_with_dummy_path(VALUE fname)
+{
+    rb_iseq_t *dummy_iseq = iseq_alloc();
+
+    ISEQ_BODY(dummy_iseq)->type = ISEQ_TYPE_TOP;
+    RB_OBJ_WRITE(dummy_iseq, &ISEQ_BODY(dummy_iseq)->location.pathobj, fname);
+    RB_OBJ_WRITE(dummy_iseq, &ISEQ_BODY(dummy_iseq)->location.label, fname);
+
+    return dummy_iseq;
+}
+
 static rb_iseq_location_t *
 iseq_location_setup(rb_iseq_t *iseq, VALUE name, VALUE path, VALUE realpath, int first_lineno, const rb_code_location_t *code_location, const int node_id)
 {
@@ -581,11 +594,11 @@ set_relation(rb_iseq_t *iseq, const rb_iseq_t *piseq)
         body->local_iseq = iseq;
     }
     else if (piseq) {
-        body->local_iseq = ISEQ_BODY(piseq)->local_iseq;
+        RB_OBJ_WRITE(iseq, &body->local_iseq, ISEQ_BODY(piseq)->local_iseq);
     }
 
     if (piseq) {
-        body->parent_iseq = piseq;
+        RB_OBJ_WRITE(iseq, &body->parent_iseq, piseq);
     }
 
     if (type == ISEQ_TYPE_MAIN) {
@@ -1072,7 +1085,7 @@ pm_iseq_new_with_opt(pm_scope_node_t *node, VALUE name, VALUE path, VALUE realpa
         .end_pos = { .lineno = (int) end.line, .column = (int) end.column }
     };
 
-    prepare_iseq_build(iseq, name, path, realpath, first_lineno, &code_location, -1,
+    prepare_iseq_build(iseq, name, path, realpath, first_lineno, &code_location, node->ast_node->node_id,
                        parent, isolated_depth, type, node->script_lines == NULL ? Qnil : *node->script_lines, option);
 
     struct pm_iseq_new_with_opt_data data = {
@@ -1306,6 +1319,15 @@ pm_iseq_compile_with_option(VALUE src, VALUE file, VALUE realpath, VALUE line, V
     ln = NUM2INT(line);
     StringValueCStr(file);
 
+    bool parse_file = false;
+    if (RB_TYPE_P(src, T_FILE)) {
+        parse_file = true;
+        src = rb_io_path(src);
+    }
+    else {
+        src = StringValue(src);
+    }
+
     pm_parse_result_t result = { 0 };
     pm_options_line_set(&result.options, NUM2INT(line));
     pm_options_scopes_init(&result.options, 1);
@@ -1328,15 +1350,14 @@ pm_iseq_compile_with_option(VALUE src, VALUE file, VALUE realpath, VALUE line, V
     VALUE script_lines;
     VALUE error;
 
-    if (RB_TYPE_P(src, T_FILE)) {
-        VALUE filepath = rb_io_path(src);
-        error = pm_load_parse_file(&result, filepath, ruby_vm_keep_script_lines ? &script_lines : NULL);
-        RB_GC_GUARD(filepath);
+    if (parse_file) {
+        error = pm_load_parse_file(&result, src, ruby_vm_keep_script_lines ? &script_lines : NULL);
     }
     else {
-        src = StringValue(src);
         error = pm_parse_string(&result, src, file, ruby_vm_keep_script_lines ? &script_lines : NULL);
     }
+
+    RB_GC_GUARD(src);
 
     if (error == Qnil) {
         int error_state;
@@ -1749,6 +1770,7 @@ iseqw_s_compile_file(int argc, VALUE *argv, VALUE self)
                                          1, NULL, 0, ISEQ_TYPE_TOP, &option,
                                          Qnil));
     rb_ast_dispose(ast);
+    RB_GC_GUARD(ast_value);
 
     rb_vm_pop_frame(ec);
     RB_GC_GUARD(v);
@@ -1916,7 +1938,11 @@ rb_iseqw_to_iseq(VALUE iseqw)
 static VALUE
 iseqw_eval(VALUE self)
 {
-    return rb_iseq_eval(iseqw_check(self));
+    const rb_iseq_t *iseq = iseqw_check(self);
+    if (0 == ISEQ_BODY(iseq)->iseq_size) {
+        rb_raise(rb_eTypeError, "attempt to evaluate dummy InstructionSequence");
+    }
+    return rb_iseq_eval(iseq);
 }
 
 /*
@@ -3739,7 +3765,7 @@ rb_vm_encoded_insn_data_table_init(void)
     const void * const *table = rb_vm_get_insns_address_table();
 #define INSN_CODE(insn) ((VALUE)table[insn])
 #else
-#define INSN_CODE(insn) (insn)
+#define INSN_CODE(insn) ((VALUE)(insn))
 #endif
     st_data_t insn;
     encoded_insn_data = st_init_numtable_with_size(VM_INSTRUCTION_SIZE / 2);

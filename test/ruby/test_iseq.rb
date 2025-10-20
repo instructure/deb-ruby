@@ -297,6 +297,56 @@ class TestISeq < Test::Unit::TestCase
     assert_raise(TypeError, bug11159) {compile(1)}
   end
 
+  def test_invalid_source_no_memory_leak
+    # [Bug #21394]
+    assert_no_memory_leak(["-rtempfile"], "#{<<-"begin;"}", "#{<<-'end;'}", rss: true)
+      code = proc do |t|
+        RubyVM::InstructionSequence.new(nil)
+      rescue TypeError
+      else
+        raise "TypeError was not raised during RubyVM::InstructionSequence.new"
+      end
+
+      10.times(&code)
+    begin;
+      1_000_000.times(&code)
+    end;
+
+    # [Bug #21394]
+    # RubyVM::InstructionSequence.new calls rb_io_path, which dups the string
+    # and can leak memory if the dup raises
+    assert_no_memory_leak(["-rtempfile"], "#{<<-"begin;"}", "#{<<-'end;'}", rss: true)
+      MyError = Class.new(StandardError)
+      String.prepend(Module.new do
+        def initialize_dup(_)
+          if $raise_on_dup
+            raise MyError
+          else
+            super
+          end
+        end
+      end)
+
+      code = proc do |t|
+        Tempfile.create do |f|
+          $raise_on_dup = true
+          t.times do
+            RubyVM::InstructionSequence.new(f)
+          rescue MyError
+          else
+            raise "MyError was not raised during RubyVM::InstructionSequence.new"
+          end
+        ensure
+          $raise_on_dup = false
+        end
+      end
+
+      code.call(100)
+    begin;
+      code.call(1_000_000)
+    end;
+  end
+
   def test_frozen_string_literal_compile_option
     $f = 'f'
     line = __LINE__ + 2
@@ -855,6 +905,25 @@ class TestISeq < Test::Unit::TestCase
     end
   end
 
+  def test_serialize_anonymous_outer_variables
+    iseq = RubyVM::InstructionSequence.compile(<<~'RUBY')
+      obj = Object.new
+      def obj.test
+        [1].each do
+          raise "Oops"
+        rescue
+          return it
+        end
+      end
+      obj
+    RUBY
+
+    binary = iseq.to_binary # [Bug # 21370]
+    roundtripped_iseq = RubyVM::InstructionSequence.load_from_binary(binary)
+    object = roundtripped_iseq.eval
+    assert_equal 1, object.test
+  end
+
   def test_loading_kwargs_memory_leak
     assert_no_memory_leak([], "#{<<~"begin;"}", "#{<<~'end;'}", rss: true)
     a = RubyVM::InstructionSequence.compile("foo(bar: :baz)").to_binary
@@ -917,6 +986,12 @@ class TestISeq < Test::Unit::TestCase
       assert_include(stdout.shift, "== disasm:")
       assert_include(stdout.pop, "leave")
       assert_predicate(status, :success?)
+    end
+  end
+
+  def test_compile_empty_under_gc_stress
+    EnvUtil.under_gc_stress do
+      RubyVM::InstructionSequence.compile_file(File::NULL)
     end
   end
 end

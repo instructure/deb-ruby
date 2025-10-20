@@ -186,18 +186,18 @@ module URI
 
       if arg_check
         self.scheme = scheme
-        self.userinfo = userinfo
         self.hostname = host
         self.port = port
+        self.userinfo = userinfo
         self.path = path
         self.query = query
         self.opaque = opaque
         self.fragment = fragment
       else
         self.set_scheme(scheme)
-        self.set_userinfo(userinfo)
         self.set_host(host)
         self.set_port(port)
+        self.set_userinfo(userinfo)
         self.set_path(path)
         self.query = query
         self.set_opaque(opaque)
@@ -511,7 +511,7 @@ module URI
         user, password = split_userinfo(user)
       end
       @user     = user
-      @password = password if password
+      @password = password
 
       [@user, @password]
     end
@@ -522,7 +522,7 @@ module URI
     # See also URI::Generic.user=.
     #
     def set_user(v)
-      set_userinfo(v, @password)
+      set_userinfo(v, nil)
       v
     end
     protected :set_user
@@ -574,6 +574,12 @@ module URI
       @password
     end
 
+    # Returns the authority info (array of user, password, host and
+    # port), if any is set.  Or returns +nil+.
+    def authority
+      return @user, @password, @host, @port if @user || @password || @host || @port
+    end
+
     # Returns the user component after URI decoding.
     def decoded_user
       URI.decode_uri_component(@user) if @user
@@ -615,6 +621,13 @@ module URI
     end
     protected :set_host
 
+    # Protected setter for the authority info (+user+, +password+, +host+
+    # and +port+).  If +port+ is +nil+, +default_port+ will be set.
+    #
+    protected def set_authority(user, password, host, port = nil)
+      @user, @password, @host, @port = user, password, host, port || self.default_port
+    end
+
     #
     # == Args
     #
@@ -639,6 +652,7 @@ module URI
     def host=(v)
       check_host(v)
       set_host(v)
+      set_userinfo(nil)
       v
     end
 
@@ -729,6 +743,7 @@ module URI
     def port=(v)
       check_port(v)
       set_port(v)
+      set_userinfo(nil)
       port
     end
 
@@ -737,12 +752,12 @@ module URI
     end
     private :check_registry
 
-    def set_registry(v) #:nodoc:
+    def set_registry(v) # :nodoc:
       raise InvalidURIError, "cannot set registry"
     end
     protected :set_registry
 
-    def registry=(v)
+    def registry=(v) # :nodoc:
       raise InvalidURIError, "cannot set registry"
     end
 
@@ -1121,7 +1136,7 @@ module URI
 
       base = self.dup
 
-      authority = rel.userinfo || rel.host || rel.port
+      authority = rel.authority
 
       # RFC2396, Section 5.2, 2)
       if (rel.path.nil? || rel.path.empty?) && !authority && !rel.query
@@ -1133,17 +1148,14 @@ module URI
       base.fragment=(nil)
 
       # RFC2396, Section 5.2, 4)
-      if !authority
-        base.set_path(merge_path(base.path, rel.path)) if base.path && rel.path
-      else
-        # RFC2396, Section 5.2, 4)
-        base.set_path(rel.path) if rel.path
+      if authority
+        base.set_authority(*authority)
+        base.set_path(rel.path)
+      elsif base.path && rel.path
+        base.set_path(merge_path(base.path, rel.path))
       end
 
       # RFC2396, Section 5.2, 7)
-      base.set_userinfo(rel.userinfo) if rel.userinfo
-      base.set_host(rel.host)         if rel.host
-      base.set_port(rel.port)         if rel.port
       base.query = rel.query       if rel.query
       base.fragment=(rel.fragment) if rel.fragment
 
@@ -1392,10 +1404,12 @@ module URI
       end
     end
 
+    # Returns the hash value.
     def hash
       self.component_ary.hash
     end
 
+    # Compares with _oth_ for Hash.
     def eql?(oth)
       self.class == oth.class &&
       parser == oth.parser &&
@@ -1438,7 +1452,7 @@ module URI
       end
     end
 
-    def inspect
+    def inspect # :nodoc:
       "#<#{self.class} #{self}>"
     end
 

@@ -83,11 +83,18 @@ typedef struct {
     bool parsed;
 } pm_parse_result_t;
 
+#define PM_SPECIAL_CONSTANT_FLAG ((pm_constant_id_t)(1 << 31))
+#define PM_CONSTANT_AND ((pm_constant_id_t)(idAnd | PM_SPECIAL_CONSTANT_FLAG))
+#define PM_CONSTANT_DOT3 ((pm_constant_id_t)(idDot3 | PM_SPECIAL_CONSTANT_FLAG))
+#define PM_CONSTANT_MULT ((pm_constant_id_t)(idMULT | PM_SPECIAL_CONSTANT_FLAG))
+#define PM_CONSTANT_POW ((pm_constant_id_t)(idPow | PM_SPECIAL_CONSTANT_FLAG))
+
 VALUE pm_load_file(pm_parse_result_t *result, VALUE filepath, bool load_error);
 VALUE pm_parse_file(pm_parse_result_t *result, VALUE filepath, VALUE *script_lines);
 VALUE pm_load_parse_file(pm_parse_result_t *result, VALUE filepath, VALUE *script_lines);
 VALUE pm_parse_string(pm_parse_result_t *result, VALUE source, VALUE filepath, VALUE *script_lines);
 VALUE pm_parse_stdin(pm_parse_result_t *result);
+void pm_options_version_for_current_ruby_set(pm_options_t *options);
 void pm_parse_result_free(pm_parse_result_t *result);
 
 rb_iseq_t *pm_iseq_new(pm_scope_node_t *node, VALUE name, VALUE path, VALUE realpath, const rb_iseq_t *parent, enum rb_iseq_type, int *error_state);

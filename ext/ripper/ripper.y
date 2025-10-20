@@ -1480,8 +1480,9 @@ static rb_ast_id_table_t *local_tbl(struct parser_params*);
 
 static VALUE reg_compile(struct parser_params*, rb_parser_string_t*, int);
 static void reg_fragment_setenc(struct parser_params*, rb_parser_string_t*, int);
-#define reg_fragment_check rb_parser_reg_fragment_check
-int reg_fragment_check(struct parser_params*, rb_parser_string_t*, int);
+int rb_parser_reg_fragment_check(struct parser_params*, rb_parser_string_t*, int, rb_parser_reg_fragment_error_func);
+static void reg_fragment_error(struct parser_params *, VALUE);
+#define reg_fragment_check(p, str, option) rb_parser_reg_fragment_check(p, str, option, reg_fragment_error)
 
 static int literal_concat0(struct parser_params *p, rb_parser_string_t *head, rb_parser_string_t *tail);
 static NODE *heredoc_dedent(struct parser_params*,NODE*);
@@ -3270,6 +3271,12 @@ command_asgn	: lhs '=' lex_ctxt command_rhs
                     {
                         $$ = new_attr_op_assign(p, $1, idCOLON2, $3, $4, $6, &@$, &@2, &@3, &@4);
                     {VALUE v1=get_value($:1), v2=get_value($:2), v3=get_value($:3), v4=get_value($:4), v5=get_value($:6), v6=dispatch3(field,v1,v2,v3), v7=dispatch3(opassign,v6,v4,v5); p->s_lvalue=v7;}
+                    }
+                | tCOLON3 tCONSTANT tOP_ASGN lex_ctxt command_rhs
+                    {
+                        YYLTYPE loc = code_loc_gen(&@1, &@2);
+                        $$ = new_const_op_assign(p, NEW_COLON3($2, &loc), $3, $5, $4, &@$);
+                    {VALUE v1=get_value($:2), v2=get_value($:3), v3=get_value($:5), v4=dispatch1(top_const_field,v1), v5=dispatch3(opassign,v4,v2,v3); p->s_lvalue=v5;}
                     }
                 | defn_head[head] f_opt_paren_args[args] '=' endless_command[bodystmt]
                     {
@@ -10040,6 +10047,7 @@ parse_qmark(struct parser_params *p, int space_seen)
     rb_encoding *enc;
     register int c;
     rb_parser_string_t *lit;
+    const char *start = p->lex.pcur;
 
     if (IS_END()) {
         SET_LEX_STATE(EXPR_VALUE);
@@ -10064,13 +10072,11 @@ parse_qmark(struct parser_params *p, int space_seen)
     }
     newtok(p);
     enc = p->enc;
-    if (!parser_isascii(p)) {
-        if (tokadd_mbchar(p, c) == -1) return 0;
-    }
-    else if ((rb_enc_isalnum(c, p->enc) || c == '_') &&
-             !lex_eol_p(p) && is_identchar(p, p->lex.pcur, p->lex.pend, p->enc)) {
+    int w = parser_precise_mbclen(p, start);
+    if (is_identchar(p, start, p->lex.pend, p->enc) &&
+        !(lex_eol_ptr_n_p(p, start, w) || !is_identchar(p, start + w, p->lex.pend, p->enc))) {
         if (space_seen) {
-            const char *start = p->lex.pcur - 1, *ptr = start;
+            const char *ptr = start;
             do {
                 int n = parser_precise_mbclen(p, ptr);
                 if (n < 0) return -1;
@@ -10098,7 +10104,7 @@ parse_qmark(struct parser_params *p, int space_seen)
         }
     }
     else {
-        tokadd(p, c);
+        if (tokadd_mbchar(p, c) == -1) return 0;
     }
     tokfix(p);
     lit = STR_NEW3(tok(p), toklen(p), enc, 0);
@@ -15378,9 +15384,15 @@ reg_fragment_setenc(struct parser_params* p, rb_parser_string_t *str, int option
     if (c) reg_fragment_enc_error(p, str, c);
 }
 
+static void
+reg_fragment_error(struct parser_params* p, VALUE err)
+{
+    compile_error(p, "%"PRIsVALUE, err);
+}
+
 #ifndef RIPPER
 int
-reg_fragment_check(struct parser_params* p, rb_parser_string_t *str, int options)
+rb_parser_reg_fragment_check(struct parser_params* p, rb_parser_string_t *str, int options, rb_parser_reg_fragment_error_func error)
 {
     VALUE err, str2;
     reg_fragment_setenc(p, str, options);
@@ -15389,7 +15401,7 @@ reg_fragment_check(struct parser_params* p, rb_parser_string_t *str, int options
     err = rb_reg_check_preprocess(str2);
     if (err != Qnil) {
         err = rb_obj_as_string(err);
-        compile_error(p, "%"PRIsVALUE, err);
+        error(p, err);
         return 0;
     }
     return 1;
@@ -15494,7 +15506,7 @@ reg_compile(struct parser_params* p, rb_parser_string_t *str, int options)
     if (NIL_P(re)) {
         VALUE m = rb_attr_get(rb_errinfo(), idMesg);
         rb_set_errinfo(err);
-        compile_error(p, "%"PRIsVALUE, m);
+        reg_fragment_error(p, m);
         return Qnil;
     }
     return re;

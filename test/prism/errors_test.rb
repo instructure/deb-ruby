@@ -14,7 +14,10 @@ module Prism
         "targeting_numbered_parameter.txt",
         "defining_numbered_parameter.txt",
         "defining_numbered_parameter_2.txt",
-        "numbered_parameters_in_block_arguments.txt"
+        "numbered_parameters_in_block_arguments.txt",
+        "numbered_and_write.txt",
+        "numbered_or_write.txt",
+        "numbered_operator_write.txt"
       ]
     end
 
@@ -95,6 +98,15 @@ module Prism
         assert_predicate Prism.parse(line, version: "3.3.0"), :failure?
         assert_predicate Prism.parse(line), :success?
       end
+    end
+
+    def test_private_endless_method
+      source = <<~RUBY
+        private def foo = puts "Hello"
+      RUBY
+
+      assert_predicate Prism.parse(source, version: "3.4"), :failure?
+      assert_predicate Prism.parse(source), :success?
     end
 
     private
