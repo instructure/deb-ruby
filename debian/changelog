@@ -1,3 +1,10 @@
+ruby3.4 (3.4.7-ppa1) focal; urgency=medium
+
+  * Initial empty upstream branch
+  * New upstream version 3.4.7
+
+ -- Aaron Ogata <aogata@instructure.com>  Mon, 20 Oct 2025 08:53:17 -0700
+
 ruby3.4 (3.4.1-1ppa14) focal; urgency=medium
 
   [ Aaron Ogata ]
