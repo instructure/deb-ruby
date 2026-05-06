@@ -1,3 +1,9 @@
+ruby3.4 (3.4.8-ppa2) focal; urgency=medium
+
+  * Bump to target resolute
+
+ -- Jacob Burroughs <jburroughs@instructure.com>  Wed, 6 May 2026 08:02:45 -0600
+
 ruby3.4 (3.4.8-ppa1) focal; urgency=medium
 
   * Initial empty upstream branch
