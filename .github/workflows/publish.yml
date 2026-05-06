@@ -23,5 +23,5 @@ jobs:
           repository: 'ppa:instructure/ruby-testing'
           gpg_private_key: ${{ secrets.PPA_GPG_PRIVATE_KEY }}
           gpg_passphrase: ${{ secrets.PPA_GPG_PASSPHRASE }}
-          series: 'focal jammy noble'
+          series: 'focal jammy noble resolute'
           pkgdir: '${{ github.workspace }}/ruby/'
