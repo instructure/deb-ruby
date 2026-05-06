@@ -18,7 +18,7 @@ jobs:
           curl https://cache.ruby-lang.org/pub/ruby/${major_version}/ruby-${upstream_minor_version}.tar.gz > ruby${major_version}_${minor_version}.orig.tar.gz          # Remove this file itself to avoid generating a debian-changes file
           rm -rf ruby/.github
       - name: Publish PPA
-        uses: maths22/publish-ppa-package@main
+        uses: aogata-inst/publish-ppa-package@main
         with:
           repository: 'ppa:instructure/ruby-testing'
           gpg_private_key: ${{ secrets.PPA_GPG_PRIVATE_KEY }}
