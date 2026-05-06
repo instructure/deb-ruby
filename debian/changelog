@@ -1,3 +1,9 @@
+ruby3.4 (3.4.8-ppa3) focal; urgency=medium
+
+  * debug jammy failure
+
+ -- Aaron Ogata <aogata@instructure.com>  Wed, 06 May 2026 07:03:10 -0700
+
 ruby3.4 (3.4.8-ppa2) focal; urgency=medium
 
   * Bump to target resolute
