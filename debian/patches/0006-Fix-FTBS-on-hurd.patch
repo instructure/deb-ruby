@@ -10,9 +10,11 @@ Signed-off-by: Samuel Thibault <samuel.thibault@ens-lyon.org>
  io.c | 6 +++++-
  1 file changed, 5 insertions(+), 1 deletion(-)
 
---- a/io.c
-+++ b/io.c
-@@ -2214,7 +2214,11 @@
+Index: deb-ruby/io.c
+===================================================================
+--- deb-ruby.orig/io.c
++++ deb-ruby/io.c
+@@ -2277,7 +2277,11 @@ io_writev(int argc, const VALUE *argv, V
  
      for (i = 0; i < argc; i += cnt) {
  #ifdef HAVE_WRITEV

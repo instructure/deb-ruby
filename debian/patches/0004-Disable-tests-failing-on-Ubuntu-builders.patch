@@ -9,11 +9,15 @@ Subject: Disable tests failing on Ubuntu builders
  create mode 100644 test/excludes/TestFileUtils.rb
  create mode 100644 test/excludes/TestProcess.rb
 
+Index: deb-ruby/test/excludes/TestFileUtils.rb
+===================================================================
 --- /dev/null
-+++ b/test/excludes/TestFileUtils.rb
++++ deb-ruby/test/excludes/TestFileUtils.rb
 @@ -0,0 +1 @@
 +exclude :test_chown, "fails on Launchpad builders"
+Index: deb-ruby/test/excludes/TestProcess.rb
+===================================================================
 --- /dev/null
-+++ b/test/excludes/TestProcess.rb
++++ deb-ruby/test/excludes/TestProcess.rb
 @@ -0,0 +1 @@
 +exclude :test_execopts_gid, "fails on Launchpad builders"

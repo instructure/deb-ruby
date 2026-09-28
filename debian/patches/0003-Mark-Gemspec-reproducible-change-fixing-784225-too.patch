@@ -11,9 +11,11 @@ Signed-off-by: Christian Hofstaedtler <zeha@debian.org>
  lib/rubygems/specification.rb | 4 +++-
  1 file changed, 3 insertions(+), 1 deletion(-)
 
---- a/lib/rubygems/specification.rb
-+++ b/lib/rubygems/specification.rb
-@@ -1774,7 +1774,9 @@
+Index: deb-ruby/lib/rubygems/specification.rb
+===================================================================
+--- deb-ruby.orig/lib/rubygems/specification.rb
++++ deb-ruby/lib/rubygems/specification.rb
+@@ -1726,7 +1726,9 @@ class Gem::Specification < Gem::BasicSpe
                  raise(Gem::InvalidSpecificationException,
                        "invalid date format in specification: #{date.inspect}")
                end

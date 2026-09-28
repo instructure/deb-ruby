@@ -9,9 +9,8 @@ Signed-off-by: Svante Signell <svante.signell@gmail.com>
 ---
  ext/socket/option.c        |  1 +
  ext/socket/raddrinfo.c     | 22 ++++++++++++++++++++++
- test/fiddle/test_handle.rb |  3 ++-
  test/socket/test_socket.rb |  2 +-
- 4 files changed, 26 insertions(+), 2 deletions(-)
+ 3 files changed, 24 insertions(+), 1 deletion(-)
 
 Index: deb-ruby/ext/socket/option.c
 ===================================================================
@@ -29,7 +28,7 @@ Index: deb-ruby/ext/socket/raddrinfo.c
 ===================================================================
 --- deb-ruby.orig/ext/socket/raddrinfo.c
 +++ deb-ruby/ext/socket/raddrinfo.c
-@@ -2138,10 +2138,21 @@ addrinfo_mload(VALUE self, VALUE ary)
+@@ -2219,10 +2219,21 @@ addrinfo_mload(VALUE self, VALUE ary)
          INIT_SOCKADDR_UN(&uaddr, sizeof(struct sockaddr_un));
  
          StringValue(v);
@@ -51,7 +50,7 @@ Index: deb-ruby/ext/socket/raddrinfo.c
          memcpy(uaddr.sun_path, RSTRING_PTR(v), RSTRING_LEN(v));
          len = (socklen_t)sizeof(uaddr);
          memcpy(&ss, &uaddr, len);
-@@ -2785,10 +2796,21 @@ addrinfo_unix_path(VALUE self)
+@@ -2866,10 +2877,21 @@ addrinfo_unix_path(VALUE self)
      if (n < 0)
          rb_raise(rb_eSocket, "too short AF_UNIX address: %"PRIuSIZE" bytes given for minimum %"PRIuSIZE" bytes.",
                   (size_t)rai->sockaddr_len, offsetof(struct sockaddr_un, sun_path));
@@ -73,32 +72,11 @@ Index: deb-ruby/ext/socket/raddrinfo.c
      return rb_str_new(addr->sun_path, n);
  }
  #endif
-Index: deb-ruby/test/fiddle/test_handle.rb
-===================================================================
---- deb-ruby.orig/test/fiddle/test_handle.rb
-+++ deb-ruby/test/fiddle/test_handle.rb
-@@ -215,6 +215,7 @@ module Fiddle
-     end
- 
-     def test_dlerror
-+      return if /kfreebsd/ =~ RUBY_PLATFORM
-       # FreeBSD (at least 7.2 to 7.2) calls nsdispatch(3) when it calls
-       # getaddrinfo(3). And nsdispatch(3) doesn't call dlerror(3) even if
-       # it calls _nss_cache_cycle_prevention_function with dlsym(3).
-@@ -226,7 +227,7 @@ module Fiddle
-       Fiddle.dlopen("/lib/libc.so.7").sym('strcpy')
-     ensure
-       $VERBOSE = verbose
--    end if /freebsd/=~ RUBY_PLATFORM
-+    end if /freebsd/ =~ RUBY_PLATFORM
- 
-     if /cygwin|mingw|mswin/ =~ RUBY_PLATFORM
-       def test_fallback_to_ansi
 Index: deb-ruby/test/socket/test_socket.rb
 ===================================================================
 --- deb-ruby.orig/test/socket/test_socket.rb
 +++ deb-ruby/test/socket/test_socket.rb
-@@ -549,7 +549,7 @@ class TestSocket < Test::Unit::TestCase
+@@ -552,7 +552,7 @@ class TestSocket < Test::Unit::TestCase
    end
  
    def test_bintime

@@ -5,9 +5,11 @@ Origin: https://github.com/sorah-rbpkg/ruby/commit/f482d322a9490cee80ac6af4e08cd
 Last-Update: 2025-02-10
 ---
 This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
---- a/tool/rbinstall.rb
-+++ b/tool/rbinstall.rb
-@@ -366,9 +366,7 @@
+Index: deb-ruby/tool/rbinstall.rb
+===================================================================
+--- deb-ruby.orig/tool/rbinstall.rb
++++ deb-ruby/tool/rbinstall.rb
+@@ -377,9 +377,7 @@ rubyw_install_name = CONFIG["rubyw_insta
  goruby_install_name = "go" + ruby_install_name
  
  bindir = CONFIG["bindir", true]
@@ -18,7 +20,7 @@ This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
  libdir = CONFIG[CONFIG.fetch("libdirname", "libdir"), true]
  rubyhdrdir = CONFIG["rubyhdrdir", true]
  archhdrdir = CONFIG["rubyarchhdrdir"] || (rubyhdrdir + "/" + CONFIG['arch'])
-@@ -898,11 +896,6 @@
+@@ -1008,11 +1006,6 @@ install?(:local, :arch, :data) do
    if pc and File.file?(pc) and File.size?(pc)
      prepare "pkgconfig data", pkgconfigdir = File.join(libdir, "pkgconfig")
      install pc, pkgconfigdir, :mode => $data_mode
