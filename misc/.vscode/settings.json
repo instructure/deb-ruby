@@ -1,0 +1,6 @@
+{
+    "rust-analyzer.cargo.features": [
+        "disasm",
+    ],
+    "rust-analyzer.cfg.setTest": false,
+}
