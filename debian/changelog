@@ -1,8 +1,18 @@
-ruby4.0 (4.0.0~placeholder-1) UNRELEASED; urgency=medium
+ruby4.0 (4.0.7-ppa1) noble; urgency=medium
 
   * Ruby 4.0
+  * Initial empty upstream branch
+  * update debian/ruby4.0.postinst
+  * New upstream version 4.0.7
+  * add .github directory
+  * Drop focal from target distros
+  * refresh patches for 4.0
+  * update rules for 4.0
+  * backport fix for dtrace rejecting CPPFLAGS
+  * skip TestBox tests that expect a binary named ruby
+  * fix symbols
 
- -- Isaac Moore <isaac.moore@instructure.com>  Mon, 28 Sep 2026 14:29:41 +0000
+ -- Isaac Moore <isaac.moore@instructure.com>  Mon, 28 Sep 2026 14:33:55 +0000
 
 ruby3.4 (3.4.8-ppa4) focal; urgency=medium
 
