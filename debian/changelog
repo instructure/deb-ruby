@@ -1,3 +1,9 @@
+ruby4.0 (4.0.0~placeholder-1) UNRELEASED; urgency=medium
+
+  * Ruby 4.0
+
+ -- Isaac Moore <isaac.moore@instructure.com>  Mon, 28 Sep 2026 14:29:41 +0000
+
 ruby3.4 (3.4.8-ppa4) focal; urgency=medium
 
   * try retry on failure
