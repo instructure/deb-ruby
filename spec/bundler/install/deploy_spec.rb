@@ -8,72 +8,6 @@ RSpec.describe "install in deployment or frozen mode" do
     G
   end
 
-  context "with CLI flags", bundler: "< 3" do
-    it "fails without a lockfile and says that --deployment requires a lock" do
-      bundle "install --deployment", raise_on_error: false
-      expect(err).to include("The --deployment flag requires a lockfile")
-    end
-
-    it "fails without a lockfile and says that --frozen requires a lock" do
-      bundle "install --frozen", raise_on_error: false
-      expect(err).to include("The --frozen flag requires a lockfile")
-    end
-
-    it "disallows --deployment --system" do
-      bundle "install --deployment --system", raise_on_error: false
-      expect(err).to include("You have specified both --deployment")
-      expect(err).to include("Please choose only one option")
-      expect(exitstatus).to eq(15)
-    end
-
-    it "disallows --deployment --path --system" do
-      bundle "install --deployment --path . --system", raise_on_error: false
-      expect(err).to include("You have specified both --path")
-      expect(err).to include("as well as --system")
-      expect(err).to include("Please choose only one option")
-      expect(exitstatus).to eq(15)
-    end
-
-    it "doesn't mess up a subsequent `bundle install` after you try to deploy without a lock" do
-      bundle "install --deployment", raise_on_error: false
-      bundle :install
-      expect(the_bundle).to include_gems "myrack 1.0"
-    end
-
-    it "installs gems by default to vendor/bundle" do
-      bundle :lock
-      bundle "install --deployment"
-      expect(out).to include("vendor/bundle")
-    end
-
-    it "installs gems to custom path if specified" do
-      bundle :lock
-      bundle "install --path vendor/bundle2 --deployment"
-      expect(out).to include("vendor/bundle2")
-    end
-
-    it "works with the --frozen flag" do
-      bundle :lock
-      bundle "install --frozen"
-    end
-
-    it "explodes with the --deployment flag if you make a change and don't check in the lockfile" do
-      bundle :lock
-      gemfile <<-G
-        source "https://gem.repo1"
-        gem "myrack"
-        gem "myrack-obama"
-      G
-
-      bundle "install --deployment", raise_on_error: false
-      expect(err).to include("frozen mode")
-      expect(err).to include("You have added to the Gemfile")
-      expect(err).to include("* myrack-obama")
-      expect(err).not_to include("You have deleted from the Gemfile")
-      expect(err).not_to include("You have changed in the Gemfile")
-    end
-  end
-
   it "fails without a lockfile and says that deployment requires a lock" do
     bundle "config deployment true"
     bundle "install", raise_on_error: false
@@ -88,7 +22,7 @@ RSpec.describe "install in deployment or frozen mode" do
 
   it "still works if you are not in the app directory and specify --gemfile" do
     bundle "install"
-    pristine_system_gems :bundler
+    pristine_system_gems
     bundle "config set --local deployment true"
     bundle "config set --local path vendor/bundle"
     bundle "install --gemfile #{tmp}/bundled_app/Gemfile", dir: tmp
@@ -241,6 +175,75 @@ RSpec.describe "install in deployment or frozen mode" do
       end.not_to change { bundled_app_lock.mtime }
     end
 
+    it "explodes if regenerating the lockfile would change it" do
+      lockfile lockfile.
+        sub("    myrack (1.0.0)", "    myrack-obama (1.0)\n    myrack (1.0.0)").
+        sub(/^  myrack \(1\.0\.0\) sha256=\S+$/) {|line| "#{line}\n  #{checksum_to_lock(gem_repo1, "myrack-obama", "1.0")}" }
+
+      bundle :install, env: { "BUNDLE_FROZEN" => "true" }, raise_on_error: false
+      expect(err).to include("Your lockfile needs to be updated, but it can't be because frozen mode is set")
+      expect(last_command).to be_failure
+    end
+
+    it "explodes on `bundle check` if the lockfile contains a gem bundler would prune" do
+      lockfile lockfile.sub("    myrack (1.0.0)", "    myrack (1.0.0)\n    myrack-obama (1.0)")
+
+      bundle :check, env: { "BUNDLE_FROZEN" => "true" }, raise_on_error: false
+      expect(err).to include("but can't be updated because frozen mode is set")
+      expect(last_command).to be_failure
+    end
+
+    it "works when the lockfile includes a checksum entry for bundler itself" do
+      lockfile <<~L
+        GEM
+          remote: https://gem.repo1/
+          specs:
+            myrack (1.0.0)
+
+        PLATFORMS
+          #{lockfile_platforms}
+
+        DEPENDENCIES
+          myrack
+
+        CHECKSUMS
+          bundler (#{Bundler::VERSION}) sha256=#{"a" * 64}
+          #{checksum_to_lock gem_repo1, "myrack", "1.0.0"}
+
+        BUNDLED WITH
+          #{Bundler::VERSION}
+      L
+
+      bundle :install, env: { "BUNDLE_FROZEN" => "true" }
+      expect(err).to be_empty
+    end
+
+    it "explodes if the lockfile checksum entry for bundler does not match the BUNDLED WITH version" do
+      lockfile <<~L
+        GEM
+          remote: https://gem.repo1/
+          specs:
+            myrack (1.0.0)
+
+        PLATFORMS
+          #{lockfile_platforms}
+
+        DEPENDENCIES
+          myrack
+
+        CHECKSUMS
+          bundler (4.0.16) sha256=#{"a" * 64}
+          #{checksum_to_lock gem_repo1, "myrack", "1.0.0"}
+
+        BUNDLED WITH
+          #{Bundler::VERSION}
+      L
+
+      bundle :install, env: { "BUNDLE_FROZEN" => "true" }, raise_on_error: false
+      expect(err).to include("Your lockfile needs to be updated, but it can't be because frozen mode is set")
+      expect(last_command).to be_failure
+    end
+
     it "explodes with the `deployment` setting if you make a change and don't check in the lockfile" do
       gemfile <<-G
         source "https://gem.repo1"
@@ -317,7 +320,7 @@ RSpec.describe "install in deployment or frozen mode" do
           bar
 
         BUNDLED WITH
-           #{Bundler::VERSION}
+          #{Bundler::VERSION}
       L
 
       bundle :install, env: { "BUNDLE_FROZEN" => "true" }, raise_on_error: false, artifice: "compact_index"
@@ -540,14 +543,13 @@ RSpec.describe "install in deployment or frozen mode" do
       bundle :install
       expect(the_bundle).to include_gems "foo 1.0"
 
-      bundle "config set cache_all true"
       bundle :cache
       expect(bundled_app("vendor/cache/foo")).to be_directory
 
       bundle "install --local"
       expect(out).to include("Updating files in vendor/cache")
 
-      pristine_system_gems :bundler
+      pristine_system_gems
       bundle "config set --local deployment true"
       bundle "install --verbose"
       expect(out).not_to include("can't be updated because frozen mode is set")

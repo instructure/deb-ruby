@@ -111,6 +111,20 @@ class TestMethod < Test::Unit::TestCase
     end
   end
 
+  def test_unbound_method_equality_with_extended_module
+    m = Module.new { def hello; "hello"; end }
+    base = Class.new { extend m }
+    sub = Class.new(base)
+
+    from_module = m.instance_method(:hello)
+    from_base   = base.method(:hello).unbind
+    from_sub    = sub.method(:hello).unbind
+
+    assert_equal(from_module, from_base)
+    assert_equal(from_module, from_sub)
+    assert_equal(from_base, from_sub)
+  end
+
   def test_callee
     assert_equal(:test_callee, __method__)
     assert_equal(:m, Class.new {def m; __method__; end}.new.m)
@@ -284,8 +298,10 @@ class TestMethod < Test::Unit::TestCase
     assert_raise(TypeError) { m.bind(Object.new) }
 
     cx = EnvUtil.labeled_class("X\u{1f431}")
-    assert_raise_with_message(TypeError, /X\u{1f431}/) do
-      o.method(cx)
+    EnvUtil.with_default_internal(Encoding::UTF_8) do
+      assert_raise_with_message(TypeError, /X\u{1f431}/) do
+        o.method(cx)
+      end
     end
   end
 
@@ -315,9 +331,12 @@ class TestMethod < Test::Unit::TestCase
     assert_raise(TypeError) do
       Class.new.class_eval { define_method(:bar, o.method(:bar)) }
     end
+
     cx = EnvUtil.labeled_class("X\u{1f431}")
-    assert_raise_with_message(TypeError, /X\u{1F431}/) do
-      Class.new {define_method(cx) {}}
+    EnvUtil.with_default_internal(Encoding::UTF_8) do
+      assert_raise_with_message(TypeError, /X\u{1F431}/) do
+        Class.new {define_method(cx) {}}
+      end
     end
   end
 
@@ -1612,7 +1631,7 @@ class TestMethod < Test::Unit::TestCase
         begin
           foo(1)
         rescue ArgumentError => e
-          assert_equal "main.rb:#{$line_method}:in 'foo'", e.backtrace.first
+          assert_equal "main.rb:#{$line_method}:in 'Object#foo'", e.backtrace.first
         end
       EOS
     END_OF_BODY

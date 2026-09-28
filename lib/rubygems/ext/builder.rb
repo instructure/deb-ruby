@@ -11,6 +11,9 @@ require_relative "../user_interaction"
 class Gem::Ext::Builder
   include Gem::UserInteraction
 
+  class NoMakefileError < Gem::InstallError
+  end
+
   attr_accessor :build_args # :nodoc:
 
   def self.class_name
@@ -19,19 +22,31 @@ class Gem::Ext::Builder
   end
 
   def self.make(dest_path, results, make_dir = Dir.pwd, sitedir = nil, targets = ["clean", "", "install"],
-    target_rbconfig: Gem.target_rbconfig)
+    target_rbconfig: Gem.target_rbconfig, n_jobs: nil)
     unless File.exist? File.join(make_dir, "Makefile")
-      raise Gem::InstallError, "Makefile not found"
+      # No makefile exists, nothing to do.
+      raise NoMakefileError, "No Makefile found in #{make_dir}"
     end
 
     # try to find make program from Ruby configure arguments first
     target_rbconfig["configure_args"] =~ /with-make-prog\=(\w+)/
     make_program_name = ENV["MAKE"] || ENV["make"] || $1
     make_program_name ||= RUBY_PLATFORM.include?("mswin") ? "nmake" : "make"
-    make_program = shellsplit(make_program_name)
+    make_program = shellsplit_command(make_program_name)
 
+    is_nmake = /\bnmake/i.match?(make_program_name)
     # The installation of the bundled gems is failed when DESTDIR is empty in mswin platform.
-    destdir = /\bnmake/i !~ make_program_name || ENV["DESTDIR"] && ENV["DESTDIR"] != "" ? format("DESTDIR=%s", ENV["DESTDIR"]) : ""
+    destdir = !is_nmake || ENV["DESTDIR"] && ENV["DESTDIR"] != "" ? format("DESTDIR=%s", ENV["DESTDIR"]) : ""
+
+    # nmake doesn't support parallel build
+    unless is_nmake
+      have_make_arguments = make_program.size > 1
+      n_jobs ||= 0
+
+      if !have_make_arguments && n_jobs > 1 && !ENV["MAKEFLAGS"]&.match(/-j\d*(\s|\Z)/)
+        make_program << "-j#{n_jobs}"
+      end
+    end
 
     env = [destdir]
 
@@ -86,9 +101,16 @@ class Gem::Ext::Builder
 
       require "open3"
       # Set $SOURCE_DATE_EPOCH for the subprocess.
-      build_env = { "SOURCE_DATE_EPOCH" => Gem.source_date_epoch_string }.merge(env)
+      # Under Ruby::Box mkmf makes RbConfig.expand recurse until SystemStackError.
+      # Drop $RUBY_BOX last so no caller can restore it.
+      build_env = { "SOURCE_DATE_EPOCH" => Gem.source_date_epoch_string }.merge(env).merge("RUBY_BOX" => nil)
+      # A single-element command would be parsed as a shell command line,
+      # splitting an unquoted command path containing spaces. Use the
+      # [cmdname, argv0] form to keep exec semantics.
+      command = [[command.first, command.first]] if command.size == 1
       output, status = begin
-                         Open3.popen2e(build_env, *command, chdir: dir) do |_stdin, stdouterr, wait_thread|
+                         Open3.popen2e(build_env, *command, chdir: dir) do |stdin, stdouterr, wait_thread|
+                           stdin.close
                            output = String.new
                            while line = stdouterr.gets
                              output << line
@@ -132,6 +154,21 @@ class Gem::Ext::Builder
     Shellwords.split(command)
   end
 
+  ##
+  # Splits a command string such as ENV["MAKE"] into an argument list.
+  #
+  # On Windows, a value that names an existing file, such as
+  # <tt>C:\path\nmake.exe</tt>, is taken as a single word because POSIX
+  # shell splitting would consume the backslashes as escape characters.
+  # Any other value is split like a POSIX shell command line, where a
+  # path containing spaces must be quoted.
+
+  def self.shellsplit_command(command)
+    return [command] if Gem.win_platform? && File.file?(command)
+
+    shellsplit(command)
+  end
+
   def self.shelljoin(command)
     require "shellwords"
 
@@ -143,13 +180,12 @@ class Gem::Ext::Builder
   # have build arguments, saved, set +build_args+ which is an ARGV-style
   # array.
 
-  def initialize(spec, build_args = spec.build_args, target_rbconfig = Gem.target_rbconfig)
+  def initialize(spec, build_args = spec.build_args, target_rbconfig = Gem.target_rbconfig, build_jobs = nil)
     @spec       = spec
     @build_args = build_args
     @gem_dir    = spec.full_gem_path
     @target_rbconfig = target_rbconfig
-
-    @ran_rake = false
+    @build_jobs = build_jobs
   end
 
   ##
@@ -162,10 +198,9 @@ class Gem::Ext::Builder
     when /configure/ then
       Gem::Ext::ConfigureBuilder
     when /rakefile/i, /mkrf_conf/i then
-      @ran_rake = true
       Gem::Ext::RakeBuilder
     when /CMakeLists.txt/ then
-      Gem::Ext::CmakeBuilder
+      Gem::Ext::CmakeBuilder.new
     when /Cargo.toml/ then
       Gem::Ext::CargoBuilder.new
     else
@@ -204,7 +239,7 @@ EOF
       FileUtils.mkdir_p dest_path
 
       results = builder.build(extension, dest_path,
-                              results, @build_args, lib_dir, extension_dir, @target_rbconfig)
+                              results, @build_args, lib_dir, extension_dir, @target_rbconfig, n_jobs: @build_jobs)
 
       verbose { results.join("\n") }
 
@@ -235,8 +270,6 @@ EOF
     FileUtils.rm_f @spec.gem_build_complete_path
 
     @spec.extensions.each do |extension|
-      break if @ran_rake
-
       build_extension extension, dest_path
     end
 

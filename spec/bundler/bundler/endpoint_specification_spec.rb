@@ -46,6 +46,74 @@ RSpec.describe Bundler::EndpointSpecification do
         )
       end
     end
+
+    context "when the metadata has created_at" do
+      let(:metadata) { { "created_at" => ["2026-05-12T10:00:00Z"] } }
+
+      it "parses created_at as a Time" do
+        expect(subject.created_at).to eq(Time.utc(2026, 5, 12, 10, 0, 0))
+      end
+    end
+
+    context "when the metadata has a string created_at (older rubygems shape)" do
+      let(:metadata) { { "created_at" => "2026-05-12T10:00:00Z" } }
+
+      it "still parses created_at" do
+        expect(subject.created_at).to eq(Time.utc(2026, 5, 12, 10, 0, 0))
+      end
+    end
+
+    context "when created_at is truncated (older rubygems splits on colons)" do
+      let(:metadata) { { "created_at" => "2026-05-12T10" } }
+
+      it "leaves created_at as nil instead of raising" do
+        expect(subject.created_at).to be_nil
+      end
+    end
+
+    context "when the metadata has an empty checksum value" do
+      let(:metadata) { { "checksum" => [] } }
+
+      it "leaves checksum as nil without raising" do
+        expect(subject.checksum).to be_nil
+      end
+    end
+
+    context "when the metadata has a nil checksum value" do
+      let(:metadata) { { "checksum" => nil } }
+
+      it "leaves checksum as nil without raising" do
+        expect(subject.checksum).to be_nil
+      end
+    end
+
+    context "when the metadata has an invalid checksum value" do
+      let(:metadata) { { "checksum" => ["xyz"] } }
+      let(:spec_fetcher) { double(:spec_fetcher, uri: "https://rubygems.org") }
+
+      it "raises an error mentioning the invalid checksum" do
+        expect { subject }.to raise_error(
+          Bundler::GemspecError,
+          a_string_including("Invalid checksum for foo-1.0.0")
+        )
+      end
+    end
+
+    context "when the metadata has no created_at" do
+      let(:metadata) { { "checksum" => ["abc"] } }
+      let(:spec_fetcher) { double(:spec_fetcher, uri: "https://rubygems.org") }
+
+      it "leaves created_at as nil" do
+        allow(Bundler::Checksum).to receive(:from_api).and_return(nil)
+        expect(subject.created_at).to be_nil
+      end
+    end
+
+    context "when the metadata is nil" do
+      it "leaves created_at as nil" do
+        expect(subject.created_at).to be_nil
+      end
+    end
   end
 
   describe "#required_ruby_version" do

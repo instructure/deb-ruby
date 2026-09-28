@@ -10,19 +10,19 @@ module Bundler
         be sure to check out these resources:
 
         1. Check out our troubleshooting guide for quick fixes to common issues:
-        https://github.com/rubygems/rubygems/blob/master/doc/bundler/TROUBLESHOOTING.md
+        https://github.com/ruby/rubygems/blob/master/doc/bundler/TROUBLESHOOTING.md
 
         2. Instructions for common Bundler uses can be found on the documentation
-        site: https://bundler.io/
+        site: https://guides.rubygems.org/
 
         3. Information about each Bundler command can be found in the Bundler
-        man pages: https://bundler.io/man/bundle.1.html
+        man pages: https://guides.rubygems.org/command-reference/bundle/
 
         Hopefully the troubleshooting steps above resolved your problem!  If things
         still aren't working the way you expect them to, please let us know so
         that we can diagnose and help fix the problem you're having, by filling
         in the new issue form located at
-        https://github.com/rubygems/rubygems/issues/new?labels=Bundler&template=bundler-related-issue.md,
+        https://github.com/ruby/rubygems/issues/new?labels=Bundler&template=bundler-related-issue.md,
         and copy and pasting the information below.
 
       EOS

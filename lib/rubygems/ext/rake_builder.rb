@@ -7,20 +7,22 @@
 #++
 
 class Gem::Ext::RakeBuilder < Gem::Ext::Builder
-  def self.build(extension, dest_path, results, args=[], lib_dir=nil, extension_dir=Dir.pwd,
-    target_rbconfig=Gem.target_rbconfig)
+  def self.build(extension, dest_path, results, args = [], lib_dir = nil, extension_dir = Dir.pwd,
+    target_rbconfig = Gem.target_rbconfig, n_jobs: nil)
     if target_rbconfig.path
       warn "--target-rbconfig is not yet supported for Rake extensions. Ignoring"
     end
 
     if /mkrf_conf/i.match?(File.basename(extension))
-      run([Gem.ruby, File.basename(extension), *args], results, class_name, extension_dir)
+      # Gem.ruby is quoted if it contains whitespace, so split it into argv
+      # elements to keep the quotes out of the spawned command.
+      run([*shellsplit(Gem.ruby), File.basename(extension), *args], results, class_name, extension_dir)
     end
 
     rake = ENV["rake"]
 
     if rake
-      rake = shellsplit(rake)
+      rake = shellsplit_command(rake)
     else
       begin
         rake = ruby << "-rrubygems" << Gem.bin_path("rake", "rake")

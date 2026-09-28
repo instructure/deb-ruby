@@ -2,12 +2,8 @@
 
 RSpec.describe "bundle install with git sources" do
   describe "when floating on main" do
-    before :each do
-      build_git "foo" do |s|
-        s.executables = "foobar"
-      end
-
-      install_gemfile <<-G
+    let(:base_gemfile) do
+      <<-G
         source "https://gem.repo1"
         git "#{lib_path("foo-1.0")}" do
           gem 'foo'
@@ -15,7 +11,16 @@ RSpec.describe "bundle install with git sources" do
       G
     end
 
+    let(:install_base_gemfile) do
+      build_git "foo" do |s|
+        s.executables = "foobar"
+      end
+
+      install_gemfile base_gemfile
+    end
+
     it "fetches gems" do
+      install_base_gemfile
       expect(the_bundle).to include_gems("foo 1.0")
 
       run <<-RUBY
@@ -26,18 +31,66 @@ RSpec.describe "bundle install with git sources" do
       expect(out).to eq("WIN")
     end
 
-    it "caches the git repo", bundler: "< 3" do
-      expect(Dir["#{default_bundle_path}/cache/bundler/git/foo-1.0-*"]).to have_attributes size: 1
+    it "points the installed copy's origin at the real remote, not the local cache" do
+      install_base_gemfile
+
+      installed = Pathname.glob(default_bundle_path("bundler/gems/foo-1.0-*")).first
+      origin = git("config --get remote.origin.url", installed).strip
+      expect(origin).to eq(lib_path("foo-1.0").to_s)
+    end
+
+    it "does not (yet?) enforce CHECKSUMS" do
+      build_git "foo"
+      revision = revision_for(lib_path("foo-1.0"))
+
+      bundle "config set lockfile_checksums true"
+      gemfile base_gemfile
+
+      lockfile <<~L
+        GIT
+          remote: #{lib_path("foo-1.0")}
+          revision: #{revision}
+          specs:
+            foo (1.0)
+
+        GEM
+          remote: https://gem.repo1/
+          specs:
+
+        PLATFORMS
+          #{lockfile_platforms}
+
+        DEPENDENCIES
+          foo!
+
+        CHECKSUMS
+          foo (1.0)
+
+        BUNDLED WITH
+          #{Bundler::VERSION}
+      L
+
+      bundle "config set frozen true"
+
+      bundle "install"
+      expect(the_bundle).to include_gems("foo 1.0")
+    end
+
+    it "caches the git repo" do
+      install_base_gemfile
+      expect(Dir["#{default_cache_path}/git/foo-1.0-*"]).to have_attributes size: 1
     end
 
     it "does not write to cache on bundler/setup" do
+      install_base_gemfile
       FileUtils.rm_r(default_cache_path)
       ruby "require 'bundler/setup'"
       expect(default_cache_path).not_to exist
     end
 
     it "caches the git repo globally and properly uses the cached repo on the next invocation" do
-      pristine_system_gems :bundler
+      install_base_gemfile
+      pristine_system_gems
       bundle "config set global_gem_cache true"
       bundle :install
       expect(Dir["#{home}/.bundle/cache/git/foo-1.0-*"]).to have_attributes size: 1
@@ -48,6 +101,7 @@ RSpec.describe "bundle install with git sources" do
     end
 
     it "caches the evaluated gemspec" do
+      install_base_gemfile
       git = update_git "foo" do |s|
         s.executables = ["foobar"] # we added this the first time, so keep it now
         s.files = ["bin/foobar"] # updating git nukes the files list
@@ -65,7 +119,31 @@ RSpec.describe "bundle install with git sources" do
       expect(file_code).to eq(ruby_code)
     end
 
+    it "caches the evaluated gemspec when the bundle path contains glob metacharacters" do
+      bundle_config "path vendor/dir[1]"
+      install_base_gemfile
+      git = update_git "foo" do |s|
+        s.executables = ["foobar"] # we added this the first time, so keep it now
+        s.files = ["bin/foobar"] # updating git nukes the files list
+        foospec = s.to_ruby.gsub(/s\.files.*/, 's.files = `git ls-files -z`.split("\x0")')
+        s.write "foo.gemspec", foospec
+      end
+
+      bundle "update foo"
+
+      sha = git.ref_for("main", 11)
+      spec_file = scoped_gem_path(bundled_app("vendor/dir[1]")).join("bundler/gems/foo-1.0-#{sha}/foo.gemspec")
+      expect(spec_file).to exist
+      # Serialize with the RubyGems that wrote the file, since `#to_ruby`
+      # output differs across RubyGems versions
+      ruby "print Gem::Specification.load(#{spec_file.to_s.dump}).to_ruby"
+      ruby_code = out
+      file_code = File.read(spec_file)
+      expect(file_code.strip).to eq(ruby_code)
+    end
+
     it "does not update the git source implicitly" do
+      install_base_gemfile
       update_git "foo"
 
       install_gemfile bundled_app2("Gemfile"), <<-G, dir: bundled_app2
@@ -84,6 +162,7 @@ RSpec.describe "bundle install with git sources" do
     end
 
     it "sets up git gem executables on the path" do
+      install_base_gemfile
       bundle "exec foobar"
       expect(out).to eq("1.0")
     end
@@ -136,7 +215,7 @@ RSpec.describe "bundle install with git sources" do
 
     it "still works after moving the application directory" do
       bundle "config set --local path vendor/bundle"
-      bundle "install"
+      install_base_gemfile
 
       FileUtils.mv bundled_app, tmp("bundled_app.bck")
 
@@ -145,7 +224,7 @@ RSpec.describe "bundle install with git sources" do
 
     it "can still install after moving the application directory" do
       bundle "config set --local path vendor/bundle"
-      bundle "install"
+      install_base_gemfile
 
       FileUtils.mv bundled_app, tmp("bundled_app.bck")
 
@@ -430,7 +509,7 @@ RSpec.describe "bundle install with git sources" do
         update_git("foo", path: repo, tag: tag)
 
         install_gemfile <<-G
-         source "https://gem.repo1"
+          source "https://gem.repo1"
           git "#{repo}", :tag => #{tag.dump} do
             gem "foo"
           end
@@ -1030,7 +1109,7 @@ RSpec.describe "bundle install with git sources" do
     expect(out).to eq("WIN")
   end
 
-  it "does not to a remote fetch if the revision is cached locally" do
+  it "does not do a remote fetch if the revision is cached locally" do
     build_git "foo"
 
     install_gemfile <<-G
@@ -1151,6 +1230,30 @@ RSpec.describe "bundle install with git sources" do
 
       expect(the_bundle).to include_gem "rails 7.1.4", "activesupport 7.1.4"
     end
+
+    it "doesn't explode when adding an explicit ref to a git gem with dependencies" do
+      lib_root = lib_path("rails")
+
+      build_lib "activesupport", "7.1.4", path: lib_root.join("activesupport")
+      build_git "rails", "7.1.4", path: lib_root do |s|
+        s.add_dependency "activesupport", "= 7.1.4"
+      end
+
+      old_revision = revision_for(lib_root)
+      update_git "rails", "7.1.4", path: lib_root
+
+      install_gemfile <<-G
+        source "https://gem.repo1"
+        gem "rails", "7.1.4", :git => "#{lib_root}"
+      G
+
+      install_gemfile <<-G
+        source "https://gem.repo1"
+        gem "rails", :git => "#{lib_root}", :ref => "#{old_revision}"
+      G
+
+      expect(the_bundle).to include_gem "rails 7.1.4", "activesupport 7.1.4"
+    end
   end
 
   describe "bundle install after the remote has been updated" do
@@ -1217,7 +1320,7 @@ RSpec.describe "bundle install with git sources" do
         gem "valim", "= 1.0", :git => "#{lib_path("valim")}"
       G
 
-      pristine_system_gems :bundler
+      pristine_system_gems
 
       bundle "config set --local deployment true"
       bundle :install
@@ -1332,7 +1435,7 @@ RSpec.describe "bundle install with git sources" do
         File.open(git_reader.path.join("ext/foo.c"), "w") do |file|
           file.write <<-C
             #include "ruby.h"
-            VALUE foo() { return INT2FIX(#{i}); }
+            VALUE foo(VALUE self) { return INT2FIX(#{i}); }
             void Init_foo() { rb_define_global_function("foo", &foo, 0); }
           C
         end
@@ -1566,7 +1669,7 @@ In Gemfile:
           rake!
 
         BUNDLED WITH
-           #{Bundler::VERSION}
+          #{Bundler::VERSION}
       L
 
       with_path_as("") do
@@ -1604,7 +1707,7 @@ In Gemfile:
       G
       bundle "config set --global path vendor/bundle"
       bundle :install
-      pristine_system_gems :bundler
+      pristine_system_gems
 
       bundle "install", env: { "PATH" => "" }
       expect(out).to_not include("You need to install git to be able to use gems from git repositories.")
@@ -1649,7 +1752,7 @@ In Gemfile:
           end
         G
 
-        expect(last_command.stdboth).to_not include("password1")
+        expect(stdboth).to_not include("password1")
         expect(out).to include("Fetching https://user1@github.com/company/private-repo")
       end
     end
@@ -1665,7 +1768,7 @@ In Gemfile:
           end
         G
 
-        expect(last_command.stdboth).to_not include("oauth_token")
+        expect(stdboth).to_not include("oauth_token")
         expect(out).to include("Fetching https://x-oauth-basic@github.com/company/private-repo")
       end
     end

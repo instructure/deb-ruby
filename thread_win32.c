@@ -132,18 +132,22 @@ thread_sched_to_running(struct rb_thread_sched *sched, rb_thread_t *th)
     if (GVL_DEBUG) fprintf(stderr, "gvl acquire (%p): acquire\n", th);
 }
 
-#define thread_sched_to_dead thread_sched_to_waiting
-
 static void
-thread_sched_to_waiting(struct rb_thread_sched *sched, rb_thread_t *th)
+thread_sched_to_waiting(struct rb_thread_sched *sched, rb_thread_t *th, bool yield_immediately)
 {
     ReleaseMutex(sched->lock);
 }
 
 static void
+thread_sched_to_dead(struct rb_thread_sched *sched, rb_thread_t *th)
+{
+    thread_sched_to_waiting(sched, th, true);
+}
+
+static void
 thread_sched_yield(struct rb_thread_sched *sched, rb_thread_t *th)
 {
-    thread_sched_to_waiting(sched, th);
+    thread_sched_to_waiting(sched, th, true);
     native_thread_yield();
     thread_sched_to_running(sched, th);
 }
@@ -585,36 +589,34 @@ rb_native_cond_destroy(rb_nativethread_cond_t *cond)
 }
 
 
-#define CHECK_ERR(expr) \
-    {if (!(expr)) {rb_bug("err: %lu - %s", GetLastError(), #expr);}}
-
-COMPILER_WARNING_PUSH
-#if __has_warning("-Wmaybe-uninitialized")
-COMPILER_WARNING_IGNORED(-Wmaybe-uninitialized)
+#if !defined(_WIN32_WINNT_WIN8) || _WIN32_WINNT < 0x602
+/* declared in processthreadsapi.h only when _WIN32_WINNT >= 0x0602,
+ * but exported from kernel32.dll since Windows 8 */
+WINBASEAPI VOID WINAPI GetCurrentThreadStackLimits(PULONG_PTR, PULONG_PTR);
 #endif
-static inline SIZE_T
-query_memory_basic_info(PMEMORY_BASIC_INFORMATION mi, void *local_in_parent_frame)
-{
-    return VirtualQuery(asan_get_real_stack_addr(local_in_parent_frame), mi, sizeof(*mi));
-}
-COMPILER_WARNING_POP
 
 static void
 native_thread_init_stack(rb_thread_t *th, void *local_in_parent_frame)
 {
-    MEMORY_BASIC_INFORMATION mi;
-    char *base, *end;
-    DWORD size, space;
+    ULONG_PTR low, high;
+    SIZE_T size, space;
 
-    CHECK_ERR(query_memory_basic_info(&mi, local_in_parent_frame));
-    base = mi.AllocationBase;
-    end = mi.BaseAddress;
-    end += mi.RegionSize;
-    size = end - base;
+    /* VirtualQuery against the current stack pointer may return a region
+     * that does not span the whole stack when the interpreter is
+     * initialized deep in the stack, which makes stack_check() misfire.
+     * [Bug #11438] */
+    GetCurrentThreadStackLimits(&low, &high);
+    size = high - low;
     space = size / 5;
     if (space > 1024*1024) space = 1024*1024;
-    th->ec->machine.stack_start = (VALUE *)end - 1;
+    th->ec->machine.stack_start = (VALUE *)high - 1;
     th->ec->machine.stack_maxsize = size - space;
+}
+
+static void
+native_thread_destroy_atfork(struct rb_native_thread *nt)
+{
+    /* no-op */
 }
 
 #ifndef InterlockedExchangePointer
@@ -798,14 +800,14 @@ rb_thread_create_timer_thread(void)
 static int
 native_stop_timer_thread(void)
 {
-    int stopped = --system_working <= 0;
-    if (stopped) {
-        SetEvent(timer_thread.lock);
-        native_thread_join(timer_thread.id);
-        CloseHandle(timer_thread.lock);
-        timer_thread.lock = 0;
-    }
-    return stopped;
+    RUBY_ATOMIC_SET(system_working, 0);
+
+    SetEvent(timer_thread.lock);
+    native_thread_join(timer_thread.id);
+    CloseHandle(timer_thread.lock);
+    timer_thread.lock = 0;
+
+    return 1;
 }
 
 static void
@@ -875,7 +877,8 @@ native_thread_native_thread_id(rb_thread_t *th)
 #define USE_NATIVE_THREAD_NATIVE_THREAD_ID 1
 
 void
-rb_add_running_thread(rb_thread_t *th){
+rb_add_running_thread(rb_thread_t *th)
+{
     // do nothing
 }
 
@@ -921,6 +924,7 @@ vm_barrier_finish_p(rb_vm_t *vm)
                    vm->ractor.blocking_cnt);
 
     VM_ASSERT(vm->ractor.blocking_cnt <= vm->ractor.cnt);
+
     return vm->ractor.blocking_cnt == vm->ractor.cnt;
 }
 
@@ -946,7 +950,7 @@ rb_ractor_sched_barrier_start(rb_vm_t *vm, rb_ractor_t *cr)
 
     // wait
     while (!vm_barrier_finish_p(vm)) {
-        rb_vm_cond_wait(vm, &vm->ractor.sync.barrier_cond);
+        rb_vm_cond_wait(vm, &vm->ractor.sync.barrier_complete_cond);
     }
 
     RUBY_DEBUG_LOG("cnt:%u barrier success", vm->ractor.sync.barrier_cnt);
@@ -956,9 +960,7 @@ rb_ractor_sched_barrier_start(rb_vm_t *vm, rb_ractor_t *cr)
     vm->ractor.sync.barrier_waiting = false;
     vm->ractor.sync.barrier_cnt++;
 
-    ccan_list_for_each(&vm->ractor.set, r, vmlr_node) {
-        rb_native_cond_signal(&r->barrier_wait_cond);
-    }
+    rb_native_cond_broadcast(&vm->ractor.sync.barrier_release_cond);
 }
 
 void
@@ -982,7 +984,7 @@ rb_ractor_sched_barrier_join(rb_vm_t *vm, rb_ractor_t *cr)
 
     if (vm_barrier_finish_p(vm)) {
         RUBY_DEBUG_LOG("wakeup barrier owner");
-        rb_native_cond_signal(&vm->ractor.sync.barrier_cond);
+        rb_native_cond_signal(&vm->ractor.sync.barrier_complete_cond);
     }
     else {
         RUBY_DEBUG_LOG("wait for barrier finish");
@@ -990,10 +992,7 @@ rb_ractor_sched_barrier_join(rb_vm_t *vm, rb_ractor_t *cr)
 
     // wait for restart
     while (barrier_cnt == vm->ractor.sync.barrier_cnt) {
-        vm->ractor.sync.lock_owner = NULL;
-        rb_native_cond_wait(&cr->barrier_wait_cond, &vm->ractor.sync.lock);
-        VM_ASSERT(vm->ractor.sync.lock_owner == NULL);
-        vm->ractor.sync.lock_owner = cr;
+        rb_vm_cond_wait(vm, &vm->ractor.sync.barrier_release_cond);
     }
 
     RUBY_DEBUG_LOG("barrier is released. Acquire vm_lock");
@@ -1015,6 +1014,12 @@ void *
 rb_thread_prevent_fork(void *(*func)(void *), void *data)
 {
     return func(data);
+}
+
+void
+rb_thread_malloc_stack_set(rb_thread_t *th, void *stack)
+{
+    // no-op
 }
 
 #endif /* THREAD_SYSTEM_DEPENDENT_IMPLEMENTATION */

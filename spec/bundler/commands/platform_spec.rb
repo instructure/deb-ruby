@@ -227,7 +227,7 @@ G
            ruby 1.0.0p127
 
         BUNDLED WITH
-           #{Bundler::VERSION}
+          #{Bundler::VERSION}
       L
 
       bundle "platform --ruby"
@@ -250,7 +250,7 @@ G
         DEPENDENCIES
 
         BUNDLED WITH
-           #{Bundler::VERSION}
+          #{Bundler::VERSION}
       L
 
       bundle "platform --ruby"
@@ -646,7 +646,7 @@ G
       expect(out).to eq(default_bundle_path("gems", "rails-2.3.2").to_s)
     end
 
-    it "fails if ruby version doesn't match", bundler: "< 3" do
+    it "fails if ruby version doesn't match" do
       gemfile <<-G
         source "https://gem.repo1"
         gem "rails"
@@ -658,7 +658,7 @@ G
       should_be_ruby_version_incorrect
     end
 
-    it "fails if engine doesn't match", bundler: "< 3" do
+    it "fails if engine doesn't match" do
       gemfile <<-G
         source "https://gem.repo1"
         gem "rails"
@@ -670,7 +670,7 @@ G
       should_be_engine_incorrect
     end
 
-    it "fails if engine version doesn't match", bundler: "< 3", jruby_only: true do
+    it "fails if engine version doesn't match", jruby_only: true do
       gemfile <<-G
         source "https://gem.repo1"
         gem "rails"
@@ -682,7 +682,7 @@ G
       should_be_engine_version_incorrect
     end
 
-    it "fails when patchlevel doesn't match", bundler: "< 3" do
+    it "fails when patchlevel doesn't match" do
       gemfile <<-G
         source "https://gem.repo1"
         gem "myrack"
@@ -1143,7 +1143,7 @@ G
       bundle "outdated", raise_on_error: false
 
       expected_output = <<~TABLE.gsub("x", "\\\h").tr(".", "\.").strip
-        Gem            Current      Latest       Requested  Groups
+        Gem            Current      Latest       Requested  Groups   Release Date
         activesupport  2.3.5        3.0          = 2.3.5    default
         foo            1.0 xxxxxxx  1.0 xxxxxxx  >= 0       default
       TABLE
@@ -1169,7 +1169,7 @@ G
       bundle "outdated", raise_on_error: false
 
       expected_output = <<~TABLE.gsub("x", "\\\h").tr(".", "\.").strip
-        Gem            Current      Latest       Requested  Groups
+        Gem            Current      Latest       Requested  Groups   Release Date
         activesupport  2.3.5        3.0          = 2.3.5    default
         foo            1.0 xxxxxxx  1.0 xxxxxxx  >= 0       default
       TABLE

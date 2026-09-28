@@ -76,6 +76,9 @@ typedef enum pm_token_type {
     /** ) */
     PM_TOKEN_PARENTHESIS_RIGHT,
 
+    /** | */
+    PM_TOKEN_PIPE,
+
     /** ; */
     PM_TOKEN_SEMICOLON,
 
@@ -423,9 +426,6 @@ typedef enum pm_token_type {
 
     /** %W */
     PM_TOKEN_PERCENT_UPPER_W,
-
-    /** | */
-    PM_TOKEN_PIPE,
 
     /** |= */
     PM_TOKEN_PIPE_EQUAL,
@@ -1051,22 +1051,6 @@ static const pm_node_flags_t PM_NODE_FLAG_NEWLINE = 0x1;
 static const pm_node_flags_t PM_NODE_FLAG_STATIC_LITERAL = 0x2;
 
 /**
- * Cast the type to an enum to allow the compiler to provide exhaustiveness
- * checking.
- */
-#define PM_NODE_TYPE(node) ((enum pm_node_type) (node)->type)
-
-/**
- * Return true if the type of the given node matches the given type.
- */
-#define PM_NODE_TYPE_P(node, type) (PM_NODE_TYPE(node) == (type))
-
-/**
- * Return true if the given flag is set on the given node.
- */
-#define PM_NODE_FLAG_P(node, flag) ((((pm_node_t *)(node))->flags & (flag)) != 0)
-
-/**
  * This is the base structure that represents a node in the syntax tree. It is
  * embedded into every node type.
  */
@@ -1095,6 +1079,32 @@ typedef struct pm_node {
      */
     pm_location_t location;
 } pm_node_t;
+
+/**
+ * Cast the given node to the base pm_node_t type.
+ */
+#define PM_NODE_UPCAST(node_) ((pm_node_t *) (node_))
+
+/**
+ * Cast the type to an enum to allow the compiler to provide exhaustiveness
+ * checking.
+ */
+#define PM_NODE_TYPE(node_) ((enum pm_node_type) (node_)->type)
+
+/**
+ * Return true if the type of the given node matches the given type.
+ */
+#define PM_NODE_TYPE_P(node_, type_) (PM_NODE_TYPE(node_) == (type_))
+
+/**
+ * Return the flags associated with the given node.
+ */
+#define PM_NODE_FLAGS(node_) (PM_NODE_UPCAST(node_)->flags)
+
+/**
+ * Return true if the given flag is set on the given node.
+ */
+#define PM_NODE_FLAG_P(node_, flag_) ((PM_NODE_FLAGS(node_) & (flag_)) != 0)
 
 /**
  * AliasGlobalVariableNode
@@ -2213,6 +2223,19 @@ typedef struct pm_call_node {
      *            ^
      */
     pm_location_t closing_loc;
+
+    /**
+     * CallNode#equal_loc
+     *
+     * Represents the location of the equal sign, in the case that this is an attribute write.
+     *
+     *     foo.bar = value
+     *             ^
+     *
+     *     foo[bar] = value
+     *              ^
+     */
+    pm_location_t equal_loc;
 
     /**
      * CallNode#block
@@ -4084,10 +4107,15 @@ typedef struct pm_forwarding_parameter_node {
 /**
  * ForwardingSuperNode
  *
- * Represents the use of the `super` keyword without parentheses or arguments.
+ * Represents the use of the `super` keyword without parentheses or arguments, but which might have a block.
  *
  *     super
  *     ^^^^^
+ *
+ *     super { 123 }
+ *     ^^^^^^^^^^^^^
+ *
+ * If it has any other arguments, it would be a `SuperNode` instead.
  *
  * Type: ::PM_FORWARDING_SUPER_NODE
  *
@@ -4100,6 +4128,8 @@ typedef struct pm_forwarding_super_node {
 
     /**
      * ForwardingSuperNode#block
+     *
+     * All other arguments are forwarded as normal, except the original block is replaced with the new block.
      */
     struct pm_block_node *block;
 } pm_forwarding_super_node_t;
@@ -7539,6 +7569,8 @@ typedef struct pm_string_node {
  *     super foo, bar
  *     ^^^^^^^^^^^^^^
  *
+ * If no arguments are provided (except for a block), it would be a `ForwardingSuperNode` instead.
+ *
  * Type: ::PM_SUPER_NODE
  *
  * @extends pm_node_t
@@ -7560,6 +7592,8 @@ typedef struct pm_super_node {
 
     /**
      * SuperNode#arguments
+     *
+     * Can be only `nil` when there are empty parentheses, like `super()`.
      */
     struct pm_arguments_node *arguments;
 

@@ -880,21 +880,20 @@ class TestHash < Test::Unit::TestCase
     assert_equal(quote1, eval(quote1).inspect)
     assert_equal(quote2, eval(quote2).inspect)
     assert_equal(quote3, eval(quote3).inspect)
-    begin
-      verbose_bak, $VERBOSE = $VERBOSE, nil
-      enc = Encoding.default_external
-      Encoding.default_external = Encoding::ASCII
+
+    EnvUtil.with_default_external(Encoding::ASCII) do
       utf8_ascii_hash = '{"\\u3042": 1}'
       assert_equal(eval(utf8_ascii_hash).inspect, utf8_ascii_hash)
-      Encoding.default_external = Encoding::UTF_8
+    end
+
+    EnvUtil.with_default_external(Encoding::UTF_8) do
       utf8_hash = "{\u3042: 1}"
       assert_equal(eval(utf8_hash).inspect, utf8_hash)
-      Encoding.default_external = Encoding::Windows_31J
+    end
+
+    EnvUtil.with_default_external(Encoding::Windows_31J) do
       sjis_hash = "{\x87]: 1}".force_encoding('sjis')
       assert_equal(eval(sjis_hash).inspect, sjis_hash)
-    ensure
-      Encoding.default_external = enc
-      $VERBOSE = verbose_bak
     end
   end
 
@@ -2005,9 +2004,12 @@ class TestHashOnly < Test::Unit::TestCase
     ObjectSpace.count_objects
 
     h = {"abc" => 1}
-    before = ObjectSpace.count_objects[:T_STRING]
-    5.times{ h["abc"] }
-    assert_equal before, ObjectSpace.count_objects[:T_STRING]
+
+    EnvUtil.without_gc do
+      before = ObjectSpace.count_objects[:T_STRING]
+      5.times{ h["abc".freeze] }
+      assert_equal before, ObjectSpace.count_objects[:T_STRING]
+    end
   end
 
   def test_AREF_fstring_key_default_proc
@@ -2135,7 +2137,9 @@ class TestHashOnly < Test::Unit::TestCase
 
   def test_iterlevel_in_ivar_bug19589
     h = { a: nil }
-    hash_iter_recursion(h, 200)
+    # Recursion level should be over 127 to actually test iterlevel being set in an instance variable,
+    # but it should be under 131 not to overflow the stack under MN threads/ractors.
+    hash_iter_recursion(h, 130)
     assert true
   end
 
@@ -2426,5 +2430,34 @@ class TestHashOnly < Test::Unit::TestCase
       hash[klass.new(val)] = val
     end
     assert_equal values, hash.values, "[ruby-core:121239] [Bug #21170]"
+  end
+
+  def test_ar_find_entry_hint_eql_mutates_hash
+    # ar_find_entry_hint caches bound and hints, then calls #eql? which
+    # can mutate the hash. If #eql? triggers AR->ST conversion the loop
+    # would read st_table memory as ar_table pairs.
+    key_class = Class.new do
+      attr_reader :v
+      def initialize(v, h = nil)
+        @v = v
+        @h = h
+      end
+      def hash; 0; end
+      def eql?(other)
+        if @h
+          # Trigger AR->ST conversion
+          @h[42] = 42
+        end
+        other.is_a?(self.class) && @v == other.v
+      end
+    end
+
+    h = {}
+    8.times { |i| h[key_class.new(i)] = i }
+
+    # Not in the hash, so ar_find_entry_hint checks every entry.
+    lookup_key = key_class.new(-1, h)
+
+    assert_equal nil, h[lookup_key]
   end
 end

@@ -80,7 +80,7 @@ RSpec.describe Bundler::Definition do
           foo!
         #{checksums}
         BUNDLED WITH
-           #{Bundler::VERSION}
+          #{Bundler::VERSION}
       G
     end
 
@@ -137,7 +137,7 @@ RSpec.describe Bundler::Definition do
           foo!
         #{checksums}
         BUNDLED WITH
-           #{Bundler::VERSION}
+          #{Bundler::VERSION}
       G
 
       expect(lockfile).to eq(expected_lockfile)
@@ -175,7 +175,7 @@ RSpec.describe Bundler::Definition do
           only_java
         #{checksums}
         BUNDLED WITH
-           #{Bundler::VERSION}
+          #{Bundler::VERSION}
       G
     end
 
@@ -205,7 +205,7 @@ RSpec.describe Bundler::Definition do
           foo
         #{checksums}
         BUNDLED WITH
-           #{Bundler::VERSION}
+          #{Bundler::VERSION}
       G
     end
   end
@@ -289,6 +289,57 @@ RSpec.describe Bundler::Definition do
     end
   end
 
+  describe "#precompute_source_requirements_for_indirect_dependencies?" do
+    before do
+      allow(Bundler::SharedHelpers).to receive(:find_gemfile) { Pathname.new("Gemfile") }
+    end
+
+    let(:sources) { Bundler::SourceList.new }
+    subject { Bundler::Definition.new(nil, [], sources, []) }
+
+    before do
+      allow(sources).to receive(:non_global_rubygems_sources).and_return(non_global_rubygems_sources)
+    end
+
+    context "when all the scoped sources implement a dependency API" do
+      let(:non_global_rubygems_sources) do
+        [
+          double("non-global-source-0", "dependency_api_available?":true, to_s:"a"),
+          double("non-global-source-1", "dependency_api_available?":true, to_s:"b"),
+        ]
+      end
+
+      it "returns true without warning" do
+        expect(subject).not_to receive(:non_dependency_api_warning)
+
+        expect(subject.send(:precompute_source_requirements_for_indirect_dependencies?)).to be_truthy
+      end
+    end
+
+    context "when some scoped sources do not implement a dependency API" do
+      let(:non_global_rubygems_sources) do
+        [
+          double("non-global-source-0", "dependency_api_available?":true, to_s:"a"),
+          double("non-global-source-1", "dependency_api_available?":false, to_s:"b"),
+          double("non-global-source-2", "dependency_api_available?":false, to_s:"c"),
+        ]
+      end
+
+      it "returns false and warns about the non-API sources" do
+        expect(Bundler.ui).to receive(:warn).with(<<-W.strip)
+Your Gemfile contains scoped sources that don't implement a dependency API, namely:
+
+  * b
+  * c
+
+Using the above gem servers may result in installing unexpected gems. To resolve this warning, make sure you use gem servers that implement dependency APIs, such as gemstash or geminabox gem servers.
+        W
+
+        expect(subject.send(:precompute_source_requirements_for_indirect_dependencies?)).to be_falsy
+      end
+    end
+  end
+
   def mock_source_list
     Class.new do
       def all_sources
@@ -296,10 +347,6 @@ RSpec.describe Bundler::Definition do
       end
 
       def path_sources
-        []
-      end
-
-      def rubygems_remotes
         []
       end
 

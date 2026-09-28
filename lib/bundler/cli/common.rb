@@ -2,6 +2,12 @@
 
 module Bundler
   module CLI::Common
+    def self.validate_cooldown!(value)
+      return if value.nil?
+      return if value.is_a?(Integer) && value >= 0
+      raise InvalidOption, "Expected `--cooldown` to be a non-negative integer, got #{value.inspect}"
+    end
+
     def self.output_post_install_messages(messages)
       return if Bundler.settings["ignore_messages"]
       messages.to_a.each do |name, msg|
@@ -12,6 +18,17 @@ module Bundler
     def self.print_post_install_message(name, msg)
       Bundler.ui.confirm "Post-install message from #{name}:"
       Bundler.ui.info msg
+    end
+
+    def self.output_cooldown_skipped_summary(definition = Bundler.definition)
+      skipped = definition.cooldown_skipped
+      return if skipped.empty?
+
+      Bundler.ui.info "The following gem versions were skipped by the cooldown setting:"
+      skipped.each do |entry|
+        days = entry[:available_in_days]
+        Bundler.ui.info "  * #{entry[:name]} #{entry[:version]} (available in #{days} #{days == 1 ? "day" : "days"}), resolved #{entry[:resolved]} instead"
+      end
     end
 
     def self.output_fund_metadata_summary
@@ -94,11 +111,14 @@ module Bundler
     end
 
     def self.gem_not_found_message(missing_gem_name, alternatives)
-      require_relative "../similarity_detector"
       message = "Could not find gem '#{missing_gem_name}'."
       alternate_names = alternatives.map {|a| a.respond_to?(:name) ? a.name : a }
-      suggestions = SimilarityDetector.new(alternate_names).similar_word_list(missing_gem_name)
-      message += "\nDid you mean #{suggestions}?" if suggestions
+      if alternate_names.include?(missing_gem_name.downcase)
+        message += "\nDid you mean '#{missing_gem_name.downcase}'?"
+      elsif defined?(DidYouMean::SpellChecker)
+        suggestions = DidYouMean::SpellChecker.new(dictionary: alternate_names).correct(missing_gem_name)
+        message += "\nDid you mean #{word_list(suggestions)}?" unless suggestions.empty?
+      end
       message
     end
 
@@ -130,9 +150,23 @@ module Bundler
     def self.clean_after_install?
       clean = Bundler.settings[:clean]
       return clean unless clean.nil?
-      clean ||= Bundler.feature_flag.auto_clean_without_path? && Bundler.settings[:path].nil?
+      clean ||= Bundler.feature_flag.bundler_5_mode? && Bundler.settings[:path].nil?
       clean &&= !Bundler.use_system_gems?
       clean
+    end
+
+    def self.word_list(words)
+      if words.empty?
+        return ""
+      end
+
+      words = words.map {|word| "'#{word}'" }
+
+      if words.length == 1
+        return words[0]
+      end
+
+      [words[0..-2].join(", "), words[-1]].join(" or ")
     end
   end
 end

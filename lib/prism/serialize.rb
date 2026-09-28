@@ -21,11 +21,11 @@ module Prism
 
     # The minor version of prism that we are expecting to find in the serialized
     # strings.
-    MINOR_VERSION = 5
+    MINOR_VERSION = 8
 
     # The patch version of prism that we are expecting to find in the serialized
     # strings.
-    PATCH_VERSION = 2
+    PATCH_VERSION = 1
 
     # Deserialize the dumped output from a request to parse or parse_file.
     #
@@ -354,6 +354,8 @@ module Prism
         :argument_forwarding_unbound,
         :argument_no_forwarding_ampersand,
         :argument_no_forwarding_ellipses,
+        :argument_no_forwarding_ellipses_lambda,
+        :argument_no_forwarding_ellipses_block,
         :argument_no_forwarding_star,
         :argument_no_forwarding_star_star,
         :argument_splat_after_assoc_splat,
@@ -556,6 +558,7 @@ module Prism
         :parameter_wild_loose_comma,
         :pattern_array_multiple_rests,
         :pattern_capture_duplicate,
+        :pattern_capture_in_alternative,
         :pattern_expression_after_bracket,
         :pattern_expression_after_comma,
         :pattern_expression_after_hrocket,
@@ -617,6 +620,7 @@ module Prism
         :unexpected_index_keywords,
         :unexpected_label,
         :unexpected_multi_write,
+        :unexpected_parameter_default_value,
         :unexpected_range_operator,
         :unexpected_safe_navigation,
         :unexpected_token_close_context,
@@ -879,7 +883,7 @@ module Prism
           when 18 then
             CallAndWriteNode.new(source, node_id, location, load_varuint, load_optional_node(constant_pool, encoding, freeze), load_optional_location(freeze), load_optional_location(freeze), load_constant(constant_pool, encoding), load_constant(constant_pool, encoding), load_location(freeze), load_node(constant_pool, encoding, freeze))
           when 19 then
-            CallNode.new(source, node_id, location, load_varuint, load_optional_node(constant_pool, encoding, freeze), load_optional_location(freeze), load_constant(constant_pool, encoding), load_optional_location(freeze), load_optional_location(freeze), load_optional_node(constant_pool, encoding, freeze), load_optional_location(freeze), load_optional_node(constant_pool, encoding, freeze))
+            CallNode.new(source, node_id, location, load_varuint, load_optional_node(constant_pool, encoding, freeze), load_optional_location(freeze), load_constant(constant_pool, encoding), load_optional_location(freeze), load_optional_location(freeze), load_optional_node(constant_pool, encoding, freeze), load_optional_location(freeze), load_optional_location(freeze), load_optional_node(constant_pool, encoding, freeze))
           when 20 then
             CallOperatorWriteNode.new(source, node_id, location, load_varuint, load_optional_node(constant_pool, encoding, freeze), load_optional_location(freeze), load_optional_location(freeze), load_constant(constant_pool, encoding), load_constant(constant_pool, encoding), load_constant(constant_pool, encoding), load_location(freeze), load_node(constant_pool, encoding, freeze))
           when 21 then
@@ -1287,7 +1291,7 @@ module Prism
             -> (constant_pool, encoding, freeze) {
               node_id = load_varuint
               location = load_location(freeze)
-              value = CallNode.new(source, node_id, location, load_varuint, load_optional_node(constant_pool, encoding, freeze), load_optional_location(freeze), load_constant(constant_pool, encoding), load_optional_location(freeze), load_optional_location(freeze), load_optional_node(constant_pool, encoding, freeze), load_optional_location(freeze), load_optional_node(constant_pool, encoding, freeze))
+              value = CallNode.new(source, node_id, location, load_varuint, load_optional_node(constant_pool, encoding, freeze), load_optional_location(freeze), load_constant(constant_pool, encoding), load_optional_location(freeze), load_optional_location(freeze), load_optional_node(constant_pool, encoding, freeze), load_optional_location(freeze), load_optional_location(freeze), load_optional_node(constant_pool, encoding, freeze))
               value.freeze if freeze
               value
             },
@@ -2239,6 +2243,7 @@ module Prism
       :KEYWORD_WHEN,
       :NEWLINE,
       :PARENTHESIS_RIGHT,
+      :PIPE,
       :SEMICOLON,
       :AMPERSAND,
       :AMPERSAND_AMPERSAND,
@@ -2355,7 +2360,6 @@ module Prism
       :PERCENT_LOWER_X,
       :PERCENT_UPPER_I,
       :PERCENT_UPPER_W,
-      :PIPE,
       :PIPE_EQUAL,
       :PIPE_PIPE,
       :PIPE_PIPE_EQUAL,

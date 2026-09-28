@@ -30,12 +30,12 @@ extern int madvise(caddr_t, size_t, int);
 #include "internal/cont.h"
 #include "internal/thread.h"
 #include "internal/error.h"
+#include "internal/eval.h"
 #include "internal/gc.h"
 #include "internal/proc.h"
 #include "internal/sanitizers.h"
 #include "internal/warnings.h"
 #include "ruby/fiber/scheduler.h"
-#include "rjit.h"
 #include "yjit.h"
 #include "vm_core.h"
 #include "vm_sync.h"
@@ -473,6 +473,7 @@ fiber_pool_allocate_memory(size_t * count, size_t stride)
         void * base = VirtualAlloc(0, (*count)*stride, MEM_COMMIT, PAGE_READWRITE);
 
         if (!base) {
+            errno = rb_w32_map_errno(GetLastError());
             *count = (*count) >> 1;
         }
         else {
@@ -504,8 +505,13 @@ fiber_pool_allocate_memory(size_t * count, size_t stride)
 }
 
 // Given an existing fiber pool, expand it by the specified number of stacks.
+//
 // @param count the maximum number of stacks to allocate.
-// @return the allocated fiber pool.
+// @return the new allocation on success, or NULL on failure with errno set.
+// @raise NoMemoryError if the struct or memory allocation fails.
+//
+// Call from fiber_pool_stack_acquire_expand with VM lock held, or from
+// fiber_pool_initialize before the pool is shared across threads.
 // @sa fiber_pool_allocation_free
 static struct fiber_pool_allocation *
 fiber_pool_expand(struct fiber_pool * fiber_pool, size_t count)
@@ -515,15 +521,20 @@ fiber_pool_expand(struct fiber_pool * fiber_pool, size_t count)
     size_t size = fiber_pool->size;
     size_t stride = size + RB_PAGE_SIZE;
 
+    // Allocate metadata before mmap: ruby_xmalloc (RB_ALLOC) raises on failure and
+    // must not run after base is mapped, or the region would leak.
+    struct fiber_pool_allocation * allocation = RB_ALLOC(struct fiber_pool_allocation);
+
     // Allocate the memory required for the stacks:
     void * base = fiber_pool_allocate_memory(&count, stride);
 
     if (base == NULL) {
-        rb_raise(rb_eFiberError, "can't alloc machine stack to fiber (%"PRIuSIZE" x %"PRIuSIZE" bytes): %s", count, size, ERRNOMSG);
+        if (!errno) errno = ENOMEM;
+        ruby_xfree(allocation);
+        return NULL;
     }
 
     struct fiber_pool_vacancy * vacancies = fiber_pool->vacancies;
-    struct fiber_pool_allocation * allocation = RB_ALLOC(struct fiber_pool_allocation);
 
     // Initialize fiber pool allocation:
     allocation->base = base;
@@ -544,18 +555,27 @@ fiber_pool_expand(struct fiber_pool * fiber_pool, size_t count)
     for (size_t i = 0; i < count; i += 1) {
         void * base = (char*)allocation->base + (stride * i);
         void * page = (char*)base + STACK_DIR_UPPER(size, 0);
-
 #if defined(_WIN32)
         DWORD old_protect;
 
         if (!VirtualProtect(page, RB_PAGE_SIZE, PAGE_READWRITE | PAGE_GUARD, &old_protect)) {
+            int error = rb_w32_map_errno(GetLastError());
             VirtualFree(allocation->base, 0, MEM_RELEASE);
-            rb_raise(rb_eFiberError, "can't set a guard page: %s", ERRNOMSG);
+            ruby_xfree(allocation);
+            errno = error;
+            return NULL;
         }
+#elif defined(__wasi__)
+        // wasi-libc's mprotect emulation doesn't support PROT_NONE.
+        (void)page;
 #else
         if (mprotect(page, RB_PAGE_SIZE, PROT_NONE) < 0) {
+            int error = errno;
+            if (!error) error = ENOMEM;
             munmap(allocation->base, count*stride);
-            rb_raise(rb_eFiberError, "can't set a guard page: %s", ERRNOMSG);
+            ruby_xfree(allocation);
+            errno = error;
+            return NULL;
         }
 #endif
 
@@ -605,7 +625,9 @@ fiber_pool_initialize(struct fiber_pool * fiber_pool, size_t size, size_t count,
 
     fiber_pool->vm_stack_size = vm_stack_size;
 
-    fiber_pool_expand(fiber_pool, count);
+    if (RB_UNLIKELY(!fiber_pool_expand(fiber_pool, count))) {
+        rb_raise(rb_eFiberError, "can't allocate initial fiber stacks (%"PRIuSIZE" x %"PRIuSIZE" bytes): %s", count, fiber_pool->size, strerror(errno));
+    }
 }
 
 #ifdef FIBER_POOL_ALLOCATION_FREE
@@ -653,45 +675,98 @@ fiber_pool_allocation_free(struct fiber_pool_allocation * allocation)
 }
 #endif
 
+// Number of stacks to request when expanding the pool (clamped to min/max).
+static inline size_t
+fiber_pool_stack_expand_count(const struct fiber_pool *pool)
+{
+    const size_t maximum = FIBER_POOL_ALLOCATION_MAXIMUM_SIZE;
+    const size_t minimum = pool->initial_count;
+
+    size_t count = pool->count;
+    if (count > maximum) count = maximum;
+    if (count < minimum) count = minimum;
+
+    return count;
+}
+
+// When the vacancy list is empty, grow the pool (and run GC only if mmap fails). Caller holds the VM lock.
+// Returns NULL if expansion failed after GC + retry; errno is set. Otherwise returns a vacancy.
+static struct fiber_pool_vacancy *
+fiber_pool_stack_acquire_expand(struct fiber_pool *fiber_pool)
+{
+    size_t count = fiber_pool_stack_expand_count(fiber_pool);
+
+    if (DEBUG) fprintf(stderr, "fiber_pool_stack_acquire: expanding fiber pool by %"PRIuSIZE" stacks\n", count);
+
+    struct fiber_pool_vacancy *vacancy = NULL;
+
+    if (RB_LIKELY(fiber_pool_expand(fiber_pool, count))) {
+        return fiber_pool_vacancy_pop(fiber_pool);
+    }
+    else {
+        if (DEBUG) fprintf(stderr, "fiber_pool_stack_acquire: expand failed (%s), collecting garbage\n", strerror(errno));
+
+        rb_gc();
+
+        // After running GC, the vacancy list may have some stacks:
+        vacancy = fiber_pool_vacancy_pop(fiber_pool);
+        if (RB_LIKELY(vacancy)) {
+            return vacancy;
+        }
+
+        // Try to expand the fiber pool again:
+        if (RB_LIKELY(fiber_pool_expand(fiber_pool, count))) {
+            return fiber_pool_vacancy_pop(fiber_pool);
+        }
+        else {
+            // Okay, we really failed to acquire a stack. Give up and return NULL with errno set:
+            return NULL;
+        }
+    }
+}
+
 // Acquire a stack from the given fiber pool. If none are available, allocate more.
 static struct fiber_pool_stack
 fiber_pool_stack_acquire(struct fiber_pool * fiber_pool)
 {
-    struct fiber_pool_vacancy * vacancy = fiber_pool_vacancy_pop(fiber_pool);
+    struct fiber_pool_vacancy * vacancy;
 
-    if (DEBUG) fprintf(stderr, "fiber_pool_stack_acquire: %p used=%"PRIuSIZE"\n", (void*)fiber_pool->vacancies, fiber_pool->used);
-
-    if (!vacancy) {
-        const size_t maximum = FIBER_POOL_ALLOCATION_MAXIMUM_SIZE;
-        const size_t minimum = fiber_pool->initial_count;
-
-        size_t count = fiber_pool->count;
-        if (count > maximum) count = maximum;
-        if (count < minimum) count = minimum;
-
-        fiber_pool_expand(fiber_pool, count);
-
-        // The free list should now contain some stacks:
-        VM_ASSERT(fiber_pool->vacancies);
-
+    unsigned int lev;
+    RB_VM_LOCK_ENTER_LEV(&lev);
+    {
+        // Fast path: try to acquire a stack from the vacancy list:
         vacancy = fiber_pool_vacancy_pop(fiber_pool);
-    }
 
-    VM_ASSERT(vacancy);
-    VM_ASSERT(vacancy->stack.base);
+        if (DEBUG) fprintf(stderr, "fiber_pool_stack_acquire: %p used=%"PRIuSIZE"\n", (void*)fiber_pool->vacancies, fiber_pool->used);
+
+        // Slow path: If the pool has no vacancies, expand first. Only run GC when expansion fails (e.g. mmap), so we can reclaim stacks from dead fibers before retrying:
+        if (RB_UNLIKELY(!vacancy)) {
+            vacancy = fiber_pool_stack_acquire_expand(fiber_pool);
+
+            // If expansion failed, raise an error:
+            if (RB_UNLIKELY(!vacancy)) {
+                RB_VM_LOCK_LEAVE_LEV(&lev);
+                rb_raise(rb_eFiberError, "can't allocate fiber stack: %s", strerror(errno));
+            }
+        }
+
+        VM_ASSERT(vacancy);
+        VM_ASSERT(vacancy->stack.base);
 
 #if defined(COROUTINE_SANITIZE_ADDRESS)
-    __asan_unpoison_memory_region(fiber_pool_stack_poison_base(&vacancy->stack), fiber_pool_stack_poison_size(&vacancy->stack));
+        __asan_unpoison_memory_region(fiber_pool_stack_poison_base(&vacancy->stack), fiber_pool_stack_poison_size(&vacancy->stack));
 #endif
 
-    // Take the top item from the free list:
-    fiber_pool->used += 1;
+        // Take the top item from the free list:
+        fiber_pool->used += 1;
 
 #ifdef FIBER_POOL_ALLOCATION_FREE
-    vacancy->stack.allocation->used += 1;
+        vacancy->stack.allocation->used += 1;
 #endif
 
-    fiber_pool_stack_reset(&vacancy->stack);
+        fiber_pool_stack_reset(&vacancy->stack);
+    }
+    RB_VM_LOCK_LEAVE_LEV(&lev);
 
     return vacancy->stack;
 }
@@ -908,6 +983,17 @@ fiber_stack_release(rb_fiber_t * fiber)
     rb_ec_clear_vm_stack(ec);
 }
 
+static void
+fiber_stack_release_locked(rb_fiber_t *fiber)
+{
+    if (!ruby_vm_during_cleanup) {
+        // We can't try to acquire the VM lock here because MMTK calls free in its own native thread which has no ec.
+        // This assertion will fail on MMTK but we currently don't have CI for debug releases of MMTK, so we can assert for now.
+        ASSERT_vm_locking_with_barrier();
+    }
+    fiber_stack_release(fiber);
+}
+
 static const char *
 fiber_status_name(enum fiber_status s)
 {
@@ -1068,7 +1154,7 @@ cont_free(void *ptr)
     else {
         rb_fiber_t *fiber = (rb_fiber_t*)cont;
         coroutine_destroy(&fiber->context);
-        fiber_stack_release(fiber);
+        fiber_stack_release_locked(fiber);
     }
 
     RUBY_FREE_UNLESS_NULL(cont->saved_vm_stack.ptr);
@@ -1640,9 +1726,9 @@ cont_restore_1(rb_context_t *cont)
     cont_restore_thread(cont);
 
     /* restore machine stack */
-#if defined(_M_AMD64) && !defined(__MINGW64__)
+#if (defined(_M_AMD64) && !defined(__MINGW64__)) || defined(_M_ARM64)
     {
-        /* workaround for x64 SEH */
+        /* workaround for x64 and arm64 SEH on Windows */
         jmp_buf buf;
         setjmp(buf);
         _JUMP_BUFFER *bp = (void*)&cont->jmpbuf;
@@ -1941,7 +2027,7 @@ rb_cont_call(int argc, VALUE *argv, VALUE contval)
  *  == Non-blocking Fibers
  *
  *  The concept of <em>non-blocking fiber</em> was introduced in Ruby 3.0.
- *  A non-blocking fiber, when reaching a operation that would normally block
+ *  A non-blocking fiber, when reaching an operation that would normally block
  *  the fiber (like <code>sleep</code>, or wait for another process or I/O)
  *  will yield control to other fibers and allow the <em>scheduler</em> to
  *  handle blocking and waking up (resuming) this fiber when it can proceed.
@@ -1972,6 +2058,12 @@ fiber_alloc(VALUE klass)
     return TypedData_Wrap_Struct(klass, &fiber_data_type, 0);
 }
 
+static rb_serial_t
+next_ec_serial(rb_ractor_t *cr)
+{
+    return cr->next_ec_serial++;
+}
+
 static rb_fiber_t*
 fiber_t_alloc(VALUE fiber_value, unsigned int blocking)
 {
@@ -1991,6 +2083,7 @@ fiber_t_alloc(VALUE fiber_value, unsigned int blocking)
     cont_init(&fiber->cont, th);
 
     fiber->cont.saved_ec.fiber_ptr = fiber;
+    fiber->cont.saved_ec.serial = next_ec_serial(th->ractor);
     rb_ec_clear_vm_stack(&fiber->cont.saved_ec);
 
     fiber->prev = NULL;
@@ -2162,7 +2255,7 @@ rb_fiber_storage_set(VALUE self, VALUE value)
  *  Returns the value of the fiber storage variable identified by +key+.
  *
  *  The +key+ must be a symbol, and the value is set by Fiber#[]= or
- *  Fiber#store.
+ *  Fiber#storage.
  *
  *  See also Fiber::[]=.
  */
@@ -2537,6 +2630,7 @@ rb_threadptr_root_fiber_setup(rb_thread_t *th)
     }
     fiber->cont.type = FIBER_CONTEXT;
     fiber->cont.saved_ec.fiber_ptr = fiber;
+    fiber->cont.saved_ec.serial = next_ec_serial(th->ractor);
     fiber->cont.saved_ec.thread_ptr = th;
     fiber->blocking = 1;
     fiber->killed = 0;
@@ -2697,6 +2791,13 @@ fiber_switch(rb_fiber_t *fiber, int argc, const VALUE *argv, int kw_splat, rb_fi
 
     VM_ASSERT(FIBER_RUNNABLE_P(fiber));
 
+    /*
+     * Keep the target fiber object alive across fiber_store.  The raw
+     * rb_fiber_t pointer is used after the coroutine switch, and GC may run
+     * while this C frame is suspended.
+     */
+    VALUE fiber_value = fiber->cont.self;
+
     rb_fiber_t *current_fiber = fiber_current();
 
     VM_ASSERT(!current_fiber->resuming_fiber);
@@ -2724,10 +2825,13 @@ fiber_switch(rb_fiber_t *fiber, int argc, const VALUE *argv, int kw_splat, rb_fi
 
     // We cannot free the stack until the pthread is joined:
 #ifndef COROUTINE_PTHREAD_CONTEXT
-    if (resuming_fiber && FIBER_TERMINATED_P(fiber)) {
-        fiber_stack_release(fiber);
+    if (FIBER_TERMINATED_P(fiber)) {
+        RB_VM_LOCKING() {
+            fiber_stack_release(fiber);
+        }
     }
 #endif
+    RB_GC_GUARD(fiber_value);
 
     if (fiber_current()->blocking) {
         th->blocking += 1;
@@ -2865,6 +2969,7 @@ void
 rb_fiber_close(rb_fiber_t *fiber)
 {
     fiber_status_set(fiber, FIBER_TERMINATED);
+    rb_ec_close(&fiber->cont.saved_ec);
 }
 
 static void
@@ -3203,37 +3308,46 @@ fiber_raise(rb_fiber_t *fiber, VALUE exception)
 }
 
 VALUE
-rb_fiber_raise(VALUE fiber, int argc, const VALUE *argv)
+rb_fiber_raise(VALUE fiber, int argc, VALUE *argv)
 {
-    VALUE exception = rb_make_exception(argc, argv);
+    VALUE exception = rb_exception_setup(argc, argv);
 
     return fiber_raise(fiber_ptr(fiber), exception);
 }
 
 /*
  *  call-seq:
- *     fiber.raise                                 -> obj
- *     fiber.raise(string)                         -> obj
- *     fiber.raise(exception [, string [, array]]) -> obj
+ *    raise(exception, message = exception.to_s, backtrace = nil, cause: $!)
+ *    raise(message = nil, cause: $!)
  *
  *  Raises an exception in the fiber at the point at which the last
- *  +Fiber.yield+ was called. If the fiber has not been started or has
+ *  +Fiber.yield+ was called.
+ *
+ *     f = Fiber.new {
+ *       puts "Before the yield"
+ *       Fiber.yield 1 # -- exception will be raised here
+ *       puts "After the yield"
+ *     }
+ *
+ *     p f.resume
+ *     f.raise "Gotcha"
+ *
+ *  Output
+ *
+ *     Before the first yield
+ *     1
+ *     t.rb:8:in 'Fiber.yield': Gotcha (RuntimeError)
+ *       from t.rb:8:in 'block in <main>'
+ *
+ *  If the fiber has not been started or has
  *  already run to completion, raises +FiberError+. If the fiber is
  *  yielding, it is resumed. If it is transferring, it is transferred into.
  *  But if it is resuming, raises +FiberError+.
  *
- *  With no arguments, raises a +RuntimeError+. With a single +String+
- *  argument, raises a +RuntimeError+ with the string as a message.  Otherwise,
- *  the first parameter should be the name of an +Exception+ class (or an
- *  object that returns an +Exception+ object when sent an +exception+
- *  message). The optional second parameter sets the message associated with
- *  the exception, and the third parameter is an array of callback information.
- *  Exceptions are caught by the +rescue+ clause of <code>begin...end</code>
- *  blocks.
- *
  *  Raises +FiberError+ if called on a Fiber belonging to another +Thread+.
  *
- *  See Kernel#raise for more information.
+ *  See Kernel#raise for more information on arguments.
+ *
  */
 static VALUE
 rb_fiber_m_raise(int argc, VALUE *argv, VALUE self)
@@ -3328,6 +3442,8 @@ rb_fiber_atfork(rb_thread_t *th)
             th->root_fiber = th->ec->fiber_ptr;
         }
         th->root_fiber->prev = 0;
+        th->root_fiber->blocking = 1;
+        th->blocking = 1;
     }
 }
 #endif

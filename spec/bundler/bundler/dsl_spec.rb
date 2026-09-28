@@ -103,7 +103,7 @@ RSpec.describe Bundler::Dsl do
       )
     end
 
-    context "default hosts", bundler: "< 3" do
+    context "default hosts" do
       it "converts :github to URI using https" do
         subject.gem("sparks", github: "indirect/sparks")
         github_uri = "https://github.com/indirect/sparks.git"
@@ -201,8 +201,8 @@ RSpec.describe Bundler::Dsl do
   describe "#gem" do
     # rubocop:disable Naming/VariableNumber
     [:ruby, :ruby_18, :ruby_19, :ruby_20, :ruby_21, :ruby_22, :ruby_23, :ruby_24, :ruby_25, :ruby_26, :ruby_27,
-     :ruby_30, :ruby_31, :ruby_32, :ruby_33, :ruby_34, :ruby_35, :mri, :mri_18, :mri_19, :mri_20, :mri_21, :mri_22, :mri_23, :mri_24,
-     :mri_25, :mri_26, :mri_27, :mri_30, :mri_31, :mri_32, :mri_33, :mri_34, :mri_35, :jruby, :rbx, :truffleruby].each do |platform|
+     :ruby_30, :ruby_31, :ruby_32, :ruby_33, :ruby_34, :ruby_40, :mri, :mri_18, :mri_19, :mri_20, :mri_21, :mri_22, :mri_23, :mri_24,
+     :mri_25, :mri_26, :mri_27, :mri_30, :mri_31, :mri_32, :mri_33, :mri_34, :mri_40, :jruby, :rbx, :truffleruby].each do |platform|
       it "allows #{platform} as a valid platform" do
         subject.gem("foo", platform: platform)
       end
@@ -219,6 +219,11 @@ RSpec.describe Bundler::Dsl do
     it "rejects invalid platforms" do
       expect { subject.gem("foo", platform: :bogus) }.
         to raise_error(Bundler::GemfileError, /is not a valid platform/)
+    end
+
+    it "warn for legacy windows platforms" do
+      expect(Bundler::SharedHelpers).to receive(:feature_deprecated!).with(/\APlatform :mswin, :x64_mingw will be removed in the future./)
+      subject.gem("foo", platforms: [:mswin, :jruby, :x64_mingw])
     end
 
     it "rejects empty gem name" do
@@ -282,6 +287,15 @@ RSpec.describe Bundler::Dsl do
       subject.gem("foo", branch: "test", test_source: "bundler/bundler")
       dep = subject.dependencies.last
       expect(dep.name).to eq "foo"
+    end
+  end
+
+  describe "#platforms" do
+    it "warn for legacy windows platforms" do
+      expect(Bundler::SharedHelpers).to receive(:feature_deprecated!).with(/\APlatform :mswin64, :mingw will be removed in the future./)
+      subject.platforms(:mswin64, :jruby, :mingw) do
+        subject.gem("foo")
+      end
     end
   end
 
@@ -350,6 +364,49 @@ RSpec.describe Bundler::Dsl do
 
         expect(subject.dependencies.last.source).to eq(other_source)
       end
+    end
+  end
+
+  describe "#source with cooldown" do
+    before do
+      allow(@rubygems).to receive(:add_remote)
+      allow(@rubygems).to receive(:remote_cooldowns).and_return({})
+    end
+
+    it "accepts a non-negative integer" do
+      expect do
+        subject.source("https://rubygems.org", cooldown: 7)
+      end.not_to raise_error
+    end
+
+    it "accepts 0 as an explicit disable" do
+      expect do
+        subject.source("https://rubygems.org", cooldown: 0)
+      end.not_to raise_error
+    end
+
+    it "rejects a string" do
+      expect do
+        subject.source("https://rubygems.org", cooldown: "7")
+      end.to raise_error(Bundler::InvalidOption, /non-negative integer/)
+    end
+
+    it "rejects a float" do
+      expect do
+        subject.source("https://rubygems.org", cooldown: 7.5)
+      end.to raise_error(Bundler::InvalidOption, /non-negative integer/)
+    end
+
+    it "rejects a negative integer" do
+      expect do
+        subject.source("https://rubygems.org", cooldown: -7)
+      end.to raise_error(Bundler::InvalidOption, /non-negative integer/)
+    end
+
+    it "rejects an array" do
+      expect do
+        subject.source("https://rubygems.org", cooldown: [7])
+      end.to raise_error(Bundler::InvalidOption, /non-negative integer/)
     end
   end
 end

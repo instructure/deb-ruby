@@ -1,8 +1,6 @@
 # frozen_string_literal: true
 # :markup: markdown
 
-require "ripper"
-
 module Prism
   module Translation
     # This class provides a compatibility layer between prism and Ripper. It
@@ -71,7 +69,7 @@ module Prism
       #          [[1, 13], :on_kw,     "end", END      ]]
       #
       def self.lex(src, filename = "-", lineno = 1, raise_errors: false)
-        result = Prism.lex_compat(src, filepath: filename, line: lineno)
+        result = Prism.lex_compat(src, filepath: filename, line: lineno, version: "current")
 
         if result.failure? && raise_errors
           raise SyntaxError, result.errors.first.message
@@ -426,8 +424,33 @@ module Prism
         end
       end
 
+      autoload :Lexer, "prism/translation/ripper/lexer"
       autoload :SexpBuilder, "prism/translation/ripper/sexp"
       autoload :SexpBuilderPP, "prism/translation/ripper/sexp"
+
+      # :stopdoc:
+      # This is not part of the public API but used by some gems.
+
+      # Ripper-internal bitflags.
+      LEX_STATE_NAMES = %i[
+        BEG END ENDARG ENDFN ARG CMDARG MID FNAME DOT CLASS LABEL LABELED FITEM
+      ].map.with_index.to_h { |name, i| [2 ** i, name] }.freeze
+      private_constant :LEX_STATE_NAMES
+
+      LEX_STATE_NAMES.each do |value, key|
+        const_set("EXPR_#{key}", value)
+      end
+      EXPR_NONE = 0
+      EXPR_VALUE = EXPR_BEG
+      EXPR_BEG_ANY = EXPR_BEG | EXPR_MID | EXPR_CLASS
+      EXPR_ARG_ANY = EXPR_ARG | EXPR_CMDARG
+      EXPR_END_ANY = EXPR_END | EXPR_ENDARG | EXPR_ENDFN
+
+      def self.lex_state_name(state)
+        LEX_STATE_NAMES.filter_map { |flag, name| name if state & flag != 0  }.join("|")
+      end
+
+      # :startdoc:
 
       # The source that is being parsed.
       attr_reader :source
@@ -3295,7 +3318,7 @@ module Prism
 
       # Lazily initialize the parse result.
       def result
-        @result ||= Prism.parse(source, partial_script: true)
+        @result ||= Prism.parse(source, partial_script: true, version: "current")
       end
 
       ##########################################################################

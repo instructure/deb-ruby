@@ -141,6 +141,7 @@ class TestGemCommandsYankCommand < Gem::TestCase
   end
 
   def test_with_webauthn_enabled_failure
+    pend "Flaky on TruffleRuby" if RUBY_ENGINE == "truffleruby"
     server = Gem::MockTCPServer.new
     error = Gem::WebauthnVerificationError.new("Something went wrong")
 
@@ -271,7 +272,7 @@ class TestGemCommandsYankCommand < Gem::TestCase
     assert_equal [yank_uri], @fetcher.paths
   end
 
-  def test_yank_gem_unathorized_api_key
+  def test_yank_gem_unauthorized_api_key
     response_forbidden = "The API key doesn't have access"
     response_success   = "Successfully yanked"
     host               = "http://example"

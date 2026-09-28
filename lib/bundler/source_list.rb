@@ -9,7 +9,7 @@ module Bundler
       :metadata_source
 
     def global_rubygems_source
-      @global_rubygems_source ||= rubygems_aggregate_class.new("allow_local" => true)
+      @global_rubygems_source ||= source_class.new("allow_local" => true)
     end
 
     def initialize
@@ -21,17 +21,7 @@ module Bundler
       @rubygems_sources       = []
       @metadata_source        = Source::Metadata.new
 
-      @merged_gem_lockfile_sections = false
       @local_mode = true
-    end
-
-    def merged_gem_lockfile_sections?
-      @merged_gem_lockfile_sections
-    end
-
-    def merged_gem_lockfile_sections!(replacement_source)
-      @merged_gem_lockfile_sections = true
-      @global_rubygems_source = replacement_source
     end
 
     def aggregate_global_source?
@@ -60,7 +50,13 @@ module Bundler
 
     def add_rubygems_source(options = {})
       new_source = Source::Rubygems.new(options)
-      return @global_rubygems_source if @global_rubygems_source == new_source
+      if @global_rubygems_source == new_source
+        warn_on_cooldown_conflict(new_source, @global_rubygems_source)
+        return @global_rubygems_source
+      end
+
+      existing_source = @rubygems_sources.find {|s| s == new_source }
+      warn_on_cooldown_conflict(new_source, existing_source) if existing_source
 
       add_source_to_list new_source, @rubygems_sources
     end
@@ -69,8 +65,15 @@ module Bundler
       add_source_to_list Plugin.source(source).new(options), @plugin_sources
     end
 
-    def add_global_rubygems_remote(uri)
-      global_rubygems_source.add_remote(uri)
+    def add_global_rubygems_remote(uri, cooldown: nil)
+      unless cooldown.nil?
+        new_source = source_class.new("remotes" => uri, "cooldown" => cooldown)
+        [global_rubygems_source, *@rubygems_sources].find do |existing_source|
+          warn_on_cooldown_conflict(new_source, existing_source)
+        end
+      end
+
+      global_rubygems_source.add_remote(uri, cooldown: cooldown)
       global_rubygems_source
     end
 
@@ -90,10 +93,6 @@ module Bundler
       @rubygems_sources
     end
 
-    def rubygems_remotes
-      rubygems_sources.flat_map(&:remotes).uniq
-    end
-
     def all_sources
       path_sources + git_sources + plugin_sources + rubygems_sources + [metadata_source]
     end
@@ -103,7 +102,7 @@ module Bundler
     end
 
     def get(source)
-      source_list_for(source).find {|s| equivalent_source?(source, s) }
+      source_list_for(source).find {|s| s.include?(source) }
     end
 
     def lock_sources
@@ -115,11 +114,7 @@ module Bundler
     end
 
     def lock_rubygems_sources
-      if merged_gem_lockfile_sections?
-        [combine_rubygems_sources]
-      else
-        rubygems_sources.sort_by(&:identifier)
-      end
+      rubygems_sources.sort_by(&:identifier)
     end
 
     # Returns true if there are changes
@@ -129,16 +124,7 @@ module Bundler
       @rubygems_sources, @path_sources, @git_sources, @plugin_sources = map_sources(replacement_sources)
       @global_rubygems_source = global_replacement_source(replacement_sources)
 
-      different_sources?(lock_sources, replacement_sources)
-    end
-
-    # Returns true if there are changes
-    def expired_sources?(replacement_sources)
-      return false if replacement_sources.empty?
-
-      lock_sources = dup_with_replaced_sources(replacement_sources).lock_sources
-
-      different_sources?(lock_sources, replacement_sources)
+      !equivalent_sources?(lock_sources, replacement_sources)
     end
 
     def prefer_local!
@@ -163,13 +149,15 @@ module Bundler
       all_sources.each(&:remote!)
     end
 
-    private
-
-    def dup_with_replaced_sources(replacement_sources)
-      new_source_list = dup
-      new_source_list.replace_sources!(replacement_sources)
-      new_source_list
+    def clear_cache
+      rubygems_sources.each(&:clear_cache)
     end
+
+    def release_resolution_memory!
+      rubygems_sources.each(&:release_resolution_memory!)
+    end
+
+    private
 
     def map_sources(replacement_sources)
       rubygems = @rubygems_sources.map do |source|
@@ -198,6 +186,10 @@ module Bundler
         # locked sources never include credentials so always prefer remotes from the gemfile
         replacement_source.remotes = gemfile_source.remotes
 
+        # cooldowns are only ever declared in the Gemfile, so carry them over
+        # along with the remotes they apply to
+        replacement_source.remote_cooldowns = gemfile_source.remote_cooldowns
+
         yield replacement_source if block_given?
 
         replacement_source
@@ -224,11 +216,7 @@ module Bundler
       end
     end
 
-    def different_sources?(lock_sources, replacement_sources)
-      !equivalent_sources?(lock_sources, replacement_sources)
-    end
-
-    def rubygems_aggregate_class
+    def source_class
       Source::Rubygems
     end
 
@@ -247,8 +235,20 @@ module Bundler
       end
     end
 
-    def combine_rubygems_sources
-      Source::Rubygems.new("remotes" => rubygems_remotes)
+    def warn_on_cooldown_conflict(new_source, existing_source)
+      new_source.remote_cooldowns.any? do |uri, cooldown|
+        next false unless existing_source.remotes.include?(uri)
+
+        existing_cooldown = existing_source.cooldown_for(uri)
+        next false if existing_cooldown == cooldown
+
+        previous = existing_cooldown ? "`cooldown: #{existing_cooldown}`" : "no cooldown"
+        Bundler.ui.warn "The source #{uri} is declared more than once with different cooldown " \
+          "values (`cooldown: #{cooldown}` here, #{previous} previously). All declarations of " \
+          "the same source URL share a single cooldown, so only one of these values will apply " \
+          "to all gems from this source."
+        true
+      end
     end
 
     def warn_on_git_protocol(source)
@@ -264,10 +264,6 @@ module Bundler
 
     def equivalent_sources?(lock_sources, replacement_sources)
       lock_sources.sort_by(&:identifier) == replacement_sources.sort_by(&:identifier)
-    end
-
-    def equivalent_source?(source, other_source)
-      source == other_source
     end
   end
 end

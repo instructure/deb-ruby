@@ -117,7 +117,7 @@ class Gem::Command
   # Unhandled arguments (gem names, files, etc.) are left in
   # <tt>options[:args]</tt>.
 
-  def initialize(command, summary=nil, defaults={})
+  def initialize(command, summary = nil, defaults = {})
     @command = command
     @summary = summary
     @program_name = "gem #{command}"
@@ -440,7 +440,7 @@ class Gem::Command
   def handle_options(args)
     args = add_extra_args(args)
     check_deprecated_options(args)
-    @options = Marshal.load Marshal.dump @defaults # deep copy
+    @options = Gem::Util.deep_dup @defaults
     parser.parse!(args)
     @options[:args] = args
   end

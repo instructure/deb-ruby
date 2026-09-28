@@ -52,10 +52,10 @@ RSpec.describe Bundler do
         s.description = "Bundler manages an application's dependencies through its entire life, across many machines, systematically and repeatably"
         s.email = ["team@bundler.io"]
         s.homepage = "https://bundler.io"
-        s.metadata = { "bug_tracker_uri" => "https://github.com/rubygems/rubygems/issues?q=is%3Aopen+is%3Aissue+label%3ABundler",
-                       "changelog_uri" => "https://github.com/rubygems/rubygems/blob/master/bundler/CHANGELOG.md",
+        s.metadata = { "bug_tracker_uri" => "https://github.com/ruby/rubygems/issues?q=is%3Aopen+is%3Aissue+label%3ABundler",
+                       "changelog_uri" => "https://github.com/ruby/rubygems/blob/master/bundler/CHANGELOG.md",
                        "homepage_uri" => "https://bundler.io/",
-                       "source_code_uri" => "https://github.com/rubygems/rubygems/tree/master/bundler" }
+                       "source_code_uri" => "https://github.com/ruby/rubygems/tree/master/bundler" }
         s.require_paths = ["lib"]
         s.required_ruby_version = Gem::Requirement.new([">= 2.6.0"])
         s.required_rubygems_version = Gem::Requirement.new([">= 3.0.1"])
@@ -126,6 +126,49 @@ RSpec.describe Bundler do
       end
 
       expect(subject.loaded_from).to eq(app_gemspec_path.expand_path.to_s)
+    end
+
+    context "with a relative path" do
+      before do
+        create_file(tmp("nested/test.gemspec"), <<~GEMSPEC)
+          Gem::Specification.new do |gem|
+            gem.name = "nested"
+            gem.summary = __FILE__
+          end
+        GEMSPEC
+      end
+
+      it "resolves a relative gemspec path against the original working directory" do
+        spec, expanded = Dir.chdir(tmp) do
+          [Bundler.load_gemspec_uncached("nested/test.gemspec"), File.expand_path("nested/test.gemspec")]
+        end
+
+        expect(spec.summary).to eq(expanded)
+        expect(spec.loaded_from).to eq(expanded)
+      end
+    end
+
+    context "with a relative path whose \"..\" crosses a symlink", if: !Gem.win_platform? do
+      before do
+        create_file(tmp("lexical/target.gemspec"), <<~GEMSPEC)
+          Gem::Specification.new do |gem|
+            gem.name = "lexical"
+            gem.summary = __FILE__
+          end
+        GEMSPEC
+        create_file(tmp("lexical/physical/target.gemspec"), "raise \"read the physical path\"")
+        tmp("lexical/physical/elsewhere").mkpath
+        File.symlink(tmp("lexical/physical/elsewhere"), tmp("lexical/link"))
+      end
+
+      it "resolves the path lexically" do
+        spec, expanded = Dir.chdir(tmp("lexical")) do
+          [Bundler.load_gemspec_uncached("link/../target.gemspec"), File.expand_path("link/../target.gemspec")]
+        end
+
+        expect(spec.summary).to eq(expanded)
+        expect(spec.loaded_from).to eq(expanded)
+      end
     end
 
     context "validate is true" do

@@ -34,7 +34,7 @@ use crate::invariants::*;
 pub const MAX_CTX_TEMPS: usize = 8;
 
 // Maximum number of local variable types or registers we keep track of
-const MAX_CTX_LOCALS: usize = 8;
+pub const MAX_CTX_LOCALS: usize = 8;
 
 /// An index into `ISEQ_BODY(iseq)->iseq_encoded`. Points
 /// to a YARV instruction or an instruction operand.
@@ -1099,7 +1099,7 @@ impl Context {
                 MapToLocal(local_idx) => {
                     bits.push_op(CtxOp::MapTempLocal);
                     bits.push_u3(stack_idx as u8);
-                    bits.push_u3(local_idx as u8);
+                    bits.push_u3(local_idx);
                 }
 
                 MapToSelf => {
@@ -1769,6 +1769,35 @@ impl IseqPayload {
         // Turn it into an iterator that owns the blocks and return
         version_map.into_iter().flatten()
     }
+
+    /// Get or create all blocks for a particular place in an iseq.
+    fn get_or_create_version_list(&mut self, insn_idx: usize) -> &mut VersionList {
+        if insn_idx >= self.version_map.len() {
+            self.version_map.resize(insn_idx + 1, VersionList::default());
+        }
+
+        return self.version_map.get_mut(insn_idx).unwrap();
+    }
+
+    // We cannot deallocate blocks immediately after invalidation since patching
+    // the code for setting up return addresses does not affect outstanding return
+    // addresses that are on stack and will use invalidated branch pointers when
+    // hit. Example:
+    //   def foo(n)
+    //     if n == 2
+    //       # 1.times.each to create a cfunc frame to preserve the JIT frame
+    //       # which will return to a stub housed in an invalidated block
+    //       return 1.times.each { Object.define_method(:foo) {} }
+    //     end
+    //
+    //     foo(n + 1) # The block for this call houses the return branch stub
+    //   end
+    //   p foo(1)
+    pub fn delayed_deallocation(&mut self, blockref: BlockRef) {
+        block_assumptions_free(blockref);
+        unsafe { blockref.as_ref() }.set_iseq_null();
+        self.dead_blocks.push(blockref);
+    }
 }
 
 /// Get the payload for an iseq. For safety it's up to the caller to ensure the returned `&mut`
@@ -1818,7 +1847,7 @@ pub fn for_each_iseq<F: FnMut(IseqPtr)>(mut callback: F) {
         callback(iseq);
     }
     let mut data: &mut dyn FnMut(IseqPtr) = &mut callback;
-    unsafe { rb_yjit_for_each_iseq(Some(callback_wrapper), (&mut data) as *mut _ as *mut c_void) };
+    unsafe { rb_jit_for_each_iseq(Some(callback_wrapper), (&mut data) as *mut _ as *mut c_void) };
 }
 
 /// Iterate over all on-stack ISEQs
@@ -1920,7 +1949,7 @@ pub extern "C" fn rb_yjit_iseq_mark(payload: *mut c_void) {
         // For aliasing, having the VM lock hopefully also implies that no one
         // else has an overlapping &mut IseqPayload.
         unsafe {
-            rb_yjit_assert_holding_vm_lock();
+            rb_assert_holding_vm_lock();
             &*(payload as *const IseqPayload)
         }
     };
@@ -2009,7 +2038,7 @@ pub extern "C" fn rb_yjit_iseq_update_references(iseq: IseqPtr) {
         // For aliasing, having the VM lock hopefully also implies that no one
         // else has an overlapping &mut IseqPayload.
         unsafe {
-            rb_yjit_assert_holding_vm_lock();
+            rb_assert_holding_vm_lock();
             &*(payload as *const IseqPayload)
         }
     };
@@ -2034,13 +2063,6 @@ pub extern "C" fn rb_yjit_iseq_update_references(iseq: IseqPtr) {
         let block = unsafe { blockref.as_ref() };
         block_update_references(block, cb, true);
     }
-
-    // Note that we would have returned already if YJIT is off.
-    cb.mark_all_executable();
-
-    CodegenGlobals::get_outlined_cb()
-        .unwrap()
-        .mark_all_executable();
 
     return;
 
@@ -2098,15 +2120,41 @@ pub extern "C" fn rb_yjit_iseq_update_references(iseq: IseqPtr) {
 
                 // Only write when the VALUE moves, to be copy-on-write friendly.
                 if new_addr != object {
-                    for (byte_idx, &byte) in new_addr.as_u64().to_le_bytes().iter().enumerate() {
-                        let byte_code_ptr = value_code_ptr.add_bytes(byte_idx);
-                        cb.write_mem(byte_code_ptr, byte)
-                            .expect("patching existing code should be within bounds");
-                    }
+                    // SAFETY: Since we already set code memory writable before the compacting phase,
+                    // we can use raw memory accesses directly.
+                    unsafe { value_ptr.write_unaligned(new_addr); }
                 }
             }
         }
 
+    }
+}
+
+/// Mark all code memory as writable.
+/// This function is useful for garbage collectors that update references in JIT-compiled code in
+/// bulk.
+#[no_mangle]
+pub extern "C" fn rb_yjit_mark_all_writeable() {
+    if CodegenGlobals::has_instance() {
+        CodegenGlobals::get_inline_cb().mark_all_writeable();
+
+        CodegenGlobals::get_outlined_cb()
+            .unwrap()
+            .mark_all_writeable();
+    }
+}
+
+/// Mark all code memory as executable.
+/// This function is useful for garbage collectors that update references in JIT-compiled code in
+/// bulk.
+#[no_mangle]
+pub extern "C" fn rb_yjit_mark_all_executable() {
+    if CodegenGlobals::has_instance() {
+        CodegenGlobals::get_inline_cb().mark_all_executable();
+
+        CodegenGlobals::get_outlined_cb()
+            .unwrap()
+            .mark_all_executable();
     }
 }
 
@@ -2119,21 +2167,6 @@ fn get_version_list(blockid: BlockId) -> Option<&'static mut VersionList> {
         },
         _ => None
     }
-}
-
-/// Get or create all blocks for a particular place in an iseq.
-fn get_or_create_version_list(blockid: BlockId) -> &'static mut VersionList {
-    let payload = get_or_create_iseq_payload(blockid.iseq);
-    let insn_idx = blockid.idx.as_usize();
-
-    // Expand the version map as necessary
-    if insn_idx >= payload.version_map.len() {
-        payload
-            .version_map
-            .resize(insn_idx + 1, VersionList::default());
-    }
-
-    return payload.version_map.get_mut(insn_idx).unwrap();
 }
 
 /// Take all of the blocks for a particular place in an iseq
@@ -2324,15 +2357,21 @@ unsafe fn add_block_version(blockref: BlockRef, cb: &CodeBlock) {
     // Function entry blocks must have stack size 0
     debug_assert!(!(block.iseq_range.start == 0 && Context::decode(block.ctx).stack_size > 0));
 
-    let version_list = get_or_create_version_list(block.get_blockid());
+    // Use a single payload reference for both version_map and pages access
+    // to avoid mutable aliasing UB from multiple get_iseq_payload calls.
+    let iseq_payload = get_or_create_iseq_payload(block.iseq.get());
+    let insn_idx = block.get_blockid().idx.as_usize();
 
-    // If this the first block being compiled with this block id
-    if version_list.len() == 0 {
-        incr_counter!(compiled_blockid_count);
+    {
+        let version_list = iseq_payload.get_or_create_version_list(insn_idx);
+
+        if version_list.is_empty() {
+            incr_counter!(compiled_blockid_count);
+        }
+
+        version_list.push(blockref);
+        version_list.shrink_to_fit();
     }
-
-    version_list.push(blockref);
-    version_list.shrink_to_fit();
 
     // By writing the new block to the iseq, the iseq now
     // contains new references to Ruby objects. Run write barriers.
@@ -2357,7 +2396,6 @@ unsafe fn add_block_version(blockref: BlockRef, cb: &CodeBlock) {
     }
 
     // Mark code pages for code GC
-    let iseq_payload = get_iseq_payload(block.iseq.get()).unwrap();
     for page in cb.addrs_to_pages(block.start_addr, block.end_addr.get()) {
         iseq_payload.pages.insert(page);
     }
@@ -2410,7 +2448,7 @@ impl<'a> JITState<'a> {
         // SAFETY: allocated with Box above
         unsafe { ptr::write(blockref, block) };
 
-        // Block is initialized now. Note that MaybeUnint<T> has the same layout as T.
+        // Block is initialized now. Note that MaybeUninit<T> has the same layout as T.
         let blockref = NonNull::new(blockref as *mut Block).expect("no null from Box");
 
         // Track all the assumptions the block makes as invariants
@@ -2474,6 +2512,11 @@ impl Block {
     // Push an incoming branch ref and shrink the vector
     fn push_incoming(&self, branch: BranchRef) {
         self.incoming.push(branch);
+    }
+
+    /// Mark this block as dead by setting its iseq to null.
+    pub fn set_iseq_null(&self) {
+        self.iseq.replace(ptr::null());
     }
 
     // Compute the size of the block code
@@ -3780,7 +3823,7 @@ pub fn gen_branch_stub_hit_trampoline(ocb: &mut OutlinedCb) -> Option<CodePtr> {
     let mut asm = Assembler::new_without_iseq();
 
     // For `branch_stub_hit(branch_ptr, target_idx, ec)`,
-    // `branch_ptr` and `target_idx` is different for each stub,
+    // `branch_ptr` and `target_idx` are different for each stub,
     // but the call and what's after is the same. This trampoline
     // is the unchanging part.
     // Since this trampoline is static, it allows code GC inside
@@ -3814,7 +3857,7 @@ pub fn gen_branch_stub_hit_trampoline(ocb: &mut OutlinedCb) -> Option<CodePtr> {
 
 /// Return registers to be pushed and popped on branch_stub_hit.
 pub fn caller_saved_temp_regs() -> impl Iterator<Item = &'static Reg> + DoubleEndedIterator {
-    let temp_regs = Assembler::get_temp_regs2().iter();
+    let temp_regs = Assembler::get_temp_regs().iter();
     let len = temp_regs.len();
     // The return value gen_leave() leaves in C_RET_REG
     // needs to survive the branch_stub_hit() call.
@@ -4279,35 +4322,14 @@ pub fn invalidate_block_version(blockref: &BlockRef) {
     // in this function before we removed it, so it's well connected.
     unsafe { remove_from_graph(*blockref) };
 
-    delayed_deallocation(*blockref);
+    if let Some(payload) = get_iseq_payload(id_being_invalidated.iseq) {
+        payload.delayed_deallocation(*blockref);
+    }
 
     ocb.unwrap().mark_all_executable();
     cb.mark_all_executable();
 
     incr_counter!(invalidation_count);
-}
-
-// We cannot deallocate blocks immediately after invalidation since patching the code for setting
-// up return addresses does not affect outstanding return addresses that are on stack and will use
-// invalidated branch pointers when hit. Example:
-//   def foo(n)
-//     if n == 2
-//       # 1.times.each to create a cfunc frame to preserve the JIT frame
-//       # which will return to a stub housed in an invalidated block
-//       return 1.times.each { Object.define_method(:foo) {} }
-//     end
-//
-//     foo(n + 1) # The block for this call houses the return branch stub
-//   end
-//   p foo(1)
-pub fn delayed_deallocation(blockref: BlockRef) {
-    block_assumptions_free(blockref);
-
-    let block = unsafe { blockref.as_ref() };
-    // Set null ISEQ on the block to signal that it's dead.
-    let iseq = block.iseq.replace(ptr::null());
-    let payload = get_iseq_payload(iseq).unwrap();
-    payload.dead_blocks.push(blockref);
 }
 
 trait RefUnchecked {

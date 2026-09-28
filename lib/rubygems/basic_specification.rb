@@ -34,15 +34,6 @@ class Gem::BasicSpecification
     internal_init
   end
 
-  def self.default_specifications_dir
-    Gem.default_specifications_dir
-  end
-
-  class << self
-    extend Gem::Deprecate
-    rubygems_deprecate :default_specifications_dir, "Gem.default_specifications_dir"
-  end
-
   ##
   # The path to the gem.build_complete file within the extension install
   # directory.
@@ -199,6 +190,9 @@ class Gem::BasicSpecification
     File.expand_path(File.join(gems_dir, full_name, "data", name))
   end
 
+  extend Gem::Deprecate
+  rubygems_deprecate :datadir, :none, "4.1"
+
   ##
   # Full path of the target library file.
   # If the file is not in this gem, return nil.
@@ -256,6 +250,13 @@ class Gem::BasicSpecification
     raise NotImplementedError
   end
 
+  def installable_on_platform?(target_platform) # :nodoc:
+    return true if [Gem::Platform::RUBY, nil, target_platform].include?(platform)
+    return true if Gem::Platform.new(platform) === target_platform
+
+    false
+  end
+
   def raw_require_paths # :nodoc:
     raise NotImplementedError
   end
@@ -305,9 +306,7 @@ class Gem::BasicSpecification
   # Return all files in this gem that match for +glob+.
 
   def matches_for_glob(glob) # TODO: rename?
-    glob = File.join(lib_dirs_glob, glob)
-
-    Dir[glob]
+    Gem::Util.glob_files_in_dir(File.join(lib_dirs, glob), full_gem_path)
   end
 
   ##
@@ -322,17 +321,7 @@ class Gem::BasicSpecification
   # for this spec.
 
   def lib_dirs_glob
-    dirs = if raw_require_paths
-      if raw_require_paths.size > 1
-        "{#{raw_require_paths.join(",")}}"
-      else
-        raw_require_paths.first
-      end
-    else
-      "lib" # default value for require_paths for bundler/inline
-    end
-
-    "#{full_gem_path}/#{dirs}"
+    "#{full_gem_path}/#{lib_dirs}"
   end
 
   ##
@@ -362,6 +351,22 @@ class Gem::BasicSpecification
   end
 
   private
+
+  ##
+  # Returns the require_paths of this gem as a string usable in Dir.glob,
+  # relative to full_gem_path.
+
+  def lib_dirs
+    if raw_require_paths
+      if raw_require_paths.size > 1
+        "{#{raw_require_paths.join(",")}}"
+      else
+        raw_require_paths.first
+      end
+    else
+      "lib" # default value for require_paths for bundler/inline
+    end
+  end
 
   def have_extensions?
     !extensions.empty?

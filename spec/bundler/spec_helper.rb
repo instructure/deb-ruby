@@ -9,18 +9,26 @@ if File.expand_path(__FILE__) =~ %r{([^\w/\.:\-])}
   abort "The bundler specs cannot be run from a path that contains special characters (particularly #{$1.inspect})"
 end
 
-# Bundler CLI will have different help text depending on whether this variable
-# is set, since the `-e` flag `bundle gem` with require an explicit value if
-# `EDITOR` is not set, but will use `EDITOR` by default is set. So make sure
-# it's `nil` before loading bundler to get a consistent help text, since some
-# tests rely on that.
+# Bundler CLI will have different help text depending on whether any of these
+# variables is set, since the `-e` flag `bundle gem` with require an explicit
+# value if they are not set, but will use their value by default if set. So make
+# sure they are `nil` before loading bundler to get a consistent help text,
+# since some tests rely on that.
 ENV["EDITOR"] = nil
+ENV["VISUAL"] = nil
+ENV["BUNDLER_EDITOR"] = nil
 require "bundler"
+
+# If we use shared GEM_HOME and install multiple versions, it may cause
+# unexpected test failures.
+gem "diff-lcs", "< 2.0"
 
 require "rspec/core"
 require "rspec/expectations"
 require "rspec/mocks"
 require "rspec/support/differ"
+gem "rubygems-generate_index"
+require "rubygems/indexer"
 
 require_relative "support/builders"
 require_relative "support/checksums"
@@ -30,6 +38,7 @@ require_relative "support/indexes"
 require_relative "support/matchers"
 require_relative "support/permissions"
 require_relative "support/platforms"
+require_relative "support/windows_tag_group"
 
 $debug = false
 
@@ -48,6 +57,7 @@ RSpec.configure do |config|
   config.include Spec::Path
   config.include Spec::Platforms
   config.include Spec::Permissions
+  config.include Spec::WindowsTagGroup
 
   # Enable flags like --only-failures and --next-failure
   config.example_status_persistence_file_path = ".rspec_status"
@@ -82,6 +92,13 @@ RSpec.configure do |config|
 
     require_relative "support/rubygems_ext"
     Spec::Rubygems.test_setup
+
+    # Disable retry delays in tests to speed them up
+    Bundler::Retry.default_base_delay = 0
+
+    # Simulate bundler has not yet been loaded
+    ENV.replace(ENV.to_hash.delete_if {|k, _v| k.start_with?(Bundler::EnvironmentPreserver::BUNDLER_PREFIX) })
+
     ENV["BUNDLER_SPEC_RUN"] = "true"
     ENV["BUNDLE_USER_CONFIG"] = ENV["BUNDLE_USER_CACHE"] = ENV["BUNDLE_USER_PLUGIN"] = nil
     ENV["BUNDLE_APP_CONFIG"] = nil
@@ -90,6 +107,32 @@ RSpec.configure do |config|
     ENV["XDG_CONFIG_HOME"] = nil
     ENV["GEMRC"] = nil
 
+    # Prevent tests from modifying the user's global git config.
+    # GIT_CONFIG_GLOBAL and GIT_CONFIG_NOSYSTEM are available since Git 2.32.
+    git_version = `git --version`[/(\d+\.\d+\.\d+)/, 1]
+    if Gem::Version.new(git_version) >= Gem::Version.new("2.32")
+      ENV["GIT_CONFIG_GLOBAL"] = File.join(ENV["HOME"], ".gitconfig")
+      ENV["GIT_CONFIG_NOSYSTEM"] = "1"
+    end
+
+    # Prevent git commands spawned by specs (directly or through Bundler)
+    # from discovering the rubygems checkout itself when run in a directory
+    # that is not a fixture repository, e.g. a fixture whose .git has been
+    # deleted by a concurrent cleanup. Without this, repository discovery
+    # walks up into the checkout and a stray `git config` writes the fixture
+    # identity to the checkout's own (possibly worktree-shared) .git/config.
+    ENV["GIT_CEILING_DIRECTORIES"] = [Spec::Path.tmp_root.to_s, Spec::Path.source_root.to_s].uniq.join(File::PATH_SEPARATOR)
+
+    # Disable git background maintenance. Since Git 2.46, commands like
+    # `git commit` spawn a detached `git maintenance run --auto` process,
+    # which briefly creates `.git/objects/maintenance.lock`. That races with
+    # specs copying repositories with FileUtils.cp_r, causing flaky ENOENT
+    # failures. GIT_CONFIG_COUNT is available since Git 2.31 and silently
+    # ignored by older versions.
+    ENV["GIT_CONFIG_COUNT"] = "1"
+    ENV["GIT_CONFIG_KEY_0"] = "maintenance.auto"
+    ENV["GIT_CONFIG_VALUE_0"] = "false"
+
     # Don't wrap output in tests
     ENV["THOR_COLUMNS"] = "10000"
 
@@ -97,11 +140,11 @@ RSpec.configure do |config|
 
     build_repo1
 
-    reset_paths!
+    reset!
   end
 
   config.around :each do |example|
-    FileUtils.cp_r pristine_system_gem_path, system_gem_path
+    default_system_gems
 
     with_gem_path_as(system_gem_path) do
       Bundler.ui.silence { example.run }
@@ -117,4 +160,19 @@ RSpec.configure do |config|
   ensure
     reset!
   end
+
+  Spec::WindowsTagGroup::EXAMPLE_MAPPINGS.each do |tag, file_paths|
+    file_pattern = Regexp.union(file_paths.map {|path| Regexp.new(Regexp.escape(path) + "$") })
+
+    config.define_derived_metadata(file_path: file_pattern) do |metadata|
+      metadata[tag] = true
+    end
+  end
+
+  config.before(:context) do |example|
+    metadata = example.class.metadata
+    if metadata[:type] != :aruba && !metadata[:realworld] && metadata.keys.none? {|k| Spec::WindowsTagGroup::EXAMPLE_MAPPINGS.keys.include?(k) }
+      warn "#{metadata[:file_path]} is not assigned to any Windows runner group. see spec/support/windows_tag_group.rb for details."
+    end
+  end unless Spec::Path.ruby_core?
 end

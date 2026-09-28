@@ -93,14 +93,14 @@ RSpec.describe Bundler::Fetcher do
       end
     end
 
-    context "when bunder ssl ssl configuration is set" do
+    context "when bunder ssl configuration is set" do
       before do
         cert = File.join(Spec::Path.tmpdir, "cert")
         File.open(cert, "w") {|f| f.write "PEM" }
         allow(Bundler.settings).to receive(:[]).and_return(nil)
         allow(Bundler.settings).to receive(:[]).with(:ssl_client_cert).and_return(cert)
         expect(OpenSSL::X509::Certificate).to receive(:new).with("PEM").and_return("cert")
-        expect(OpenSSL::PKey::RSA).to receive(:new).with("PEM").and_return("key")
+        expect(OpenSSL::PKey).to receive(:read).with("PEM").and_return("key")
       end
       after do
         FileUtils.rm File.join(Spec::Path.tmpdir, "cert")
@@ -120,7 +120,7 @@ RSpec.describe Bundler::Fetcher do
         )
         expect(File).to receive(:read).and_return("")
         expect(OpenSSL::X509::Certificate).to receive(:new).and_return("cert")
-        expect(OpenSSL::PKey::RSA).to receive(:new).and_return("key")
+        expect(OpenSSL::PKey).to receive(:read).and_return("key")
         store = double("ca store")
         expect(store).to receive(:add_file)
         expect(OpenSSL::X509::Store).to receive(:new).and_return(store)
@@ -139,6 +139,19 @@ RSpec.describe Bundler::Fetcher do
       expect(fetcher.user_agent).to match(%r{rubygems/(\d.)})
       expect(fetcher.user_agent).to match(%r{ruby/(\d.)})
       expect(fetcher.user_agent).to match(%r{options/foo,bar})
+    end
+
+    it "strips userinfo from settings keys that embed a URI" do
+      allow(Bundler.settings).to receive(:all).and_return(
+        %w[foo mirror.http://user:token@example.org/ mirror.https://token@example.net/]
+      )
+      options = fetcher.user_agent.split(" ").find {|x| x.start_with?("options/") }
+
+      expect(options).not_to include("token")
+      expect(options).not_to include("user:")
+      expect(options).to include("mirror.http://example.org/")
+      expect(options).to include("mirror.https://example.net/")
+      expect(options).to include("foo")
     end
 
     describe "include CI information" do

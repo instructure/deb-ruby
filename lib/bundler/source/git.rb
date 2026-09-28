@@ -91,9 +91,9 @@ module Bundler
 
       def to_s
         begin
-          at = humanized_ref || current_branch
-
-          rev = "at #{at}@#{shortref_for_display(revision)}"
+          at = humanized_ref
+          at = "#{at}@" if at
+          rev = "at #{at}#{shortref_for_display(revision)}"
         rescue GitError
           ""
         end
@@ -238,7 +238,7 @@ module Bundler
       # across different projects, this cache will be shared.
       # When using local git repos, this is set to the local repo.
       def cache_path
-        @cache_path ||= if Bundler.feature_flag.global_gem_cache?
+        @cache_path ||= if Bundler.settings[:global_gem_cache]
           Bundler.user_cache
         else
           Bundler.bundle_path.join("cache", "bundler")
@@ -268,7 +268,7 @@ module Bundler
       private
 
       def cache_to(custom_path, try_migrate: false)
-        return unless Bundler.feature_flag.cache_all?
+        return unless Bundler.settings[:cache_all]
 
         app_cache_path = app_cache_path(custom_path)
 
@@ -320,7 +320,7 @@ module Bundler
 
       def serialize_gemspecs_in(destination)
         destination = destination.expand_path(Bundler.root) if destination.relative?
-        Dir["#{destination}/#{@glob}"].each do |spec_path|
+        SharedHelpers.glob_files_in_dir(@glob, destination.to_s).each do |spec_path|
           # Evaluate gemspecs and cache the result. Gemspecs
           # in git might require git or other dependencies.
           # The gemspecs we cache should already be evaluated.
@@ -416,7 +416,6 @@ module Bundler
       def fetch
         git_proxy.checkout
       rescue GitError => e
-        raise unless Bundler.feature_flag.allow_offline_install?
         Bundler.ui.warn "Using cached git data because of network errors:\n#{e}"
       end
 

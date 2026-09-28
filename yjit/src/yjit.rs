@@ -37,12 +37,17 @@ pub fn yjit_enabled_p() -> bool {
     unsafe { rb_yjit_enabled_p }
 }
 
+/// Register specialized codegen for builtin C method entries.
+/// Must be called at boot before ruby_init_prelude() since the prelude
+/// could redefine core methods (e.g. Kernel.prepend via bundler).
+#[no_mangle]
+pub extern "C" fn rb_yjit_init_builtin_cmes() {
+    yjit_reg_method_codegen_fns();
+}
+
 /// This function is called from C code
 #[no_mangle]
 pub extern "C" fn rb_yjit_init(yjit_enabled: bool) {
-    // Register the method codegen functions. This must be done at boot.
-    yjit_reg_method_codegen_fns();
-
     // If --yjit-disable, yjit_init() will not be called until RubyVM::YJIT.enable.
     if yjit_enabled {
         yjit_init();
@@ -53,6 +58,12 @@ pub extern "C" fn rb_yjit_init(yjit_enabled: bool) {
 fn yjit_init() {
     // TODO: need to make sure that command-line options have been
     // initialized by CRuby
+
+    // Call YJIT hooks before enabling YJIT to avoid compiling the hooks themselves
+    unsafe {
+        let yjit = rb_const_get(rb_cRubyVM, rust_str_to_id("YJIT"));
+        rb_funcall(yjit, rust_str_to_id("call_jit_hooks"), 0);
+    }
 
     // Catch panics to avoid UB for unwinding into C frames.
     // See https://doc.rust-lang.org/nomicon/exception-safety.html
@@ -151,6 +162,13 @@ pub extern "C" fn rb_yjit_iseq_gen_entry_point(iseq: IseqPtr, ec: EcPtr, jit_exc
         return std::ptr::null();
     }
 
+    // In case of exceptional entry, reject escaped environment.
+    // This allows us to use the fact that new frames generally start with an on-stack environment.
+    if jit_exception && unsafe { cfp_env_has_escaped(get_ec_cfp(ec)) } {
+        incr_counter!(exceptional_entry_escaped_env);
+        return std::ptr::null();
+    }
+
     // If a custom call threshold was not specified on the command-line and
     // this is a large application (has very many ISEQs), switch to
     // using the call threshold for large applications after this entry point
@@ -185,8 +203,24 @@ pub extern "C" fn rb_yjit_code_gc(_ec: EcPtr, _ruby_self: VALUE) -> VALUE {
 
 /// Enable YJIT compilation, returning true if YJIT was previously disabled
 #[no_mangle]
-pub extern "C" fn rb_yjit_enable(_ec: EcPtr, _ruby_self: VALUE, gen_stats: VALUE, print_stats: VALUE, gen_log: VALUE, print_log: VALUE) -> VALUE {
+pub extern "C" fn rb_yjit_enable(_ec: EcPtr, _ruby_self: VALUE, gen_stats: VALUE, print_stats: VALUE, gen_log: VALUE, print_log: VALUE, mem_size: VALUE, call_threshold: VALUE) -> VALUE {
     with_vm_lock(src_loc!(), || {
+
+        if !mem_size.nil_p() {
+            let mem_size_mb = mem_size.as_isize() >> 1;
+            let mem_size_bytes = mem_size_mb * 1024 * 1024;
+            unsafe {
+                OPTIONS.mem_size = mem_size_bytes as usize;
+            }
+        }
+
+        if !call_threshold.nil_p() {
+            let threshold = call_threshold.as_isize() >> 1;
+            unsafe {
+                rb_yjit_call_threshold = threshold as u64;
+            }
+        }
+
         // Initialize and enable YJIT
         if gen_stats.test() {
             unsafe {

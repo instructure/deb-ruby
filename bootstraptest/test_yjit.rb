@@ -1,38 +1,6 @@
 # To run the tests in this file only, with YJIT enabled:
 # make btest BTESTS=bootstraptest/test_yjit.rb RUN_OPTS="--yjit-call-threshold=1"
 
-# This used to trigger a "try to mark T_NONE"
-# due to an uninitialized local in foo.
-assert_normal_exit %{
-  def foo(...)
-    _local_that_should_nil_on_call = GC.start
-  end
-
-  def test_bug21021
-    puts [], [], [], [], [], []
-    foo []
-  end
-
-  GC.stress = true
-  test_bug21021
-}
-
-assert_equal 'nil', %{
-  def foo(...)
-    _a = _b = _c = binding.local_variable_get(:_c)
-
-    _c
-  end
-
-  # [Bug #21021]
-  def test_local_fill_in_forwardable
-    puts [], [], [], [], []
-    foo []
-  end
-
-  test_local_fill_in_forwardable.inspect
-}
-
 # regression test for popping before side exit
 assert_equal "ok", %q{
   def foo(a, *) = a
@@ -146,7 +114,7 @@ assert_equal '[:ae, :ae]', %q{
   end
 
   [test(Array.new 5), test([])]
-} unless rjit_enabled? # Not yet working on RJIT
+}
 
 # regression test for arity check with splat and send
 assert_equal '[:ae, :ae]', %q{
@@ -206,7 +174,7 @@ assert_equal 'ok', %q{
     GC.compact
   end
   :ok
-} unless rjit_enabled? # Not yet working on RJIT
+}
 
 # regression test for overly generous guard elision
 assert_equal '[0, :sum, 0, :sum]', %q{
@@ -252,7 +220,7 @@ assert_equal 'Sub', %q{
   call(Sub.new('o')).class
 }
 
-# String#dup with FL_EXIVAR
+# String#dup with generic ivars
 assert_equal '["str", "ivar"]', %q{
   def str_dup(str) = str.dup
   str = "str"
@@ -343,7 +311,7 @@ assert_equal '[:ok]', %q{
   # Used to crash due to GC run in rb_ensure_iv_list_size()
   # not marking the newly allocated [:ok].
   RegressionTest.new.extender.itself
-} unless rjit_enabled? # Skip on RJIT since this uncovers a crash
+}
 
 assert_equal 'true', %q{
   # regression test for tracking type of locals for too long
@@ -497,91 +465,6 @@ assert_normal_exit %q{
     if r != 777
       raise "error"
     end
-  end
-}
-
-assert_equal '0', %q{
-  # This is a regression test for incomplete invalidation from
-  # opt_setinlinecache. This test might be brittle, so
-  # feel free to remove it in the future if it's too annoying.
-  # This test assumes --yjit-call-threshold=2.
-  module M
-    Foo = 1
-    def foo
-      Foo
-    end
-
-    def pin_self_type_then_foo
-      _ = @foo
-      foo
-    end
-
-    def only_ints
-      1 + self
-      foo
-    end
-  end
-
-  class Integer
-    include M
-  end
-
-  class Sub
-    include M
-  end
-
-  foo_method = M.instance_method(:foo)
-
-  dbg = ->(message) do
-    return # comment this out to get printouts
-
-    $stderr.puts RubyVM::YJIT.disasm(foo_method)
-    $stderr.puts message
-  end
-
-  2.times { 42.only_ints }
-
-  dbg["There should be two versions of getinlineache"]
-
-  module M
-    remove_const(:Foo)
-  end
-
-  dbg["There should be no getinlinecaches"]
-
-  2.times do
-    42.only_ints
-  rescue NameError => err
-    _ = "caught name error #{err}"
-  end
-
-  dbg["There should be one version of getinlineache"]
-
-  2.times do
-    Sub.new.pin_self_type_then_foo
-  rescue NameError
-    _ = 'second specialization'
-  end
-
-  dbg["There should be two versions of getinlineache"]
-
-  module M
-    Foo = 1
-  end
-
-  dbg["There should still be two versions of getinlineache"]
-
-  42.only_ints
-
-  dbg["There should be no getinlinecaches"]
-
-  # Find name of the first VM instruction in M#foo.
-  insns = RubyVM::InstructionSequence.of(foo_method).to_a
-  if defined?(RubyVM::YJIT.blocks_for) && (insns.last.find { Array === _1 }&.first == :opt_getinlinecache)
-    RubyVM::YJIT.blocks_for(RubyVM::InstructionSequence.of(foo_method))
-      .filter { _1.iseq_start_index == 0 }.count
-  else
-    0 # skip the test
   end
 }
 
@@ -1447,7 +1330,7 @@ assert_equal '[42, :default]', %q{
   ]
 }
 
-# Test default value block for Hash with opt_aref_with
+# Test default value block for Hash
 assert_equal "false", <<~RUBY, frozen_string_literal: false
   def index_with_string(h)
     h["foo"]
@@ -2097,7 +1980,7 @@ assert_equal '[97, :nil, 97, :nil, :raised]', %q{
   getbyte("a", 0)
 
   [getbyte("a", 0), getbyte("a", 1), getbyte("a", -1), getbyte("a", -2), getbyte("a", "a")]
-} unless rjit_enabled? # Not yet working on RJIT
+}
 
 # Basic test for String#setbyte
 assert_equal 'AoZ', %q{
@@ -2795,7 +2678,7 @@ assert_equal '[1, 2]', %q{
 
   expandarray_redefined_nilclass
   expandarray_redefined_nilclass
-} unless rjit_enabled?
+}
 
 assert_equal 'not_array', %q{
   def expandarray_not_array(obj)
@@ -2923,7 +2806,7 @@ assert_equal '[[:c_return, :String, :string_alias, "events_to_str"]]', %q{
   events.compiled(events)
 
   events
-} unless rjit_enabled? # RJIT calls extra Ruby methods
+}
 
 # test enabling a TracePoint that targets a particular line in a C method call
 assert_equal '[true]', %q{
@@ -3005,7 +2888,7 @@ assert_equal '[[:c_call, :itself]]', %q{
   tp.enable { shouldnt_compile }
 
   events
-} unless rjit_enabled? # RJIT calls extra Ruby methods
+}
 
 # test enabling c_return tracing before compiling
 assert_equal '[[:c_return, :itself, main]]', %q{
@@ -3020,7 +2903,7 @@ assert_equal '[[:c_return, :itself, main]]', %q{
   tp.enable { shouldnt_compile }
 
   events
-} unless rjit_enabled? # RJIT calls extra Ruby methods
+}
 
 # test c_call invalidation
 assert_equal '[[:c_call, :itself]]', %q{
@@ -3066,15 +2949,16 @@ assert_equal '[:itself]', %q{
     itself
   end
 
-  tracing_ractor = Ractor.new do
+  port = Ractor::Port.new
+  tracing_ractor = Ractor.new port do |port|
     # 1: start tracing
     events = []
     tp = TracePoint.new(:c_call) { events << _1.method_id }
     tp.enable
-    Ractor.yield(nil)
+    port << nil
 
     # 3: run compiled method on tracing ractor
-    Ractor.yield(nil)
+    port << nil
     traced_method
 
     events
@@ -3082,13 +2966,13 @@ assert_equal '[:itself]', %q{
     tp&.disable
   end
 
-  tracing_ractor.take
+  port.receive
 
   # 2: compile on non tracing ractor
   traced_method
 
-  tracing_ractor.take
-  tracing_ractor.take
+  port.receive
+  tracing_ractor.value
 }
 
 # Try to hit a lazy branch stub while another ractor enables tracing
@@ -3102,17 +2986,18 @@ assert_equal '42', %q{
     end
   end
 
-  ractor = Ractor.new do
+  port = Ractor::Port.new
+  ractor = Ractor.new port do |port|
     compiled(false)
-    Ractor.yield(nil)
+    port << nil
     compiled(41)
   end
 
   tp = TracePoint.new(:line) { itself }
-  ractor.take
+  port.receive
   tp.enable
 
-  ractor.take
+  ractor.value
 }
 
 # Test equality with changing types
@@ -3188,7 +3073,7 @@ assert_equal '42',  %q{
   A.foo
   A.foo
 
-  Ractor.new { A.foo }.take
+  Ractor.new { A.foo }.value
 }
 
 assert_equal '["plain", "special", "sub", "plain"]', %q{
@@ -3872,6 +3757,40 @@ assert_equal 'ok', %q{
   foo(s) rescue :ok
 }
 
+# max size struct with ivars
+assert_equal 'ok', <<~'RUBY'
+  n = 78
+  members = n.times.map { |i| :"m#{i}" }
+  klass = Struct.new(*members)
+  reader = ->(s) { s.m2 }
+  make = -> { klass.new(*n.times.to_a) }
+
+  before = make.call
+  300.times { reader.call(before); make.call }
+
+  before.instance_variable_set(:@iv, 1)
+  after = make.call
+  raise "wrong value" unless reader.call(after) == 2 && after.send(members.last) == (n - 1)
+  :ok
+RUBY
+
+# struct with ivars
+assert_equal 'ok', <<~'RUBY'
+  n = 3
+  members = n.times.map { |i| :"m#{i}" }
+  klass = Struct.new(*members)
+  reader = ->(s) { s.m2 }
+  make = -> { klass.new(*n.times.to_a) }
+
+  before = make.call
+  300.times { reader.call(before); make.call }
+
+  before.instance_variable_set(:@iv, 1)
+  after = make.call
+  raise "wrong value" unless reader.call(after) == 2 && after.send(members.last) == (n - 1)
+  :ok
+RUBY
+
 # File.join is a cfunc accepting variable arguments as a Ruby array (argc = -2)
 assert_equal 'foo/bar', %q{
   def foo
@@ -3905,36 +3824,6 @@ assert_equal '3,12', %q{
 
   # Make sure it's returning '3,12' instead of e.g. '3,false'
   pt_inspect(p)
-}
-
-# Regression test for deadlock between branch_stub_hit and ractor_receive_if
-assert_equal '10', %q{
-  r = Ractor.new Ractor.current do |main|
-    main << 1
-    main << 2
-    main << 3
-    main << 4
-    main << 5
-    main << 6
-    main << 7
-    main << 8
-    main << 9
-    main << 10
-  end
-
-  a = []
-  a << Ractor.receive_if{|msg| msg == 10}
-  a << Ractor.receive_if{|msg| msg == 9}
-  a << Ractor.receive_if{|msg| msg == 8}
-  a << Ractor.receive_if{|msg| msg == 7}
-  a << Ractor.receive_if{|msg| msg == 6}
-  a << Ractor.receive_if{|msg| msg == 5}
-  a << Ractor.receive_if{|msg| msg == 4}
-  a << Ractor.receive_if{|msg| msg == 3}
-  a << Ractor.receive_if{|msg| msg == 2}
-  a << Ractor.receive_if{|msg| msg == 1}
-
-  a.length
 }
 
 # checktype
@@ -4240,6 +4129,26 @@ assert_equal '1', %q{
 
   bar { }
   bar { }
+}
+
+# unshareable bmethod call through Method#to_proc#call
+assert_equal '1000', %q{
+  define_method(:bmethod) do
+    self
+  end
+
+  Ractor.new do
+    errors = 0
+    1000.times do
+      p = method(:bmethod).to_proc
+      begin
+        p.call
+      rescue RuntimeError
+        errors += 1
+      end
+    end
+    errors
+  end.value
 }
 
 # test for return stub lifetime issue
@@ -4610,7 +4519,7 @@ assert_equal 'true', %q{
   rescue ArgumentError
     true
   end
-} unless rjit_enabled? # Not yet working on RJIT
+}
 
 # Regression test: register allocator on expandarray
 assert_equal '[]', %q{
@@ -5035,7 +4944,7 @@ assert_equal '0', %q{
   end
 
   foo # try again
-} unless rjit_enabled? # doesn't work on RJIT
+}
 
 # test integer left shift with constant rhs
 assert_equal [0x80000000000, 'a+', :ok].inspect, %q{
@@ -5143,7 +5052,7 @@ assert_equal '[[true, false, false], [true, true, false], [true, :error, :error]
   end
 
   results << test
-} unless rjit_enabled? # Not yet working on RJIT
+}
 
 # test FalseClass#=== before and after redefining FalseClass#==
 assert_equal '[[true, false, false], [true, false, true], [true, :error, :error]]', %q{
@@ -5178,7 +5087,7 @@ assert_equal '[[true, false, false], [true, false, true], [true, :error, :error]
   end
 
   results << test
-} unless rjit_enabled? # Not yet working on RJIT
+}
 
 # test NilClass#=== before and after redefining NilClass#==
 assert_equal '[[true, false, false], [true, false, true], [true, :error, :error]]', %q{
@@ -5213,7 +5122,7 @@ assert_equal '[[true, false, false], [true, false, true], [true, :error, :error]
   end
 
   results << test
-} unless rjit_enabled? # Not yet working on RJIT
+}
 
 # test struct accessors fire c_call events
 assert_equal '[[:c_call, :x=], [:c_call, :x]]', %q{
@@ -5482,6 +5391,38 @@ assert_normal_exit %{
   end
 }
 
+# This used to trigger a "try to mark T_NONE"
+# due to an uninitialized local in foo.
+assert_normal_exit %{
+  def foo(...)
+    _local_that_should_nil_on_call = GC.start
+  end
+
+  def test_bug21021
+    puts [], [], [], [], [], []
+    foo []
+  end
+
+  GC.stress = true
+  test_bug21021
+}
+
+assert_equal 'nil', %{
+  def foo(...)
+    _a = _b = _c = binding.local_variable_get(:_c)
+
+    _c
+  end
+
+  # [Bug #21021]
+  def test_local_fill_in_forwardable
+    puts [], [], [], [], []
+    foo []
+  end
+
+  test_local_fill_in_forwardable.inspect
+}
+
 # Test defined?(yield) and block_given? in non-method context.
 # It's good that the body of this runs at true top level and isn't wrapped in a block.
 assert_equal 'false', %{
@@ -5552,4 +5493,73 @@ assert_normal_exit %q{
   def test = foo(1)
   test
   test
+}
+
+# regression test for register mapping of methods with over 256 locals
+# [Bug #22074]
+assert_equal "ok", %q{
+  source = +"def many_locals\n"
+  source << "  total = 0\n"
+
+  128.times do |i|
+    source << "  y#{i} = 1\n"
+    source << "  x#{i} = Object.new\n"
+  end
+
+  source << "  total += 1\n"
+  source << "  raise total.inspect unless total == 1\n"
+  source << "end\n"
+
+  eval(source)
+  many_locals
+  "ok"
+}
+
+# regression test for tracing invalidation with on-stack compiled methods
+# Exercises the on_stack_iseqs path in rb_yjit_tracing_invalidate_all
+# where delayed deallocation must not create aliasing &mut references
+# to IseqPayload (use-after-free of version_map backing storage).
+assert_normal_exit %q{
+  def deep = 42
+  def mid = deep
+  def outer = mid
+
+  # Compile all three methods with YJIT
+  10.times { outer }
+
+  # Enable tracing from within a call chain so that outer/mid/deep
+  # are on the stack when rb_yjit_tracing_invalidate_all runs.
+  # This triggers the on_stack_iseqs (delayed deallocation) path.
+  def deep
+    TracePoint.new(:line) {}.enable
+    42
+  end
+
+  outer
+
+  # After invalidation, verify YJIT can recompile and run correctly
+  def deep = 42
+  10.times { outer }
+}
+
+# regression test for tracing invalidation with on-stack fibers
+# Suspended fibers have iseqs on their stack that must survive invalidation.
+assert_equal '42', %q{
+  def compiled_method
+    Fiber.yield
+    42
+  end
+
+  # Compile the method
+  10.times { compiled_method rescue nil }
+
+  fiber = Fiber.new { compiled_method }
+  fiber.resume # suspends inside compiled_method; it's now on the fiber's stack
+
+  # Enable tracing while compiled_method is on the fiber's stack.
+  # This triggers rb_yjit_tracing_invalidate_all with on-stack iseqs.
+  TracePoint.new(:call) {}.enable
+
+  # Resume the fiber; compiled_method's iseq must still be valid
+  fiber.resume.to_s
 }

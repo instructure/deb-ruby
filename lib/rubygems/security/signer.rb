@@ -52,7 +52,7 @@ class Gem::Security::Signer
     re_signed_cert = Gem::Security.re_sign(
       expired_cert,
       private_key,
-      (Gem::Security::ONE_DAY * Gem.configuration.cert_expiration_length_days)
+      Gem::Security::ONE_DAY * Gem.configuration.cert_expiration_length_days
     )
 
     Gem::Security.write(re_signed_cert, expired_cert_path)
@@ -109,9 +109,7 @@ class Gem::Security::Signer
     subject_alt_name = cert.extensions.find {|e| e.oid == "subjectAltName" }
 
     if subject_alt_name
-      /\Aemail:/ =~ subject_alt_name.value # rubocop:disable Performance/StartWith
-
-      $' || subject_alt_name.value
+      subject_alt_name.value.delete_prefix("email:")
     else
       cert.subject
     end

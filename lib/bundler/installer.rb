@@ -7,12 +7,6 @@ require_relative "installer/gem_installer"
 
 module Bundler
   class Installer
-    class << self
-      attr_accessor :ambiguous_gems
-
-      Installer.ambiguous_gems = []
-    end
-
     attr_reader :post_install_messages, :definition
 
     # Begins the installation process for Bundler.
@@ -69,6 +63,11 @@ module Bundler
       Bundler.create_bundle_path
 
       ProcessLock.lock do
+        # Invalidate any stale gem specification cache from before we acquired the lock.
+        # Another process may have installed gems while we were waiting.
+        Gem::Specification.reset
+        @definition.sources.clear_cache
+
         @definition.ensure_equivalent_gemfile_and_lockfile(options[:deployment])
 
         if @definition.dependencies.empty?
@@ -84,6 +83,12 @@ module Bundler
         install(options)
 
         Gem::Specification.reset # invalidate gem specification cache so that installed gems are immediately available
+        # Drop the source caches too, since releasing resolution memory dropped
+        # the source indexes. A resolution happening after this point would
+        # otherwise rebuild them around a snapshot of installed gems taken
+        # before the install, and materialize against remote specs that don't
+        # know where the gems they stand for ended up.
+        @definition.sources.clear_cache
 
         lock
         Standalone.new(options[:standalone], @definition).generate if options[:standalone]
@@ -91,6 +96,11 @@ module Bundler
     end
 
     def generate_bundler_executable_stubs(spec, options = {})
+      if spec.name == "bundler"
+        Bundler.ui.warn "Bundler itself does not use binstubs because its version is selected by RubyGems"
+        return
+      end
+
       if options[:binstubs_cmd] && spec.executables.empty?
         options = {}
         spec.runtime_dependencies.each do |dep|
@@ -115,10 +125,6 @@ module Bundler
       ruby_command = Thor::Util.ruby_command
       ruby_command = ruby_command
       template_path = File.expand_path("templates/Executable", __dir__)
-      if spec.name == "bundler"
-        template_path += ".bundler"
-        spec.executables = %(bundle)
-      end
       template = File.read(template_path)
 
       exists = []
@@ -194,19 +200,17 @@ module Bundler
       standalone = options[:standalone]
       force = options[:force]
       local = options[:local] || options[:"prefer-local"]
-      jobs = installation_parallelization
-      spec_installations = ParallelInstaller.call(self, @definition.specs, jobs, standalone, force, local: local)
+      jobs = Bundler.settings.installation_parallelization
+      specs = @definition.specs
+      # Installing default gems may need the remote index again to cache
+      # their .gem files, so keep resolution memory around in that case.
+      # The bundler spec itself is excluded because it comes from the
+      # metadata source and never goes through that path.
+      @definition.release_resolution_memory! if specs.none? {|s| s.default_gem? && s.source.is_a?(Source::Rubygems) }
+      spec_installations = ParallelInstaller.call(self, specs, jobs, standalone, force, local: local)
       spec_installations.each do |installation|
         post_install_messages[installation.name] = installation.post_install_message if installation.has_post_install_message?
       end
-    end
-
-    def installation_parallelization
-      if jobs = Bundler.settings[:jobs]
-        return jobs
-      end
-
-      Bundler.settings.processor_count
     end
 
     def load_plugins

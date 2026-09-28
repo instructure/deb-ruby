@@ -5,7 +5,7 @@ require_relative "text"
 # A Source knows how to list and fetch gems from a RubyGems marshal index.
 #
 # There are other Source subclasses for installed gems, local gems, the
-# bundler dependency API and so-forth.
+# Compact Index API and so-forth.
 
 class Gem::Source
   include Comparable
@@ -67,28 +67,11 @@ class Gem::Source
 
   ##
   # Returns a Set that can fetch specifications from this source.
-
-  def dependency_resolver_set # :nodoc:
-    return Gem::Resolver::IndexSet.new self if uri.scheme == "file"
-
-    fetch_uri = if uri.host == "rubygems.org"
-      index_uri = uri.dup
-      index_uri.host = "index.rubygems.org"
-      index_uri
-    else
-      uri
-    end
-
-    bundler_api_uri = enforce_trailing_slash(fetch_uri) + "versions"
-
-    begin
-      fetcher = Gem::RemoteFetcher.fetcher
-      response = fetcher.fetch_path bundler_api_uri, nil, true
-    rescue Gem::RemoteFetcher::FetchError
-      Gem::Resolver::IndexSet.new self
-    else
-      Gem::Resolver::APISet.new response.uri + "./info/"
-    end
+  #
+  # The set will optionally fetch prereleases if requested.
+  #
+  def dependency_resolver_set(prerelease = false)
+    new_dependency_resolver_set.tap {|set| set.prerelease = prerelease }
   end
 
   def hash # :nodoc:
@@ -119,12 +102,19 @@ class Gem::Source
   end
 
   ##
-  # Fetches a specification for the given +name_tuple+.
+  # Fetches a specification for the given Gem::NameTuple.
 
   def fetch_spec(name_tuple)
     fetcher = Gem::RemoteFetcher.fetcher
 
     spec_file_name = name_tuple.spec_name
+
+    # The name tuple comes from a remote index and is not otherwise
+    # validated, so refuse anything that would escape the spec cache
+    # directory when used as a path component.
+    if File.basename(spec_file_name) != spec_file_name
+      raise Gem::Exception, "malformed spec name: #{spec_file_name.inspect}"
+    end
 
     source_uri = enforce_trailing_slash(uri) + "#{Gem::MARSHAL_SPEC_DIR}#{spec_file_name}"
 
@@ -207,7 +197,7 @@ class Gem::Source
   # Downloads +spec+ and writes it to +dir+.  See also
   # Gem::RemoteFetcher#download.
 
-  def download(spec, dir=Dir.pwd)
+  def download(spec, dir = Dir.pwd)
     fetcher = Gem::RemoteFetcher.fetcher
     fetcher.download spec, uri.to_s, dir
   end
@@ -227,12 +217,35 @@ class Gem::Source
     end
   end
 
-  def typo_squatting?(host, distance_threshold=4)
+  def typo_squatting?(host, distance_threshold = 4)
     return if @uri.host.nil?
     levenshtein_distance(@uri.host, host).between? 1, distance_threshold
   end
 
   private
+
+  def new_dependency_resolver_set
+    return Gem::Resolver::IndexSet.new self if uri.scheme == "file"
+
+    fetch_uri = if uri.host == "rubygems.org"
+      index_uri = uri.dup
+      index_uri.host = "index.rubygems.org"
+      index_uri
+    else
+      uri
+    end
+
+    bundler_api_uri = enforce_trailing_slash(fetch_uri) + "versions"
+
+    begin
+      fetcher = Gem::RemoteFetcher.fetcher
+      response = fetcher.fetch_path bundler_api_uri, nil, true
+    rescue Gem::RemoteFetcher::FetchError
+      Gem::Resolver::IndexSet.new self
+    else
+      Gem::Resolver::APISet.new response.uri + "./info/"
+    end
+  end
 
   def enforce_trailing_slash(uri)
     uri.merge(uri.path.gsub(%r{/+$}, "") + "/")

@@ -380,7 +380,7 @@ RSpec.describe "bundler/inline#gemfile" do
         rake
 
       BUNDLED WITH
-         #{Bundler::VERSION}
+        #{Bundler::VERSION}
     G
 
     script <<-RUBY
@@ -414,7 +414,7 @@ RSpec.describe "bundler/inline#gemfile" do
         rake
 
       BUNDLED WITH
-         #{Bundler::VERSION}
+        #{Bundler::VERSION}
     G
 
     script <<-RUBY
@@ -590,36 +590,9 @@ RSpec.describe "bundler/inline#gemfile" do
     expect(err).to be_empty
   end
 
-  it "when requiring fileutils after does not show redefinition warnings" do
-    Dir.mkdir tmp("path_without_gemfile")
-
-    default_fileutils_version = ruby "gem 'fileutils', '< 999999'; require 'fileutils'; puts FileUtils::VERSION", raise_on_error: false
-    skip "fileutils isn't a default gem" if default_fileutils_version.empty?
-
-    realworld_system_gems "fileutils --version 1.4.1"
-
-    realworld_system_gems "pathname --version 0.2.0"
-
-    script <<-RUBY, dir: tmp("path_without_gemfile"), env: { "BUNDLER_GEM_DEFAULT_DIR" => system_gem_path.to_s, "BUNDLER_SPEC_GEM_REPO" => gem_repo2.to_s }
-      require "bundler/inline"
-
-      gemfile(true) do
-        source "https://gem.repo2"
-      end
-
-      require "fileutils"
-    RUBY
-
-    expect(err).to eq("The Gemfile specifies no dependencies")
-  end
-
-  it "does not load default timeout" do
+  it "does not load default timeout", rubygems: ">= 3.5.0" do
     default_timeout_version = ruby "gem 'timeout', '< 999999'; require 'timeout'; puts Timeout::VERSION", raise_on_error: false
     skip "timeout isn't a default gem" if default_timeout_version.empty?
-
-    # This only works on RubyGems 3.5.0 or higher
-    ruby "require 'rubygems/timeout'", raise_on_error: false
-    skip "rubygems under test does not yet vendor timeout" unless last_command.success?
 
     build_repo4 do
       build_gem "timeout", "999"
@@ -707,6 +680,38 @@ RSpec.describe "bundler/inline#gemfile" do
     expect(out).to include("Installing stringio 999")
     expect(out).to include("The psych gem was resolved to 999")
     expect(out).to include("The stringio gem was resolved to 999")
+  end
+
+  it "sets up custom require paths for gems installed in the same process" do
+    build_repo4 do
+      build_gem "securerandom", "999"
+
+      build_gem "unusual_paths", "1.0.0", no_default: true do |s|
+        s.require_paths = ["lib/unusual_paths"]
+        s.write "lib/unusual_paths/unusual_paths.rb", "UNUSUAL_PATHS = 'loaded'"
+      end
+    end
+
+    script <<-RUBY, env: { "BUNDLER_SPEC_GEM_REPO" => gem_repo4.to_s }
+      # Simulate a platform where installing in a subprocess is not possible, so
+      # that the conflicting default gem forces a re-resolution in this process,
+      # after the gems have been installed.
+      class << Process
+        undef_method :fork
+      end
+
+      gemfile(true) do
+        source "https://gem.repo4"
+        gem "securerandom"
+        gem "unusual_paths"
+      end
+
+      puts UNUSUAL_PATHS
+    RUBY
+
+    expect(out).to include("Installing unusual_paths 1.0.0")
+    expect(out).to include("loaded")
+    expect(err).to be_empty
   end
 
   it "leaves a lockfile in the same directory as the inline script alone" do
