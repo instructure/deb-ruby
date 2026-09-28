@@ -7,3 +7,4 @@
 0009-Fix-FTBFS-on-x32-misdetected-as-i386-or-amd64.patch
 0011-don-t-try-to-download-stuff-in-configure.patch
 0012-use-debian-standard-multiarch.patch
+0013-pass-only-D-U-options-to-dtrace.patch
