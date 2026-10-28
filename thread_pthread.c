@@ -1533,6 +1533,8 @@ get_native_thread_id(void)
 #endif
 
 #if defined(HAVE_WORKING_FORK)
+void rb_internal_thread_event_hooks_rw_lock_atfork(void);
+
 static void
 thread_sched_atfork(struct rb_thread_sched *sched)
 {
@@ -1550,6 +1552,11 @@ thread_sched_atfork(struct rb_thread_sched *sched)
     vm->ractor.sched.running_cnt = 0;
 
     rb_native_mutex_initialize(&vm->ractor.sched.lock);
+#if VM_CHECK_MODE > 0
+    vm->ractor.sched.lock_owner = NULL;
+    vm->ractor.sched.locked = false;
+#endif
+
     // rb_native_cond_destroy(&vm->ractor.sched.cond);
     rb_native_cond_initialize(&vm->ractor.sched.cond);
     rb_native_cond_initialize(&vm->ractor.sched.barrier_complete_cond);
@@ -1558,6 +1565,8 @@ thread_sched_atfork(struct rb_thread_sched *sched)
     ccan_list_head_init(&vm->ractor.sched.grq);
     ccan_list_head_init(&vm->ractor.sched.timeslice_threads);
     ccan_list_head_init(&vm->ractor.sched.running_threads);
+
+    rb_internal_thread_event_hooks_rw_lock_atfork();
 
     VM_ASSERT(sched->is_running);
     sched->is_running_timeslice = false;
@@ -3294,6 +3303,10 @@ native_sleep(rb_thread_t *th, rb_hrtime_t *rel)
 // fork read-write lock (only for pthread)
 static pthread_rwlock_t rb_thread_fork_rw_lock = PTHREAD_RWLOCK_INITIALIZER;
 
+// the registered thread waiting to be joined, or NULL; no pthread_t is 0
+static void *last_exiting_thread;
+STATIC_ASSERT(pthread_t_fits_in_pointer, sizeof(pthread_t) <= sizeof(void *));
+
 void
 rb_thread_release_fork_lock(void)
 {
@@ -3306,14 +3319,10 @@ rb_thread_release_fork_lock(void)
 void
 rb_thread_reset_fork_lock(void)
 {
-    int r;
-    if ((r = pthread_rwlock_destroy(&rb_thread_fork_rw_lock))) {
-        rb_bug_errno("pthread_rwlock_destroy", r);
-    }
-
-    if ((r = pthread_rwlock_init(&rb_thread_fork_rw_lock, NULL))) {
-        rb_bug_errno("pthread_rwlock_init", r);
-    }
+    // On macOS the child's copy still counts a thread waiting for this lock
+    // at fork: unlocking it leaves kernel state that later waiters hang on,
+    // and destroying or initializing it fails with EBUSY.
+    rb_thread_fork_rw_lock = (pthread_rwlock_t)PTHREAD_RWLOCK_INITIALIZER;
 }
 
 void *
@@ -3328,6 +3337,26 @@ rb_thread_prevent_fork(void *(*func)(void *), void *data)
     return result;
 }
 
+static void
+thread_register_exiting(void *thread)
+{
+    void *previous_thread = RUBY_ATOMIC_PTR_EXCHANGE(last_exiting_thread, thread);
+    if (previous_thread) {
+        int r;
+        if ((r = pthread_join((pthread_t)(uintptr_t)previous_thread, NULL))) {
+            rb_bug_errno("pthread_join", r);
+        }
+    }
+}
+
+// Called within rb_thread_prevent_fork() by a joinable thread just before it
+// exits.  The thread it replaces in the slot has usually exited by then.
+void
+rb_thread_register_exiting(void)
+{
+    thread_register_exiting((void *)(uintptr_t)pthread_self());
+}
+
 void
 rb_thread_acquire_fork_lock(void)
 {
@@ -3335,6 +3364,11 @@ rb_thread_acquire_fork_lock(void)
     if ((r = pthread_rwlock_wrlock(&rb_thread_fork_rw_lock))) {
         rb_bug_errno("pthread_rwlock_wrlock", r);
     }
+
+    // A registered thread may still be exiting, and glibc's thread exit takes
+    // the resolver configuration lock, which fork does not reset.  None can
+    // register while this lock is held.
+    thread_register_exiting(NULL);
 }
 
 // thread internal event hooks (only for pthread)
@@ -3348,6 +3382,22 @@ struct rb_internal_thread_event_hook {
 };
 
 static pthread_rwlock_t rb_internal_thread_event_hooks_rw_lock = PTHREAD_RWLOCK_INITIALIZER;
+
+#if defined(HAVE_WORKING_FORK)
+void
+rb_internal_thread_event_hooks_rw_lock_atfork(void)
+{
+  // After fork(), this rwlock may have been held by a now-dead thread.
+  //
+  // pthread_rwlock_destroy() on a held lock is undefined behavior, and
+  // pthread_rwlock_init() on an already-initialized lock is also undefined
+  // behavior
+  //
+  // Direct assignment of PTHREAD_RWLOCK_INITIALIZER is safe and portable.
+  rb_internal_thread_event_hooks_rw_lock =
+      (pthread_rwlock_t)PTHREAD_RWLOCK_INITIALIZER;
+}
+#endif
 
 rb_internal_thread_event_hook_t *
 rb_internal_thread_add_event_hook(rb_internal_thread_event_callback callback, rb_event_flag_t internal_event, void *user_data)

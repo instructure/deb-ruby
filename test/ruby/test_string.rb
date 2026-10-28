@@ -1,5 +1,6 @@
 # frozen_string_literal: false
 require 'test/unit'
+require '-test-/string'
 
 class TestString < Test::Unit::TestCase
   WIDE_ENCODINGS = [
@@ -2787,6 +2788,17 @@ CODE
     assert_equal([S("abcdb"), S("c"), S("e")], S("abcdbce").rpartition(/b\Kc/))
   end
 
+  def test_rpartition_string_modified
+    str = S("héllo" * 1000)
+    replacement = S("hé")
+    obj = Object.new
+    obj.define_singleton_method(:to_str) do
+      str.replace(replacement)
+      "-"
+    end
+    assert_equal([S(""), S(""), replacement], str.rpartition(obj))
+  end
+
   def test_fs_setter
     return unless @cls == String
 
@@ -3524,6 +3536,16 @@ CODE
     assert !1000.times.any? {s.byteindex("", 100_000_000)}
   end
 
+  def test_byteindex_modify_source
+    s = S("héllo" * 1000)
+    obj = Object.new
+    obj.define_singleton_method(:to_int) do
+      s.replace("é" * 50)
+      4500
+    end
+    assert_nil(s.byteindex("l", obj))
+  end
+
   def test_byterindex
     assert_byterindex(3, S("hello"), ?l)
     assert_byterindex(6, S("ell, hello"), S("ell"))
@@ -3576,6 +3598,16 @@ CODE
     assert_byterindex(nil, S("こんにち"), S("こんにちは"))
     assert_byterindex(nil, S("こ"), S("こんにちは"))
     assert_byterindex(nil, S(""), S("こんにちは"))
+  end
+
+  def test_byterindex_modify_source
+    s = S("héllo" * 1000)
+    obj = Object.new
+    obj.define_singleton_method(:to_int) do
+      s.replace("é" * 50)
+      4500
+    end
+    assert_nil(s.byterindex("l", obj))
   end
 
   def test_bytesplice
@@ -3753,6 +3785,34 @@ CODE
     Warning[:deprecated] = deprecated
   end
 
+  def test_encode_fallback_raise_memory_leak
+    {
+      "hash" => <<~RUBY,
+        fallback = Hash.new { raise }
+      RUBY
+      "proc" => <<~RUBY,
+        fallback = proc { raise }
+      RUBY
+      "method" => <<~RUBY,
+        def my_method = raise
+        fallback = method(:my_method)
+      RUBY
+      "aref" => <<~RUBY,
+        fallback = Object.new
+        def fallback.[] = raise
+      RUBY
+    }.each do |type, code|
+      assert_no_memory_leak([], '', <<~RUBY, "fallback type is #{type}", rss: true)
+        #{code}
+
+        100_000.times do |i|
+          "\\ufffd".encode(Encoding::US_ASCII, fallback:)
+        rescue
+        end
+      RUBY
+    end
+  end
+
   private
 
   def assert_bytesplice_result(expected, s, *args)
@@ -3805,5 +3865,39 @@ class TestString2 < TestString
   def initialize(*args)
     super
     @cls = S2
+  end
+
+  def assert_capacity(capa, str, msg)
+    assert_equal capa, Bug::String.capacity(str), msg
+  end
+
+  def test_capacity_inflation
+    orig = ("\u{30AF}" * 5)
+    all_assertions_foreach(nil, Encoding::UTF_8, *WIDE_ENCODINGS) do |enc|
+      assert_capacity(200, S2.new(orig.encode(enc), encoding: "UTF-8", capacity: 200), enc.name)
+    end
+  end
+
+  def test_capacity_no_inflation
+    orig = "hello"
+    all_assertions_foreach(nil, Encoding::UTF_8, *WIDE_ENCODINGS) do |enc|
+      assert_capacity(100, S2.new(orig, encoding: enc, capacity: 100), enc.name)
+    end
+  end
+
+  def test_capacity_no_overflow_on_append
+    orig = ("\u{30AF}" * 5)
+    all_assertions_foreach(nil, *WIDE_ENCODINGS) do |enc|
+      encoded = orig.encode(enc)
+      size = encoded.bytesize
+
+      s = S2.new(encoded, encoding: "UTF-8", capacity: 200)
+      s << "x" * 191
+      assert_equal(size + 191, s.bytesize, enc.name)
+
+      s = S2.new(encoded, encoding: "UTF-8", capacity: 207)
+      s << "y" * 207
+      assert_equal(size + 207, s.bytesize, enc.name)
+    end
   end
 end

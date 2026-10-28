@@ -1,6 +1,7 @@
 # frozen_string_literal: false
 
 require 'tempfile'
+require 'rbconfig/sizeof'
 
 class TestIOBuffer < Test::Unit::TestCase
   experimental = Warning[:experimental]
@@ -313,6 +314,15 @@ class TestIOBuffer < Test::Unit::TestCase
     assert_raise_with_message(ArgumentError, /Offset can't be negative/) do
       buffer.get_string(-1)
     end
+
+    # [Bug #22336]
+    encoding = Struct.new(:buffer) do
+      def to_str
+        buffer.resize(64 * 1024 * 1024)
+        "UTF-8"
+      end
+    end.new(IO::Buffer.new(2_000_000))
+    assert_equal 1_000_000, encoding.buffer.get_string(0, 1_000_000, encoding).length
   end
 
   def test_zero_length_get_string
@@ -347,6 +357,8 @@ class TestIOBuffer < Test::Unit::TestCase
     :F64 => [-1.0, 0.0, 0.5, 1.0, 128.0],
   }
 
+  SIZE_MAX = RbConfig::LIMITS["SIZE_MAX"]
+
   def test_get_set_value
     buffer = IO::Buffer.new(128)
 
@@ -354,6 +366,16 @@ class TestIOBuffer < Test::Unit::TestCase
       values.each do |value|
         buffer.set_value(data_type, 0, value)
         assert_equal value, buffer.get_value(data_type, 0), "Converting #{value} as #{data_type}."
+      end
+      assert_raise(ArgumentError) {buffer.get_value(data_type, 128)}
+      assert_raise(ArgumentError) {buffer.set_value(data_type, 128, 0)}
+      case data_type
+      when :U8, :S8
+      else
+        assert_raise(ArgumentError) {buffer.get_value(data_type, 127)}
+        assert_raise(ArgumentError) {buffer.set_value(data_type, 127, 0)}
+        assert_raise(ArgumentError) {buffer.get_value(data_type, SIZE_MAX)}
+        assert_raise(ArgumentError) {buffer.set_value(data_type, SIZE_MAX, 0)}
       end
     end
   end
@@ -421,7 +443,21 @@ class TestIOBuffer < Test::Unit::TestCase
 
   def test_clear
     buffer = IO::Buffer.new(16)
-    buffer.set_string("Hello World!")
+    assert_equal "\0" * 16, buffer.get_string
+    buffer.clear(1)
+    assert_equal "\1" * 16, buffer.get_string
+    buffer.clear(2, 1, 2)
+    assert_equal "\1" + "\2"*2 + "\1"*13, buffer.get_string
+    buffer.clear(2, 1)
+    assert_equal "\1" + "\2"*15, buffer.get_string
+    buffer.clear(260)
+    assert_equal "\4" * 16, buffer.get_string
+    assert_raise(TypeError) {buffer.clear("x")}
+
+    assert_raise(ArgumentError) {buffer.clear(0, 20)}
+    assert_raise(ArgumentError) {buffer.clear(0, 0, 20)}
+    assert_raise(ArgumentError) {buffer.clear(0, 10, 10)}
+    assert_raise(ArgumentError) {buffer.clear(0, SIZE_MAX-7, 10)}
   end
 
   def test_invalidation
@@ -599,6 +635,24 @@ class TestIOBuffer < Test::Unit::TestCase
     assert_equal IO::Buffer.for("\xce\xcd\xcc\xcb\xce\xcd\xcc\xcb\xce\xcd"), source.dup.not!
   end
 
+  def test_and_raises_on_freed_self
+    inner = IO::Buffer.new(IO::Buffer::PAGE_SIZE)
+    slice = inner.slice(0, 8)
+    inner.free
+
+    mask = IO::Buffer.for("ABCDEFGH")
+    assert_raise(IO::Buffer::InvalidatedError) { slice & mask }
+  end
+
+  def test_and_raises_on_freed_mask
+    inner = IO::Buffer.new(IO::Buffer::PAGE_SIZE)
+    mask_slice = inner.slice(0, 8)
+    inner.free
+
+    source = IO::Buffer.for("ABCDEFGH")
+    assert_raise(IO::Buffer::InvalidatedError) { source & mask_slice }
+  end
+
   def test_shared
     message = "Hello World"
     buffer = IO::Buffer.new(64, IO::Buffer::MAPPED | IO::Buffer::SHARED)
@@ -682,5 +736,35 @@ class TestIOBuffer < Test::Unit::TestCase
     assert_predicate buf, :null?
     buf.set_string('a', 0, 0)
     assert_predicate buf, :empty?
+  end
+
+  class Bug21882 < RuntimeError; end
+  def test_locked_exception
+    buf = IO::Buffer.new(10)
+    assert_raise(Bug21882, '#locked should propagate exception') do
+      buf.locked { raise Bug21882 }
+    end
+
+    # should be unlocked now and can be locked again
+    refute_predicate buf, :locked?
+    buf.locked { }
+  end
+
+  def test_locked_break
+    buf = IO::Buffer.new(10)
+    assert_equal :ok, (buf.locked { break :ok })
+
+    # should be unlocked now and can be locked again
+    refute_predicate buf, :locked?
+    buf.locked { }
+  end
+
+  def test_locked_throw
+    buf = IO::Buffer.new(10)
+    assert_equal :ok, (catch(:bug21882) { buf.locked { throw :bug21882, :ok } })
+
+    # should be unlocked now and can be locked again
+    refute_predicate buf, :locked?
+    buf.locked { }
   end
 end

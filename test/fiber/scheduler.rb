@@ -120,7 +120,7 @@ class Scheduler
         end
 
         ready.each do |fiber|
-          fiber.transfer
+          fiber.transfer if fiber.alive?
         end
       end
     end
@@ -438,6 +438,25 @@ class IOBufferScheduler < Scheduler
 
   def blocking(&block)
     Fiber.blocking(&block)
+  end
+end
+
+class IOWaitErrorScheduler < Scheduler
+  def initialize(result)
+    super()
+    @result = result
+  end
+
+  def io_read(*)
+    -Errno::EAGAIN::Errno
+  end
+
+  alias io_write io_read
+
+  def io_wait(*)
+    # A successful blocking read clears errno while the scheduler is waiting.
+    Fiber.blocking { File.read(File::NULL) }
+    @result
   end
 end
 
