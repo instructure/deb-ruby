@@ -1375,6 +1375,17 @@ rb_io_buffer_try_unlock(VALUE self)
     return 0;
 }
 
+static VALUE
+rb_io_buffer_locked_ensure(VALUE self)
+{
+    struct rb_io_buffer *buffer = NULL;
+    TypedData_Get_Struct(self, struct rb_io_buffer, &rb_io_buffer_type, buffer);
+
+    buffer->flags &= ~RB_IO_BUFFER_LOCKED;
+
+    return Qnil;
+}
+
 /*
  *  call-seq: locked { ... }
  *
@@ -1417,11 +1428,7 @@ rb_io_buffer_locked(VALUE self)
 
     buffer->flags |= RB_IO_BUFFER_LOCKED;
 
-    VALUE result = rb_yield(self);
-
-    buffer->flags &= ~RB_IO_BUFFER_LOCKED;
-
-    return result;
+    return rb_ensure(rb_yield, self, rb_io_buffer_locked_ensure, self);
 }
 
 /*
@@ -1475,13 +1482,19 @@ VALUE rb_io_buffer_free_locked(VALUE self)
     return self;
 }
 
+static bool
+size_sum_is_bigger_than(size_t a, size_t b, size_t x)
+{
+    struct rbimpl_size_overflow_tag size = rbimpl_size_add_overflow(a, b);
+    return size.overflowed || size.result > x;
+}
+
 // Validate that access to the buffer is within bounds, assuming you want to
 // access length bytes from the specified offset.
 static inline void
 io_buffer_validate_range(struct rb_io_buffer *buffer, size_t offset, size_t length)
 {
-    // We assume here that offset + length won't overflow:
-    if (offset + length > buffer->size) {
+    if (size_sum_is_bigger_than(offset, length, buffer->size)) {
         rb_raise(rb_eArgError, "Specified offset+length is bigger than the buffer size!");
     }
 }
@@ -1791,9 +1804,9 @@ rb_io_buffer_compare(VALUE self, VALUE other)
 }
 
 static void
-io_buffer_validate_type(size_t size, size_t offset)
+io_buffer_validate_type(size_t size, size_t offset, size_t extend)
 {
-    if (offset > size) {
+    if (size_sum_is_bigger_than(offset, extend, size)) {
         rb_raise(rb_eArgError, "Type extends beyond end of buffer! (offset=%"PRIdSIZE" > size=%"PRIdSIZE")", offset, size);
     }
 }
@@ -1850,7 +1863,7 @@ static ID RB_IO_BUFFER_DATA_TYPE_##name; \
 static VALUE \
 io_buffer_read_##name(const void* base, size_t size, size_t *offset) \
 { \
-    io_buffer_validate_type(size, *offset + sizeof(type)); \
+    io_buffer_validate_type(size, *offset, sizeof(type)); \
     type value; \
     memcpy(&value, (char*)base + *offset, sizeof(type)); \
     if (endian != RB_IO_BUFFER_HOST_ENDIAN) value = swap(value); \
@@ -1861,7 +1874,7 @@ io_buffer_read_##name(const void* base, size_t size, size_t *offset) \
 static void \
 io_buffer_write_##name(const void* base, size_t size, size_t *offset, VALUE _value) \
 { \
-    io_buffer_validate_type(size, *offset + sizeof(type)); \
+    io_buffer_validate_type(size, *offset, sizeof(type)); \
     type value = unwrap(_value); \
     if (endian != RB_IO_BUFFER_HOST_ENDIAN) value = swap(value); \
     memcpy((char*)base + *offset, &value, sizeof(type)); \
@@ -2366,7 +2379,7 @@ io_buffer_memmove(struct rb_io_buffer *buffer, size_t offset, const void *source
 
     io_buffer_validate_range(buffer, offset, length);
 
-    if (source_offset + length > source_size) {
+    if (size_sum_is_bigger_than(source_offset, length, source_size)) {
         rb_raise(rb_eArgError, "The computed source range exceeds the size of the source buffer!");
     }
 
@@ -2562,10 +2575,6 @@ io_buffer_get_string(int argc, VALUE *argv, VALUE self)
     size_t offset, length;
     struct rb_io_buffer *buffer = io_buffer_extract_offset_length(self, argc, argv, &offset, &length);
 
-    const void *base;
-    size_t size;
-    io_buffer_get_bytes_for_reading(buffer, &base, &size);
-
     rb_encoding *encoding;
     if (argc >= 3) {
         encoding = rb_find_encoding(argv[2]);
@@ -2573,6 +2582,10 @@ io_buffer_get_string(int argc, VALUE *argv, VALUE self)
     else {
         encoding = rb_ascii8bit_encoding();
     }
+
+    const void *base;
+    size_t size;
+    io_buffer_get_bytes_for_reading(buffer, &base, &size);
 
     io_buffer_validate_range(buffer, offset, length);
 
@@ -3227,14 +3240,14 @@ io_buffer_pwrite(int argc, VALUE *argv, VALUE self)
 }
 
 static inline void
-io_buffer_check_mask(const struct rb_io_buffer *buffer)
+io_buffer_check_mask_size(size_t size)
 {
-    if (buffer->size == 0)
+    if (size == 0)
         rb_raise(rb_eIOBufferMaskError, "Zero-length mask given!");
 }
 
 static void
-memory_and(unsigned char * restrict output, unsigned char * restrict base, size_t size, unsigned char * restrict mask, size_t mask_size)
+memory_and(unsigned char * restrict output, const unsigned char * restrict base, size_t size, const unsigned char * restrict mask, size_t mask_size)
 {
     for (size_t offset = 0; offset < size; offset += 1) {
         output[offset] = base[offset] & mask[offset % mask_size];
@@ -3262,13 +3275,21 @@ io_buffer_and(VALUE self, VALUE mask)
     struct rb_io_buffer *mask_buffer = NULL;
     TypedData_Get_Struct(mask, struct rb_io_buffer, &rb_io_buffer_type, mask_buffer);
 
-    io_buffer_check_mask(mask_buffer);
+    const void *base;
+    size_t size;
+    io_buffer_get_bytes_for_reading(buffer, &base, &size);
 
-    VALUE output = rb_io_buffer_new(NULL, buffer->size, io_flags_for_size(buffer->size));
+    const void *mask_base;
+    size_t mask_size;
+    io_buffer_get_bytes_for_reading(mask_buffer, &mask_base, &mask_size);
+
+    io_buffer_check_mask_size(mask_size);
+
+    VALUE output = rb_io_buffer_new(NULL, size, io_flags_for_size(size));
     struct rb_io_buffer *output_buffer = NULL;
     TypedData_Get_Struct(output, struct rb_io_buffer, &rb_io_buffer_type, output_buffer);
 
-    memory_and(output_buffer->base, buffer->base, buffer->size, mask_buffer->base, mask_buffer->size);
+    memory_and(output_buffer->base, base, size, mask_base, mask_size);
 
     return output;
 }
@@ -3302,7 +3323,7 @@ io_buffer_or(VALUE self, VALUE mask)
     struct rb_io_buffer *mask_buffer = NULL;
     TypedData_Get_Struct(mask, struct rb_io_buffer, &rb_io_buffer_type, mask_buffer);
 
-    io_buffer_check_mask(mask_buffer);
+    io_buffer_check_mask_size(mask_buffer->size);
 
     VALUE output = rb_io_buffer_new(NULL, buffer->size, io_flags_for_size(buffer->size));
     struct rb_io_buffer *output_buffer = NULL;
@@ -3342,7 +3363,7 @@ io_buffer_xor(VALUE self, VALUE mask)
     struct rb_io_buffer *mask_buffer = NULL;
     TypedData_Get_Struct(mask, struct rb_io_buffer, &rb_io_buffer_type, mask_buffer);
 
-    io_buffer_check_mask(mask_buffer);
+    io_buffer_check_mask_size(mask_buffer->size);
 
     VALUE output = rb_io_buffer_new(NULL, buffer->size, io_flags_for_size(buffer->size));
     struct rb_io_buffer *output_buffer = NULL;
@@ -3439,7 +3460,7 @@ io_buffer_and_inplace(VALUE self, VALUE mask)
     struct rb_io_buffer *mask_buffer = NULL;
     TypedData_Get_Struct(mask, struct rb_io_buffer, &rb_io_buffer_type, mask_buffer);
 
-    io_buffer_check_mask(mask_buffer);
+    io_buffer_check_mask_size(mask_buffer->size);
     io_buffer_check_overlaps(buffer, mask_buffer);
 
     void *base;
@@ -3485,7 +3506,7 @@ io_buffer_or_inplace(VALUE self, VALUE mask)
     struct rb_io_buffer *mask_buffer = NULL;
     TypedData_Get_Struct(mask, struct rb_io_buffer, &rb_io_buffer_type, mask_buffer);
 
-    io_buffer_check_mask(mask_buffer);
+    io_buffer_check_mask_size(mask_buffer->size);
     io_buffer_check_overlaps(buffer, mask_buffer);
 
     void *base;
@@ -3531,7 +3552,7 @@ io_buffer_xor_inplace(VALUE self, VALUE mask)
     struct rb_io_buffer *mask_buffer = NULL;
     TypedData_Get_Struct(mask, struct rb_io_buffer, &rb_io_buffer_type, mask_buffer);
 
-    io_buffer_check_mask(mask_buffer);
+    io_buffer_check_mask_size(mask_buffer->size);
     io_buffer_check_overlaps(buffer, mask_buffer);
 
     void *base;

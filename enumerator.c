@@ -18,6 +18,7 @@
 #include <float.h>
 #endif
 
+#include <limits.h>
 #include "id.h"
 #include "internal.h"
 #include "internal/class.h"
@@ -1978,7 +1979,7 @@ lazy_to_enum(int argc, VALUE *argv, VALUE self)
 
     if (argc > 0) {
         --argc;
-        meth = *argv++;
+        meth = rb_to_symbol(*argv++);
     }
     if (RTEST((super_meth = rb_hash_aref(lazy_use_super_method, meth)))) {
         meth = super_meth;
@@ -2073,17 +2074,12 @@ lazy_map(VALUE obj)
     return lazy_add_method(obj, 0, 0, Qnil, Qnil, &lazy_map_funcs);
 }
 
-struct flat_map_i_arg {
-    struct MEMO *result;
-    long index;
-};
-
 static VALUE
 lazy_flat_map_i(RB_BLOCK_CALL_FUNC_ARGLIST(i, y))
 {
-    struct flat_map_i_arg *arg = (struct flat_map_i_arg *)y;
+    struct MEMO *arg = MEMO_CAST(y);
 
-    return lazy_yielder_yield(arg->result, arg->index, argc, argv);
+    return lazy_yielder_yield(MEMO_CAST(arg->v1), arg->u3.cnt, argc, argv);
 }
 
 static struct MEMO *
@@ -2098,10 +2094,11 @@ lazy_flat_map_proc(VALUE proc_entry, struct MEMO *result, VALUE memos, long memo
         ary = value;
     }
     else if (rb_respond_to(value, id_force) && rb_respond_to(value, id_each)) {
-        struct flat_map_i_arg arg = {.result = result, .index = proc_index};
+        VALUE arg = (VALUE)MEMO_NEW((VALUE)result, Qnil, proc_index);
         LAZY_MEMO_RESET_BREAK(result);
-        rb_block_call(value, id_each, 0, 0, lazy_flat_map_i, (VALUE)&arg);
+        rb_block_call(value, id_each, 0, 0, lazy_flat_map_i, arg);
         if (break_p) LAZY_MEMO_SET_BREAK(result);
+        RB_GC_GUARD(arg);
         return 0;
     }
 
@@ -3971,7 +3968,7 @@ arith_seq_first(int argc, VALUE *argv, VALUE self)
             ary = rb_ary_new_capa((n < len) ? n : len);
             while (n > 0 && i < end) {
                 rb_ary_push(ary, LONG2FIX(i));
-                if (i + unit < i) break;
+                if (i > LONG_MAX - unit) break;
                 i += unit;
                 --n;
             }
@@ -3984,7 +3981,7 @@ arith_seq_first(int argc, VALUE *argv, VALUE self)
             ary = rb_ary_new_capa((n < len) ? n : len);
             while (n > 0 && i > end) {
                 rb_ary_push(ary, LONG2FIX(i));
-                if (i + unit > i) break;
+                if (i < LONG_MIN - unit) break;
                 i += unit;
                 --n;
             }
