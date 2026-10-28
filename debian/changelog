@@ -1,3 +1,10 @@
+ruby4.0 (4.0.9-ppa1) focal; urgency=medium
+
+  * New upstream version 4.0.9
+  * Restore .github
+
+ -- Jacob Burroughs <jburroughs@instructure.com>  Wed, 28 Oct 2026 18:02:51 -0500
+
 ruby4.0 (4.0.7-ppa1) noble; urgency=medium
 
   * Ruby 4.0
