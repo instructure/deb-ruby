@@ -989,6 +989,23 @@ class TestRegexp < Test::Unit::TestCase
     assert_equal('foobazquux/foobazquux', result, bug8856)
   end
 
+  def test_alternation_compile_error_no_memory_leak
+    # A compile error in the 2nd+ branch of a top-level alternation leaked the
+    # partially parsed branch (parse_subexp freed the alternation list but not
+    # the node parse_branch had built so far). Regexp#to_s reaches this path
+    # for every /(?:a|b)c(d)/-shaped regexp.
+    assert_no_memory_leak([], "#{<<~"begin;"}", "#{<<~"end;"}", "[Bug #22384]", rss: true)
+      code = proc do
+        Regexp.new("a|b(c") rescue nil
+        /(?:a|b)c(d)/.to_s
+      end
+
+      1_000.times(&code)
+    begin;
+      300_000.times(&code)
+    end;
+  end
+
   def test_ignorecase
     v = assert_deprecated_warning(/variable \$= is no longer effective/) { $= }
     assert_equal(false, v)
@@ -1602,6 +1619,33 @@ class TestRegexp < Test::Unit::TestCase
     assert_raise(RegexpError, bug12418){ Regexp.new('(0?0|(?(5)||)|(?(5)||))?') }
   end
 
+  def test_quick_search
+    assert_match_at('(?i) *TOOKY', 'Mozilla/5.0 (Linux; Android 4.0.3; TOOKY', [[34, 40]])   # Issue #120
+  end
+
+  def test_ss_in_look_behind
+    assert_match_at("(?i:ss)", "ss", [[0, 2]])
+    assert_match_at("(?i:ss)", "Ss", [[0, 2]])
+    assert_match_at("(?i:ss)", "SS", [[0, 2]])
+    assert_match_at("(?i:ss)", "\u017fS", [[0, 2]])  # LATIN SMALL LETTER LONG S
+    assert_match_at("(?i:ss)", "s\u017f", [[0, 2]])
+    assert_match_at("(?i:ss)", "\u00df", [[0, 1]])   # LATIN SMALL LETTER SHARP S
+    assert_match_at("(?i:ss)", "\u1e9e", [[0, 1]])   # LATIN CAPITAL LETTER SHARP S
+    assert_match_at("(?i:xssy)", "xssy", [[0, 4]])
+    assert_match_at("(?i:xssy)", "xSsy", [[0, 4]])
+    assert_match_at("(?i:xssy)", "xSSy", [[0, 4]])
+    assert_match_at("(?i:xssy)", "x\u017fSy", [[0, 4]])
+    assert_match_at("(?i:xssy)", "xs\u017fy", [[0, 4]])
+    assert_match_at("(?i:xssy)", "x\u00dfy", [[0, 3]])
+    assert_match_at("(?i:xssy)", "x\u1e9ey", [[0, 3]])
+    assert_match_at("(?i:\u00df)", "ss", [[0, 2]])
+    assert_match_at("(?i:\u00df)", "SS", [[0, 2]])
+    assert_match_at("(?i:[\u00df])", "ss", [[0, 2]])
+    assert_match_at("(?i:[\u00df])", "SS", [[0, 2]])
+    assert_match_at("(?i)(?<!ss)\u2728", "qq\u2728", [[2, 3]])     # Issue #92
+    assert_match_at("(?i)(?<!xss)\u2728", "qq\u2728", [[2, 3]])
+  end
+
   def test_options_in_look_behind
     assert_nothing_raised {
       assert_match_at("(?<=(?i)ab)cd", "ABcd", [[2,4]])
@@ -1737,6 +1781,12 @@ class TestRegexp < Test::Unit::TestCase
         Regexp.new("((?(1)x|x|)x)+")
       end
     end;
+  end
+
+  def test_too_big_number_for_repeat_range
+    assert_raise_with_message(SyntaxError, /too big number for repeat range/) do
+      eval(%[/|{1000000}/])
+    end
   end
 
   # This assertion is for porting x2() tests in testpy.py of Onigmo.
@@ -2106,5 +2156,29 @@ class TestRegexp < Test::Unit::TestCase
     assert_linear_performance([10, 29], pre: pre) do |re, s|
       re =~ s
     end
+  end
+
+  def test_too_many_range_repeat
+    source = '(?:foobar){0,100}' * 100000
+    assert_raise(RegexpError) { Regexp.new(source) }
+    assert_raise(SyntaxError) { eval("/#{source}/") }
+  end
+
+  def test_too_many_null_check
+    source = '(?:(?:foo)?|(?:bar)?)*' * 100000
+    assert_raise(RegexpError) { Regexp.new(source) }
+    assert_raise(SyntaxError) { eval("/#{source}/") }
+  end
+
+  def test_nested_repeat_expansion_overflow
+    assert_separately([], "#{<<-"begin;"}\n#{<<-'end;'}", timeout: 30)
+    begin;
+      # A nested repeat whose expanded size overflows int must not be
+      # unrolled: the compiler used to hang or emit wrapped jump offsets.
+      ["(?:.{90000,}){90000}", "(?:.{46341,}){46341}"].each do |src|
+        re = Regexp.new(src)
+        assert_nil(re.match("x" * 10), src)
+      end
+    end;
   end
 end

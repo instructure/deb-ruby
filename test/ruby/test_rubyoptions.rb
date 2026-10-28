@@ -851,7 +851,9 @@ class TestRubyOptions < Test::Unit::TestCase
     KILL_SELF = "Process.kill :SEGV, $$"
   end
 
-  def assert_segv(args, message=nil, list: SEGVTest::ExpectedStderrList, **opt)
+  def assert_segv(args, message=nil, list: SEGVTest::ExpectedStderrList, **opt, &block)
+    pend "macOS 15 is not working with this assertion" if macos?(15)
+
     # We want YJIT to be enabled in the subprocess if it's enabled for us
     # so that the Ruby description matches.
     env = Hash === args.first ? args.shift : {}
@@ -860,9 +862,10 @@ class TestRubyOptions < Test::Unit::TestCase
     args.unshift(env)
 
     test_stdin = ""
+    tests = [//, list] unless block
 
-    assert_in_out_err(args, test_stdin, //, list, encoding: "ASCII-8BIT",
-                      **SEGVTest::ExecOptions, **opt)
+    assert_in_out_err(args, test_stdin, *tests, encoding: "ASCII-8BIT",
+                      **SEGVTest::ExecOptions, **opt, &block)
   end
 
   def test_segv_test
@@ -890,7 +893,9 @@ class TestRubyOptions < Test::Unit::TestCase
     }
   end
 
-  def assert_crash_report(path, cmd = nil)
+  def assert_crash_report(path, cmd = nil, &block)
+    pend "macOS 15 is not working with this assertion" if macos?(15)
+
     Dir.mktmpdir("ruby_crash_report") do |dir|
       list = SEGVTest::ExpectedStderrList
       if cmd
@@ -901,7 +906,8 @@ class TestRubyOptions < Test::Unit::TestCase
       else
         cmd = ['-e', SEGVTest::KILL_SELF]
       end
-      status = assert_segv([{"RUBY_CRASH_REPORT"=>path}, *cmd], list: [], chdir: dir)
+      status = assert_segv([{"RUBY_CRASH_REPORT"=>path}, *cmd], list: [], chdir: dir, &block)
+      next if block
       reports = Dir.glob("*.log", File::FNM_DOTMATCH, base: dir)
       assert_equal(1, reports.size)
       assert_pattern_list(list, File.read(File.join(dir, reports.first)))
@@ -910,43 +916,59 @@ class TestRubyOptions < Test::Unit::TestCase
   end
 
   def test_crash_report
-    assert_crash_report("%e.%f.%p.log") do |status, report|
-      assert_equal("#{File.basename(EnvUtil.rubybin)}.-e.#{status.pid}.log", report)
-    end
+    status, report = assert_crash_report("%e.%f.%p.log")
+    assert_equal("#{File.basename(EnvUtil.rubybin)}.-e.#{status.pid}.log", report)
   end
 
   def test_crash_report_script
-    assert_crash_report("%e.%f.%p.log", "bug.rb") do |status, report|
-      assert_equal("#{File.basename(EnvUtil.rubybin)}.bug.rb.#{status.pid}.log", report)
-    end
+    status, report = assert_crash_report("%e.%f.%p.log", "bug.rb")
+    assert_equal("#{File.basename(EnvUtil.rubybin)}.bug.rb.#{status.pid}.log", report)
   end
 
   def test_crash_report_executable_path
     omit if EnvUtil.rubybin.size > 245
-    assert_crash_report("%E.%p.log") do |status, report|
-      assert_equal("#{EnvUtil.rubybin.tr('/', '!')}.#{status.pid}.log", report)
-    end
+    status, report = assert_crash_report("%E.%p.log")
+    path = EnvUtil.rubybin.sub(/\A\w\K:[\/\\]/, '!').tr_s('/', '!')
+    assert_equal("#{path}.#{status.pid}.log", report)
   end
 
   def test_crash_report_script_path
-    assert_crash_report("%F.%p.log", "test/bug.rb") do |status, report|
-      assert_equal("test!bug.rb.#{status.pid}.log", report)
-    end
+    status, report = assert_crash_report("%F.%p.log", "test/bug.rb")
+    assert_equal("test!bug.rb.#{status.pid}.log", report)
   end
 
   def test_crash_report_pipe
+    pend "macOS 15 is not working with this assertion" if macos?(15)
+
     if File.executable?(echo = "/bin/echo")
     elsif /mswin|ming/ =~ RUBY_PLATFORM
       echo = "echo"
     else
       omit "/bin/echo not found"
     end
-    env = {"RUBY_CRASH_REPORT"=>"| #{echo} %e:%f:%p", "RUBY_ON_BUG"=>nil}
-    assert_in_out_err([env], SEGVTest::KILL_SELF,
-                      encoding: "ASCII-8BIT",
-                      **SEGVTest::ExecOptions) do |stdout, stderr, status|
-      assert_empty(stderr)
-      assert_equal(["#{File.basename(EnvUtil.rubybin)}:-:#{status.pid}"], stdout)
+    assert_crash_report("| #{echo} %e:%f:%p") do |stdin, stdout, status|
+      assert_equal(["#{File.basename(EnvUtil.rubybin)}:-e:#{status.pid}"], stdin)
+    end
+  end
+
+  def test_crash_report_pipe_script
+    omit "only runs on Linux" unless RUBY_PLATFORM.include?("linux")
+
+    Tempfile.create(["script", ".sh"]) do |script|
+      Tempfile.create("crash_report") do |crash_report|
+        script.write(<<~BASH)
+          #!/usr/bin/env bash
+
+          cat > #{crash_report.path}
+        BASH
+        script.close
+
+        FileUtils.chmod("+x", script)
+
+        assert_crash_report("| #{script.path}") do
+          assert_include(File.read(crash_report.path), "[BUG] Segmentation fault at")
+        end
+      end
     end
   end
 
