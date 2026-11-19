@@ -1,1 +1,0 @@
-exclude /./, 'fails under autopkgtest'
