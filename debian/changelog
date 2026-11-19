@@ -1,3 +1,10 @@
+ruby3.4 (3.4.13-ppa1) focal; urgency=medium
+
+  * New upstream version 3.4.13
+  * Restore .github
+
+ -- jburroughs <jburroughs@instructure.com>  Wed, 18 Nov 2026 18:49:57 -0600
+
 ruby3.4 (3.4.12-ppa1) focal; urgency=medium
 
   * New upstream version 3.4.12
